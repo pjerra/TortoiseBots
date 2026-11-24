@@ -40,18 +40,14 @@ The fill never teleports anyone: the party walks to the instance portal. To brin
 <a id="battleground-auto-queue-human-demand"></a>
 ## Battlegrounds: Warsong Gulch and Arathi Basin
 
-Role matching is fail-closed based on each bot's talent spec and equipped gear:
-- A **Tank** slot requires a tanking specialization with a shield equipped (Warrior, Paladin, Shaman). The bot equips the best shield from its bags before queueing.
-- Druid tanks must have Bear Form. A Shaman tank needs its key talents (*Totemic Alignment* or *Spirit Armor*, from level 25) or the installed tank kit.
-- A 7.3 Shaman below that level without the kit is offered as DPS instead, never as a tank.
-- A **Healer** slot requires a healing specialization with core healing spells trained.
-- If no eligible bot can be found, the slot stays empty with a logged reason rather than assigning an unsuitable spec.
 Bot battlegrounds are a separate round, **off by default** ([`TortoiseBots.Bg.Enable`](../server/settings/queues.md#tortoisebotsbgenable)). With it on:
 
-- Admins can optionally let bots respec into missing roles using [`AiPlayerbot.RandomBotLftAllowRoleBorrow`](../server/settings/queues.md#aiplayerbotrandombotlftallowroleborrow).
-- When a bot whose default kit differs from its queued role is adopted (such as a Feral Druid queued as a Tank), the engine assigns the matching role kit (Bear kit instead of Cat kit).
-- This rebuilds the strategies on the spot — the same rebuild [`.bot role`](../play/commands/roster-and-hiring.md#bot-role) runs.
-- Clearing the role when the fill ends rebuilds the bot's own kit again, so a borrowed role never outlives the queue.
+- **Two maps only:** Warsong Gulch and Arathi Basin ([`TortoiseBots.Bg.Maps`](../server/settings/queues.md#tortoisebotsbgmaps)). Alterac Valley, the arenas and the random queue are not filled.
+- **Human demand first:** while a real player waits in a WSG or AB queue, pool bots of that bracket and faction queue on **both** sides until each side holds the module minimum plus one (five plus one by default). At most five bots per side enter the queue per five-second check.
+- **No half match:** the core is not allowed to start an instance before both sides reach that target, so a fill does not open a 1v1 and leave the rest waiting. A side that stays short for three minutes gets one system line to the waiting players, naming the side and its count.
+- **Invitations:** a queued bot accepts after a short delay. A bot whose human leaves the queue or the world leaves with them, and a queue entry nobody wants is dropped.
+- **Caps:** at most two instances hold bots, and at most fifty bots are held for battlegrounds server-wide, counting queued, invited and inside.
+- **Leaving:** bots leave a finished match instead of waiting for the instance to shut down, and a bot still inside after 45 minutes leaves without the Deserter debuff.
 - **After a death:** the bot releases at once, walks to the area spirit healer and waits there to be revived in the core's resurrection waves.
 
 Bot objective play is not there yet: a bot in a match fights the players who attack it, but it does not run flags, capture nodes, defend objectives or follow a leader.
