@@ -2,17 +2,19 @@
 id: developers-data
 title: Developer Reference Data
 category: developers
-summary: Tab-separated reference tables for bot capabilities, donor tracking, spell coverage, and talent builds.
+summary: Tab-separated reference tables for the Forever build's capabilities, donor provenance, spell coverage, and talent builds.
 tags: [developer, data, tsv, reference]
 ---
 
 # Developer Reference Data
 
-Tab-separated reference tables (`.tsv`) used for capability auditing, donor mapping, spell coverage tracking, and talent progression validation.
+Tab-separated reference tables (`.tsv`). People read them; the build does not. Each file is a ledger with its own columns.
 
-| File | Content |
-| :--- | :--- |
-| `capabilities.tsv` | Inventory of engine capabilities, registrations, implementations, and verification state. |
-| `donor-map.tsv` | Source tracking from donor codebases with adaptation rules and local replacement notes. |
-| `spell-coverage.tsv` | Per-class spell catalog mapping game data spells to bot actions, triggers, and strategies. |
-| `talent-builds.tsv` | Validated 5-level talent checkpoints and learning orders from level 10 to 60 (Druid feral shares one level-60 Bear/Cat row). |
+| File | Content | State |
+| :--- | :--- | :--- |
+| `capabilities.tsv` | Forever-build capability inventory: area, what it does, whether it is in the build, the owner files, and the check that proves it. | Current for the Forever build. |
+| `donor-map.tsv` | Donor provenance: repository and commit, the area read, the local owner, keep/adapt/reject, and whether the local code is in the Forever build. | Current for the Forever build. |
+| `spell-coverage.tsv` | Per-class spell catalogue from the Turtle-era audit (spell ids, acquisition, action/trigger mapping). | Reference only: not regenerated for ForeverCore data. |
+| `talent-builds.tsv` | Turtle-era 1.12 talent presets and learning orders. | Reference only: Forever bots spend talents on the core's trait trees. |
+
+When a capability or donor row changes, update the table in the same change. When the Forever data set or the engine registry changes, the first two tables are the ones to re-check; the spell and talent tables need a regeneration against the Forever stores before they can be treated as current.
