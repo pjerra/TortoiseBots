@@ -114,6 +114,66 @@ inline TransportWaitStep DecideTransportWait(TransportWaitInput const& in)
     return TransportWaitStep::Wait;
 }
 
+// #215: a point on the transport's deck that a waiting bot walks to (world coordinates), found by sampling the deck
+// surface around the transport's origin. The origin of a zeppelin or ship model is not a place a bot can stand on.
+struct DeckPoint
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+
+// The boarding point: of the deck samples, the one nearest the bot (3D) whose height is within maxZDiff of the bot's
+// (the dock and a docked deck are about level; a sample far below is the hull's bottom, far above the balloon).
+// False when no sample qualifies.
+inline bool PickBoardingPoint(std::vector<DeckPoint> const& samples, float botX, float botY, float botZ, float maxZDiff, DeckPoint& out)
+{
+    bool found = false;
+    float best = 0.0f;
+    for (DeckPoint const& p : samples)
+    {
+        if (std::fabs(p.z - botZ) > maxZDiff)
+            continue;
+        float const dx = p.x - botX;
+        float const dy = p.y - botY;
+        float const dz = p.z - botZ;
+        float const d = dx * dx + dy * dy + dz * dz;
+        if (!found || d < best)
+        {
+            found = true;
+            best = d;
+            out = p;
+        }
+    }
+    return found;
+}
+
+enum class DeckApproachMode : std::uint8_t
+{
+    Navmesh = 0,   // far: walk the navmesh path to the dock edge (the deck itself is not on the navmesh)
+    Direct = 1     // near: a straight step from the dock onto the deck point
+};
+
+// A deck is not on the navmesh, so the last metres are a straight move; anything farther walks the navmesh path first.
+inline DeckApproachMode ChooseDeckApproach(float dist2DToDeckPoint, float directStepYd)
+{
+    return dist2DToDeckPoint <= directStepYd ? DeckApproachMode::Direct : DeckApproachMode::Navmesh;
+}
+
+// #215 stale state: a bot that boarded and is no longer a passenger (it fell off, or something moved it) has lost the
+// ride. Lost for graceMs in a row (a cross-map hop removes and re-adds the passenger for a moment) fails the order.
+inline bool HasLostTransport(bool boarded, bool arrived, bool onBoardNow, std::uint32_t lostMs, std::uint32_t graceMs)
+{
+    return boarded && !arrived && !onBoardNow && lostMs >= graceMs;
+}
+
+// #215 follow vs ride: while a ride errand waits, walks to the deck or rides, the ride alone moves the bot: the party
+// follow and the bot's own movement would walk it off the dock or out of the deck in world space.
+inline bool RideHoldsMovement(bool active, bool arrived)
+{
+    return active && !arrived;
+}
+
 // Type-11 animated transports (e.g. Deeprun Tram) pause at stations via consecutive animation
 // nodes that share identical coordinates.
 inline bool IsTransportAnimPaused(

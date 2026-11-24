@@ -92,3 +92,17 @@ Run by Audrey in game (Asdasdasd, Horde GM) with host bots; state read from the 
   beside the hull, then the party follow pulled it off and it fell); the order stayed `pending:aboard` after the bot was off the
   transport. Fix direction: board from a dock point with a confirmed deck surface, fail when a boarded bot is no longer on the transport,
   pause follow/stay movement during a ride.
+- **#215 fix (zeppelins and boats):**
+  - *Deck check:* the core never turns collision on for an MO transport's model (`Transport::Create` sets the go state before
+    `CreateModel`, and `GameObject::SetGoState` skips transports), and `GameObjectModel::IntersectRay` answers "no hit" for a model
+    with collision off: that was the `has_deck=0`. The deck ray now switches the model's collision on for the one query and puts it
+    back as it was.
+  - *Approach:* the deck is sampled on a 2 yd grid within 26 yd of the transport's origin, at the bot's height band; the sample
+    nearest the bot is the boarding point (`[W5] ride-deck-point`). The bot walks the navmesh path to the dock edge, then one straight
+    step onto the deck; it boards only with the deck under it. Board reach from the origin is now 30 yd (was 12).
+  - *Stale state:* a boarded bot that is no longer a passenger for 5 s fails the order with `fail:lost-transport`
+    (`[W5] ride-giveup ... code=lost-transport`).
+  - *Follow vs ride:* while a ride runs (waiting, stepping on, aboard) the engine tick is skipped unless the bot is in combat, and the
+    host catch-up teleport is refused with `stuck=blocked:riding`.
+  - Tests: `forever/tools/test_ride.cpp` (boarding point, approach mode, lost transport, movement hold) and
+    `forever/tools/test_w5_flights_wiring.py` (`test_ride_fixes_215`).

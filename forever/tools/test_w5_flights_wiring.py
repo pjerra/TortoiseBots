@@ -50,6 +50,23 @@ class TestW5FlightsWiring(unittest.TestCase):
         self.assertIn("RemovePassenger", host)
         self.assertIn("DecideTransportWait", host)
 
+    def test_ride_fixes_215(self):
+        """#215: deck check with the model's collision on, a deck boarding point (not the origin), lost-transport fail,
+        and the ride holding the engine tick and the catch-up teleport."""
+        host = read("forever/src/host/TbHostTransport.cpp")
+        if MUTATE:
+            host = host.replace("go->m_model->EnableCollision(true);", "")
+        self.assertIn("go->m_model->EnableCollision(true);", host)
+        self.assertIn("go->m_model->EnableCollision(wasEnabled);", host)
+        self.assertIn("FindBoardingPoint", host)
+        self.assertIn("ChooseDeckApproach", host)
+        self.assertIn("HasLostTransport", host)
+        self.assertNotIn("MovePoint(0, found.obj->GetPositionX()", host, "the approach must not walk to the transport's origin")
+        brain = read("forever/src/host/TbEngineBrain.cpp")
+        self.assertIn("tbhost::ride::HoldsMovement(brain->bot)", brain)
+        mgr = read("forever/src/TbBotMgr.cpp")
+        self.assertIn('tbhost::ride::HoldsMovement(me)', mgr)
+
     def test_orders_and_state_wire_w5(self):
         orders = read("forever/src/host/TbOrders.cpp")
         for verb in ('"taxi-learn"', '"fly"', '"ride"'):

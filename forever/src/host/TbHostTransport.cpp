@@ -29,8 +29,13 @@ namespace ride
 namespace
 {
 
-constexpr float kMaxBoardReachYd = 12.0f;   // 2D from the transport's centre: the bot stands on the deck
+constexpr float kMaxBoardReachYd = 30.0f;   // 2D from the transport's origin: a zeppelin or ship deck reaches ~25 yd from it (#215)
 constexpr float kMaxDeckZDiffYd = 2.5f;     // vertical band around the transport's deck surface at (botX, botY)
+constexpr float kDeckSampleRadiusYd = 26.0f; // #215: the deck is sampled on a grid this far around the origin
+constexpr float kDeckSampleStepYd = 2.0f;
+constexpr float kDirectStepYd = 10.0f;      // #215: the last metres onto the deck are a straight move (the deck is off the navmesh)
+constexpr float kDeckPointRefreshYd = 1.0f; // #215: a boarding point is sampled again when the transport moved this far
+constexpr uint32_t kLostTransportGraceMs = 5000; // #215: a cross-map hop removes and re-adds the passenger for a moment
 constexpr float kApproachReachYd = 60.0f;
 constexpr float kLeaveDockMinDistYd = 100.0f;
 constexpr uint32_t kGiveUpMarginMs = 15000;
@@ -45,6 +50,11 @@ struct RideState
     bool offDeckRefused = false;
     bool approachPathFailed = false;
     bool arrived = false;
+    bool hasBoardingPoint = false;  // #215: the deck point the bot walks to, sampled while the transport stands
+    ai::DeckPoint boardingPoint;
+    float boardingFromX = 0.0f;     // where the transport stood when the point was sampled
+    float boardingFromY = 0.0f;
+    uint32_t lostMs = 0;            // #215: how long a boarded bot has not been a passenger
     uint32_t entry = 0;
     uint32_t orderSeq = 0;
     ObjectGuid transportGuid;
@@ -240,21 +250,29 @@ bool CheckClassicRoute(uint32_t entry)
     return sTransportMgr->GetTransportAnimInfo(entry) != nullptr;
 }
 
-bool SampleTransportDeckZ(Player const* bot, WorldObject const* transportObj, float& outDeckZ)
+// #215: the deck surface under (x, y), between fromZ and fromZ - 6 yd, on the transport's own model.
+// The core never turns collision on for an MO transport's model (Transport::Create sets the go state before CreateModel, and
+// GameObject::SetGoState skips transports), and GameObjectModel::IntersectRay answers "no hit" for a model with collision off:
+// that is why the old check said has_deck=0 on the Orgrimmar zeppelin every time, also with the bot on the docked deck. The
+// model is switched on for this one query and put back as it was (world thread, the maps are not updating here).
+bool SampleDeckZAt(WorldObject const* transportObj, PhaseShift const& phaseShift, float x, float y, float fromZ, float& outDeckZ)
 {
-    if (!bot || !transportObj)
+    if (!transportObj)
         return false;
 
     if (GameObject const* go = transportObj->ToGameObject())
     {
         if (go->m_model)
         {
-            float const rayStartZ = bot->GetPositionZ() + 2.0f;
+            bool const wasEnabled = go->m_model->IsCollisionEnabled();
+            go->m_model->EnableCollision(true);
             float maxDist = 6.0f;
-            G3D::Ray const ray(G3D::Vector3(bot->GetPositionX(), bot->GetPositionY(), rayStartZ), G3D::Vector3(0.0f, 0.0f, -1.0f));
-            if (go->m_model->IntersectRay(ray, maxDist, /*stopAtFirstHit=*/false, bot->GetPhaseShift(), VMAP::ModelIgnoreFlags::Nothing))
+            G3D::Ray const ray(G3D::Vector3(x, y, fromZ), G3D::Vector3(0.0f, 0.0f, -1.0f));
+            bool const hit = go->m_model->IntersectRay(ray, maxDist, /*stopAtFirstHit=*/false, phaseShift, VMAP::ModelIgnoreFlags::Nothing);
+            go->m_model->EnableCollision(wasEnabled);
+            if (hit)
             {
-                outDeckZ = rayStartZ - maxDist;
+                outDeckZ = fromZ - maxDist;
                 return true;
             }
             return false;
@@ -263,6 +281,35 @@ bool SampleTransportDeckZ(Player const* bot, WorldObject const* transportObj, fl
 
     outDeckZ = transportObj->GetPositionZ();
     return true;
+}
+
+bool SampleTransportDeckZ(Player const* bot, WorldObject const* transportObj, float& outDeckZ)
+{
+    if (!bot)
+        return false;
+    return SampleDeckZAt(transportObj, bot->GetPhaseShift(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() + 2.0f, outDeckZ);
+}
+
+// #215: the boarding point: the deck is sampled on a grid around the transport's origin at the bot's height band, and the
+// sample nearest the bot is the place it walks to (approaching the origin itself ended at the tower edge).
+bool FindBoardingPoint(Player const* bot, WorldObject const* transportObj, ai::DeckPoint& out)
+{
+    if (!bot || !transportObj || !transportObj->ToGameObject() || !transportObj->ToGameObject()->m_model)
+        return false;
+    std::vector<ai::DeckPoint> samples;
+    float const ox = transportObj->GetPositionX();
+    float const oy = transportObj->GetPositionY();
+    float const fromZ = bot->GetPositionZ() + kMaxDeckZDiffYd + 0.5f;
+    for (float dx = -kDeckSampleRadiusYd; dx <= kDeckSampleRadiusYd; dx += kDeckSampleStepYd)
+        for (float dy = -kDeckSampleRadiusYd; dy <= kDeckSampleRadiusYd; dy += kDeckSampleStepYd)
+        {
+            if (dx * dx + dy * dy > kDeckSampleRadiusYd * kDeckSampleRadiusYd)
+                continue;
+            float z = 0.0f;
+            if (SampleDeckZAt(transportObj, bot->GetPhaseShift(), ox + dx, oy + dy, fromZ, z))
+                samples.push_back({ ox + dx, oy + dy, z });
+        }
+    return ai::PickBoardingPoint(samples, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), kMaxDeckZDiffYd, out);
 }
 
 } // namespace
@@ -357,6 +404,24 @@ void TickRide(Player* bot, uint32_t diffMs)
     bool const currentlyOnBoard = bot->GetTransport() != nullptr &&
         (!rs.transportGuid.IsEmpty() ? bot->GetTransport()->GetTransportGUID() == rs.transportGuid : true);
 
+    // #215 stale state: boarded, and no longer a passenger. After the grace the order fails instead of answering
+    // pending:aboard for ever (live 2026-11-22: he fell off the Orgrimmar tower and stayed "aboard" with transport=none).
+    if (rs.boarded && !rs.arrived)
+    {
+        rs.lostMs = currentlyOnBoard ? 0 : rs.lostMs + diffMs;
+        if (ai::HasLostTransport(rs.boarded, rs.arrived, currentlyOnBoard, rs.lostMs, kLostTransportGraceMs))
+        {
+            rs.active = false;
+            rs.boarded = false;
+            rs.outcome = ai::RideOrderResult(false, false, false, false, "lost-transport");
+            TC_LOG_INFO("tortoisebots", "[W5] ride-giveup bot={} entry={} code=lost-transport lost_ms={} map={}",
+                bot->GetName(), rs.entry, rs.lostMs, map->GetId());
+            return;
+        }
+        if (!currentlyOnBoard)
+            return;   // inside the grace: no new boarding somewhere else
+    }
+
     if (rs.boarded && found.obj)
     {
         float const distFromStart = Dist2D(found.obj->GetPositionX(), found.obj->GetPositionY(), rs.startX, rs.startY);
@@ -432,20 +497,51 @@ void TickRide(Player* bot, uint32_t diffMs)
         }
         case ai::TransportWaitStep::Approach:
         {
+            // #215: walk to a point on the deck, not to the transport's origin (that ended at the tower edge). Far: the navmesh
+            // path toward it (it ends at the dock edge, the deck is off the navmesh); near: one straight step onto the deck.
+            if (found.obj && (!rs.hasBoardingPoint ||
+                Dist2D(found.obj->GetPositionX(), found.obj->GetPositionY(), rs.boardingFromX, rs.boardingFromY) > kDeckPointRefreshYd))
+            {
+                rs.hasBoardingPoint = FindBoardingPoint(bot, found.obj, rs.boardingPoint);
+                rs.boardingFromX = found.obj->GetPositionX();
+                rs.boardingFromY = found.obj->GetPositionY();
+                if (rs.hasBoardingPoint)
+                    TC_LOG_INFO("tortoisebots", "[W5] ride-deck-point bot={} entry={} x={:.2f} y={:.2f} z={:.2f} map={}",
+                        bot->GetName(), rs.entry, rs.boardingPoint.x, rs.boardingPoint.y, rs.boardingPoint.z, map->GetId());
+            }
+            if (found.obj && !rs.hasBoardingPoint)
+            {
+                // No deck surface at the bot's height near the transport: wait (it may still be docking) until the give-up.
+                rs.outcome = ai::RideOrderResult(rs.active, rs.boarded, rs.arrived, rs.offDeckRefused, "");
+                break;
+            }
             if (found.obj && !bot->isMoving())
             {
-                PathGenerator path(bot);
-                path.CalculatePath(found.obj->GetPositionX(), found.obj->GetPositionY(), found.obj->GetPositionZ(), false);
-                if (!ai::IsApproachPathUsable(static_cast<uint32_t>(path.GetPathType()), path.GetPath().size()))
+                ai::DeckPoint const& p = rs.boardingPoint;
+                float const d = Dist2D(bot->GetPositionX(), bot->GetPositionY(), p.x, p.y);
+                if (ai::ChooseDeckApproach(d, kDirectStepYd) == ai::DeckApproachMode::Direct)
+                    bot->GetMotionMaster()->MovePoint(0, p.x, p.y, p.z, /*generatePath=*/false);
+                else
                 {
-                    rs.approachPathFailed = true;
-                    rs.active = false;
-                    rs.outcome = ai::RideOrderResult(false, false, false, false, "no-path");
-                    TC_LOG_INFO("tortoisebots", "[W5] ride-giveup bot={} entry={} code=no-path map={}",
-                        bot->GetName(), rs.entry, map->GetId());
-                    break;
+                    PathGenerator path(bot);
+                    path.CalculatePath(p.x, p.y, p.z, false);
+                    if (!ai::IsApproachPathUsable(static_cast<uint32_t>(path.GetPathType()), path.GetPath().size()))
+                    {
+                        rs.approachPathFailed = true;
+                        rs.active = false;
+                        rs.outcome = ai::RideOrderResult(false, false, false, false, "no-path");
+                        TC_LOG_INFO("tortoisebots", "[W5] ride-giveup bot={} entry={} code=no-path map={}",
+                            bot->GetName(), rs.entry, map->GetId());
+                        break;
+                    }
+                    // the end of the navmesh path: the dock edge nearest the deck point. Standing there already, the rest is the
+                    // straight step (the gap from the edge to the deck point can be more than kDirectStepYd).
+                    G3D::Vector3 const& end = path.GetPath().back();
+                    if (Dist2D(bot->GetPositionX(), bot->GetPositionY(), end.x, end.y) < 2.0f)
+                        bot->GetMotionMaster()->MovePoint(0, p.x, p.y, p.z, /*generatePath=*/false);
+                    else
+                        bot->GetMotionMaster()->MovePoint(0, end.x, end.y, end.z, /*generatePath=*/true);
                 }
-                bot->GetMotionMaster()->MovePoint(0, found.obj->GetPositionX(), found.obj->GetPositionY(), found.obj->GetPositionZ(), true);
             }
             rs.outcome = ai::RideOrderResult(rs.active, rs.boarded, rs.arrived, rs.offDeckRefused, "");
             break;
@@ -502,6 +598,14 @@ void CancelOrderErrand(Player const* bot)
     it->second.active = false;
     it->second.orderSeq = 0;
     it->second.outcome.clear();
+}
+
+bool HoldsMovement(Player const* bot)
+{
+    if (!bot)
+        return false;
+    auto it = RideStates().find(bot->GetGUID());
+    return it != RideStates().end() && ai::RideHoldsMovement(it->second.active, it->second.arrived);
 }
 
 bool IsOnBoard(Player const* bot)
