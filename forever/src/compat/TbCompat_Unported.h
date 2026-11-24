@@ -753,8 +753,7 @@ inline bool GameEventActiveCompat(int16 eventId) { return sGameEventMgr->IsActiv
 // ===============================================================================================================
 // CHAT (PlayerbotAIChat.cpp)
 // ===============================================================================================================
-// Say something in the bot's guild (T: the speak right of its rank, then Guild::BroadcastToGuild). Failure value: false (not said).
-inline bool GuildSayCompat(Player* /*bot*/, Guild* /*guild*/, std::string const& /*msg*/) { tbcompat::Unported(tbcompat::Feature::GuildRanks); return false; }
+// GuildSayCompat lives in TbCompat_P.h: the guild speak right and BroadcastToGuild are both public on ForeverCore.
 // Join a named channel of the bot's team and say something in it (T: ChannelMgr by team, GetOrCreateChannel, Join, AsyncSay). Failure
 // value: false (not said).
 inline bool SayToChannelCompat(Player* /*bot*/, std::string const& /*name*/, std::string const& /*msg*/) { tbcompat::Unported(tbcompat::Feature::AddonChat); return false; }

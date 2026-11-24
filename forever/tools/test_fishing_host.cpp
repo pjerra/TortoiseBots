@@ -1,6 +1,6 @@
 // Pure unit tests for the host fishing errand phase walk (TbHostFishingPure.h).
 // Build & run from repo root:
-//   g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_fishing_host.cpp -o /tmp/test_fishing_host && /tmp/test_fishing_host
+//   g++ -std=c++17 -O1 -Wall -Wextra -I. -Iai forever/tools/test_fishing_host.cpp -o /tmp/test_fishing_host && /tmp/test_fishing_host
 
 #include "forever/src/host/TbHostFishingPure.h"
 
@@ -166,6 +166,49 @@ int main()
         d = Step(full);
         CHECK(d.action == Action::Fail);
         CHECK(d.fail && std::string(d.fail) == "bags-full");
+    }
+
+    // Idle session budget: one session per hour, 5 minutes or 5 casts.
+    {
+        CHECK(IdleSessionStartable(0, 0, 0, 1000));
+        CHECK(!IdleSessionStartable(0, 1000, 0, 1000 + 3600000 - 1));
+        CHECK(IdleSessionStartable(0, 1000, 0, 1000 + 3600000));
+        CHECK(!IdleSessionOver(1000, 0, 1000 + 300000 - 1));
+        CHECK(IdleSessionOver(1000, 0, 1000 + 300000));
+        CHECK(IdleSessionOver(1000, 5, 1000));
+    }
+
+    // A failed search parks for 15 minutes; a running one keeps 15 s.
+    {
+        CHECK(IdleSearchAllowed(0, 0, 1000));
+        CHECK(!IdleSearchAllowed(1000, 0, 1000 + 15000 - 1));
+        CHECK(IdleSearchAllowed(1000, 0, 1000 + 15000));
+        CHECK(!IdleSearchAllowed(0, 1000, 1000 + 900000 - 1));
+        CHECK(IdleSearchAllowed(0, 1000, 1000 + 900000));
+    }
+
+    // A hole wins over open water; a guarded stand drops either pick.
+    {
+        CHECK(IdleSpotChosen(true, false, false));
+        CHECK(IdleSpotChosen(false, true, false));
+        CHECK(!IdleSpotChosen(false, false, false));
+        CHECK(!IdleSpotChosen(true, false, true));
+        CHECK(!IdleSpotChosen(false, true, true));
+    }
+
+    // Open-water fallback geometry the host search uses.
+    {
+        CHECK(ai::FishingCastInRange(10.0f));
+        CHECK(ai::FishingCastInRange(20.0f));
+        CHECK(!ai::FishingCastInRange(9.9f));
+        CHECK(!ai::FishingCastInRange(20.1f));
+        CHECK(ai::FishingWaterDeepEnough(1.0f, 0.4f));
+        CHECK(!ai::FishingWaterDeepEnough(1.0f, 1.0f));
+        CHECK(ai::FishingStandDry(false, true));
+        CHECK(!ai::FishingStandDry(true, true));
+        CHECK(ai::FishingZoneSkillOk(-20, 0));
+        CHECK(ai::FishingZoneSkillOk(75, 70));
+        CHECK(!ai::FishingZoneSkillOk(80, 70));
     }
 
     if (g_failures == 0)

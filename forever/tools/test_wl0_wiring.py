@@ -452,9 +452,12 @@ class Behaviour(unittest.TestCase):
 
     def build_and_run(self, tmp, registry, create, gxx, compat=None):
         for rel in ("forever/tools/pool_registry_check.cpp", "forever/src/host/pool/TbPoolRegistry.h",
-                    "forever/src/host/pool/TbPoolCreate.h", "forever/src/compat/TbCompat_WL0.h",
+                    "forever/src/host/pool/TbPoolCreate.h", "forever/src/host/pool/TbPoolReset.h",
+                    "forever/src/host/pool/TbPoolReset.cpp",
+                    "forever/src/compat/TbCompat_WL0.h",
                     "forever/src/compat/TbCompat_CharStore.h", "forever/src/compat/TbSqlNames.h",
-                    "ai/playerbot/policy/world/PoolRegistryPolicy.h", "ai/playerbot/policy/world/PoolCompositionPolicy.h"):
+                    "ai/playerbot/policy/world/PoolRegistryPolicy.h", "ai/playerbot/policy/world/PoolCompositionPolicy.h",
+                    "ai/playerbot/policy/world/PoolResetSafetyPolicy.h", "runtime/policy/infra/PoolResetPolicy.h"):
             (tmp / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / rel, tmp / rel)
         shutil.copytree(TOOLS / "pool_registry_fakes", tmp / "forever/tools/pool_registry_fakes")
@@ -467,7 +470,8 @@ class Behaviour(unittest.TestCase):
                         "-I", str(tmp / "forever/tools/pool_registry_fakes"), "-I", str(tmp / "forever/src"), "-I", str(tmp),
                         str(tmp / "forever/tools/pool_registry_check.cpp"),
                         str(tmp / "forever/src/host/pool/TbPoolRegistry.cpp"),
-                        str(tmp / "forever/src/host/pool/TbPoolCreate.cpp"), "-o", str(exe)],
+                        str(tmp / "forever/src/host/pool/TbPoolCreate.cpp"),
+                        str(tmp / "forever/src/host/pool/TbPoolReset.cpp"), "-o", str(exe)],
                        check=True, capture_output=True, text=True)
         return subprocess.run([str(exe)], capture_output=True, text=True)
 

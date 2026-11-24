@@ -15,3 +15,8 @@ template <class... Args>
 inline void TC_LOG_INFO(char const* /*filter*/, char const* /*format*/, Args const&...)
 {
 }
+
+template <class... Args>
+inline void TC_LOG_WARN(char const* /*filter*/, char const* /*format*/, Args const&...)
+{
+}

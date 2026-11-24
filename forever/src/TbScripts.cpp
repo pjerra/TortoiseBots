@@ -8,6 +8,7 @@
 #include "host/cmd/TbCmdBinding.h"
 #include "host/pool/TbPoolCreate.h"
 #include "host/pool/TbPoolRegistry.h"
+#include "host/pool/TbPoolReset.h"
 #include "host/pool/TbPoolScheduler.h"
 #include "host/cmd/TbCmdOrders.h"
 #include "host/cmd/TbPlace.h"
@@ -31,6 +32,7 @@
 #include "host/run/TbRunLiquid.h"
 #include "host/gear/TbGearGen.h"
 #include "host/TbHostProfession.h"
+#include "runtime/PassingBuffsService.h"
 #endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
@@ -301,6 +303,8 @@ public:
         TortoiseBots::pool::LoadConfig();      // W0
         TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B
         TortoiseBots::pool::Reconcile();       // W0: the creations that stopped halfway (a claim row, no account or character yet)
+        // Startup only (the key is read here, never in OnConfigLoad): `.reload config` cannot start a reset.
+        TortoiseBots::pool::Reset::PlanAtStartup(sConfigMgr->GetStringDefault("TortoiseBots.Pool.Reset", "off"));
         TortoiseBots::bg::LoadBgMapData();     // BG1: the flag stands and node banners from the core's spawn store (one pass)
         // The item store is loaded by now (World.cpp:1625, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
@@ -345,6 +349,10 @@ public:
     {
         auto const started = std::chrono::steady_clock::now();
         BotMgr::Instance().Update(diff);
+        TortoiseBots::pool::Reset::Update(diff);   // the startup reset, one step and at most one deletion per tick
+#ifdef TORTOISEBOTS_SLICE1
+        TortoiseBots::PassingBuffsService::Instance().Update(diff);   // pool bots' buffs for the real players they pass
+#endif
         bool const poolLogin = TortoiseBots::pool::PoolScheduler::Update(diff);   // W0-B: the pool's logins and logouts, once a second
         if (!poolLogin)
             TortoiseBots::pool::CreateUpdate(diff);   // W0: at most one pool character per rate tick, and never in a tick with a login
@@ -398,6 +406,7 @@ public:
 
     void OnShutdown() override
     {
+        TortoiseBots::pool::Reset::Shutdown();
         // Save and remove every bot while the world is still up.
         BotMgr::Instance().LogoutAll("server shutdown");
         BotMgr::Instance().Update(0);
@@ -795,6 +804,7 @@ public:
     {
         for (std::string const& line : TortoiseBots::pool::PoolScheduler::Status())
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
+        handler->PSendSysMessage("TortoiseBots: pool %s", TortoiseBots::pool::Reset::StatusLine().c_str());
         return true;
     }
 

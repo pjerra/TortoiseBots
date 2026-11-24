@@ -10,6 +10,7 @@
     } \
 } while (0)
 
+using ai::CorpseReadyForSkinning;
 using ai::DecideGatherSkillForLoot;
 using ai::IsSkinningLoot;
 using ai::ShouldSkipLootFilter;
@@ -72,6 +73,17 @@ int main()
     CHECK(!ShouldSkipLootFilter(kSkinningLootType, true, kNoGatherSkill));
     CHECK(!ShouldSkipLootFilter(kSkinningLootType, true, 633)); // SKILL_LOCKPICKING
     std::cout << "  [PASS] filter bypass limited to skinned creatures and herb/ore nodes\n";
+
+    // 6. The corpse's own skin gate: the flag, no skin taken yet, and the
+    // viewer's loot gone or emptied. A corpse with loot left is refused (the
+    // core's CheckCast answers SPELL_FAILED_TARGET_NOT_LOOTED), and a loot
+    // of type LOOT_SKINNING (already skinned by this bot) too.
+    CHECK(CorpseReadyForSkinning(true, false, true, true));
+    CHECK(CorpseReadyForSkinning(true, false, false, false));
+    CHECK(!CorpseReadyForSkinning(false, false, true, true));
+    CHECK(!CorpseReadyForSkinning(true, true, true, true));
+    CHECK(!CorpseReadyForSkinning(true, false, true, false));
+    std::cout << "  [PASS] skin only on a flagged, unlooted, not-yet-skinned corpse\n";
 
     std::cout << "skinning-loot policy: OK\n";
     return 0;

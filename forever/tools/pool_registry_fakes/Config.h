@@ -22,8 +22,15 @@ public:
         return found == ints.end() ? fallback : found->second;
     }
 
+    std::string GetStringDefault(char const* key, char const* fallback) const
+    {
+        auto const found = strings.find(key);
+        return found == strings.end() ? std::string(fallback ? fallback : "") : found->second;
+    }
+
     std::map<std::string, bool> bools;
     std::map<std::string, int32> ints;
+    std::map<std::string, std::string> strings;
 };
 
 inline FakeConfigMgr fakeConfig;

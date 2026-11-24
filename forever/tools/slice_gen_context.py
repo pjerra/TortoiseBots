@@ -84,12 +84,12 @@ SLICE3_KEYS = {
     "value": "master position",
 }
 # Slice 4 (package P4, FOREVER-SLICE4-SPEC section 3, listed with creator file:line in forever/docs/SLICE4-P-NOTES.md section 4): death and resurrection. Left out on
-# purpose (each one does less): repop, self resurrect, spirit healer, should spirit healer, find corpse, revive from corpse, corpse near, dead (trigger),
+# purpose (each one does less): repop, spirit healer, should spirit healer, find corpse, revive from corpse, corpse near, dead (trigger),
 # falling far, move long stuck, bg reset objective force, corpse run, resurrect request (the host calls the action), area trigger, reach area trigger,
 # within area trigger, use meeting stone, summon.
 SLICE4_KEYS = {
     "strategy": "dead",
-    "action": "auto release, accept resurrect, release, reach party member to resurrect",
+    "action": "auto release, accept resurrect, release, reach party member to resurrect, self resurrect",
     "trigger": "party member dead, resurrect",
     "value": "party member to resurrect",
 }
@@ -139,7 +139,7 @@ SLICE11_KEYS = {
 # actions and triggers of the open-world dead kit, and the graveyard values. Left out of the free kit on purpose (each one does less, spec
 # section 1.3): `rpg`, `travel`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `group`, `guild` (the collision keys are in
 # COLLISION_KEYS, which a player can add, still not part of the free kit); the travel
-# target values (no journey), `need for quest` (false), `enemy flag carrier`; the repop, self resurrect, unstuck and battleground
+# target values (no journey), `need for quest` (false), `enemy flag carrier`; the repop, unstuck and battleground
 # reset actions and the `falling far` / `move long stuck` / `val::gt32::*` triggers (the host's five-minute rescue replaces them).
 W1_KEYS = {
     "strategy": "grind",
@@ -393,7 +393,16 @@ MOUNT_KEYS = {
     "trigger": "check mount state",
     "value": "mount list, current mount speed, max mount speed, travel target traveling, travel target working",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS)
+# TBF #156 (guild participation): the owner's `speak` chat word. Its action is the legacy SayAction, whose `/g` branch
+# calls PlayerbotAI::SayToGuild, now backed by the real guild speak right (forever/src/compat/TbCompat_P.h). The trigger
+# is the ordinary chat command trigger every chat word uses. SayAction.cpp is on the build list (forever/SLICE-W4.txt).
+GUILD_KEYS = {
+    "strategy": "",
+    "action": "speak",
+    "trigger": "speak",
+    "value": "",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, GUILD_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

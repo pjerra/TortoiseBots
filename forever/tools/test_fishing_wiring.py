@@ -86,6 +86,53 @@ class TestFishingWiring(unittest.TestCase):
         unported = read("forever/docs/UNPORTED.md")
         self.assertNotIn("fishing and disenchant loot stay", unported)
 
+    def test_idle_fishing_key_defaults_on(self):
+        mgr = read("forever/src/TbBotMgr.cpp")
+        if MUTATE:
+            mgr = mgr.replace('GetBoolDefault("TortoiseBots.World.Fishing", true)',
+                              'GetBoolDefault("TortoiseBots.World.Fishing", false)')
+        self.assertIn('GetBoolDefault("TortoiseBots.World.Fishing", true)', mgr)
+        conf = read("forever/conf/tortoisebots.conf.dist")
+        self.assertIn("TortoiseBots.World.Fishing = 1", conf)
+        docs = read("docs/server/configuration.md")
+        self.assertIn("`TortoiseBots.World.Fishing` | `1`", docs)
+        addon = read("forever/src/host/TbAddonInfo.cpp")
+        self.assertIn('"world-fishing", "TortoiseBots.World.Fishing", true, 1', addon)
+
+    def test_idle_tick_is_wired_and_pauses_the_engine(self):
+        mgr = read("forever/src/TbBotMgr.cpp")
+        if MUTATE:
+            mgr = mgr.replace("tbhost::fishing::TickIdle(me, diff, bot.free && _fishingEnabled);", "")
+        self.assertIn('#include "host/TbHostFishing.h"', mgr)
+        self.assertIn("tbhost::fishing::TickIdle(me, diff, bot.free && _fishingEnabled);", mgr)
+        self.assertIn("tbhost::fishing::HasActiveIdleErrand(me)", mgr)
+
+    def test_idle_errand_tick_search_and_guard(self):
+        host = read("forever/src/host/TbHostFishing.cpp")
+        if MUTATE:
+            host = host.replace("FindNearbyWater(bot, botX, botY, botZ, radius, water)", "FindNothing()")
+        for needle in ("void TickIdle(Player* bot, std::uint32_t diffMs, bool enabled)",
+                       "FindNearbyWater", "FindFishingHole", "FindShoreCastSpot",
+                       "StepTowardFishableWater", "IdleSessionOver", "IdleSearchAllowed",
+                       "SpotGuarded", "it->second.idle"):
+            self.assertIn(needle, host)
+        pure = read("forever/src/host/TbHostFishingPure.h")
+        self.assertIn("IdleSessionStartable", pure)
+        self.assertIn("IdleSpotChosen", pure)
+        prof = read("forever/src/host/TbHostProfession.cpp")
+        self.assertIn("fishing::TickErrand(bot, diffMs)", prof)
+        header = read("forever/src/host/TbHostFishing.h")
+        self.assertIn("HasActiveIdleErrand", header)
+
+    def test_spot_guard_bridge_uses_the_static_spawn_index(self):
+        compat = read("forever/src/compat/TbCompat_Fishing.h")
+        self.assertIn("bool SpotGuarded(", compat)
+        impl = read("forever/src/compat/TbCompat_WL4.cpp")
+        if MUTATE:
+            impl = impl.replace("getHighestHostileLevelNear", "getHighestUnrelatedLevelNear")
+        self.assertIn("getHighestHostileLevelNear", impl)
+        self.assertIn("highest + 2 >= botLevel", impl)
+
 
 if __name__ == "__main__":
     if "--mutate" in sys.argv:

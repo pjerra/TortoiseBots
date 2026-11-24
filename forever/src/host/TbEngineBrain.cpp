@@ -15,6 +15,7 @@
 #include "host/TbSpellDelayPure.h"
 #include "host/TbThrownPure.h"
 #include "host/TbHostTaxi.h"
+#include "host/TbHostGuildJoin.h"
 #include "host/TbHostTransport.h"
 #include "host/TbOnyxia.h"
 #include "host/TbOnyxiaGround.h"
@@ -187,6 +188,10 @@ void DeliverChat(Brain* brain)
             chatin::Drop(brain->guidLow);
             continue;
         }
+        // The owner's guild management words (guild invite/join/leave/promote/demote/remove/leader) are
+        // answered by the guild host driver; every other line keeps going to the legacy chat commands.
+        if (tbhost::guildjoin::HandleWhisper(brain->bot, sender, line.text))
+            continue;
         brain->ai->HandleCommand(line.kind, line.text, *sender, line.lang);
     }
 }

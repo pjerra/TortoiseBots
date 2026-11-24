@@ -269,33 +269,6 @@ bool FindStackForMail(Player* bot, uint32_t itemId, uint32_t want, Item*& out)
     return false;
 }
 
-// Every unlooted piece of the item's disenchant window, through the core's
-// own autostore handler; the window is released only when nothing is left.
-void TakeItemLoot(Player* bot, ObjectGuid const& itemGuid)
-{
-    Loot* loot = bot->GetLootByWorldObjectGUID(itemGuid);
-    if (!loot || !bot->GetSession())
-        return;
-    std::vector<uint8_t> listIds;
-    for (LootItem const& lootItem : loot->items)
-        if (!lootItem.is_looted)
-            listIds.push_back(static_cast<uint8_t>(lootItem.LootListId));
-    for (uint8_t listId : listIds)
-    {
-        Loot* current = bot->GetLootByWorldObjectGUID(itemGuid);
-        if (!current)
-            break;
-        WorldPackets::Loot::LootItem packet{ WorldPacket(CMSG_LOOT_ITEM) };
-        WorldPackets::Loot::LootRequest request;
-        request.Object = current->GetGUID();
-        request.LootListID = listId;
-        packet.Loot.push_back(request);
-        bot->GetSession()->HandleAutostoreLootItemOpcode(packet);
-    }
-    if (Loot* rest = bot->GetLootByWorldObjectGUID(itemGuid); rest && rest->isLooted())
-        bot->GetSession()->DoLootRelease(rest);
-}
-
 // Starts the client's cast on the queued stack. The bot is stopped and
 // dismounted first: a moving or mounted bot cannot finish the cast.
 bool StartCast(Player* bot, BotState& st, DisenchantQueueEntry const& head, Item* item)
@@ -650,6 +623,31 @@ void GoToMailbox(Player* bot, BotState& st)
 }
 
 } // namespace
+
+void TakeItemLoot(Player* bot, ObjectGuid const& itemGuid)
+{
+    Loot* loot = bot->GetLootByWorldObjectGUID(itemGuid);
+    if (!loot || !bot->GetSession())
+        return;
+    std::vector<uint8_t> listIds;
+    for (LootItem const& lootItem : loot->items)
+        if (!lootItem.is_looted)
+            listIds.push_back(static_cast<uint8_t>(lootItem.LootListId));
+    for (uint8_t listId : listIds)
+    {
+        Loot* current = bot->GetLootByWorldObjectGUID(itemGuid);
+        if (!current)
+            break;
+        WorldPackets::Loot::LootItem packet{ WorldPacket(CMSG_LOOT_ITEM) };
+        WorldPackets::Loot::LootRequest request;
+        request.Object = current->GetGUID();
+        request.LootListID = listId;
+        packet.Loot.push_back(request);
+        bot->GetSession()->HandleAutostoreLootItemOpcode(packet);
+    }
+    if (Loot* rest = bot->GetLootByWorldObjectGUID(itemGuid); rest && rest->isLooted())
+        bot->GetSession()->DoLootRelease(rest);
+}
 
 bool IsDisenchantServiceMail(Player* bot, Mail* mail)
 {

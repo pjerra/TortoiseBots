@@ -31,7 +31,19 @@ bool IsMemberOnline(uint64_t guildId, ObjectGuid const& memberGuid);
 // Membership and ranks.
 bool InviteByName(Player* inviter, std::string const& targetName, std::string* failReason = nullptr);
 bool AcceptInvite(Player* invitee, uint64_t guildId, std::string* failReason = nullptr);
+bool DeclineInvite(Player* invitee, std::string* failReason = nullptr);
 bool SetMemberRank(Player* setter, ObjectGuid const& targetGuid, uint8_t rankOrder, std::string* failReason = nullptr);
+
+// Guild management through the core's own handlers (the owner's `guild <verb>` whispers).
+bool LeaveGuild(Player* bot, std::string* failReason = nullptr);
+bool PromoteMember(Player* actor, ObjectGuid const& targetGuid, std::string* failReason = nullptr);
+bool DemoteMember(Player* actor, ObjectGuid const& targetGuid, std::string* failReason = nullptr);
+bool RemoveMember(Player* actor, ObjectGuid const& targetGuid, std::string* failReason = nullptr);
+bool SetLeader(Player* actor, std::string const& targetName, std::string* failReason = nullptr);
+
+// The core's charter price (CONFIG_CHARTER_COST_GUILD) and a line in the bot's guild chat (its rank must allow speech).
+uint32_t CharterCost();
+bool SayToGuild(Player* bot, std::string const& text, std::string* failReason = nullptr);
 
 // Guild bank DEPOSIT only (contents are private in ForeverCore).
 bool DepositMoney(Player* bot, ObjectGuid const& bankerGuid, uint64_t copper, std::string* failReason = nullptr);

@@ -4,8 +4,9 @@
 //
 // Lead's decision D2: the bot loots MONEY from the corpses of creatures its group killed. Corpse lootability (who may open it, the tap,
 // the group's loot rules), the distance and the money itself are done properly here. What a corpse holds besides money, game object
-// loot, gathering and skinning go to three named unported features (UnportedFeatures.h: "loot: items", "game object loot, gathering and
-// skinning", "loot tables (drop maps)"). Rule for those: the failure value makes the bot do LESS (no item, no object, no drop known).
+// loot and the skin of a looted corpse are named unported features where they stay unported (UnportedFeatures.h: "loot: items",
+// "loot: game objects, pickpocketing and disenchant loot", "loot tables (drop maps)"); skinning a looted corpse is ported here.
+// Rule for the named features: the failure value makes the bot do LESS (no item, no object, no drop known).
 //
 // Core facts used below (F = pinned ForeverCore, src/server/game; T = Turtle core):
 //  * A corpse's loot is a Loot object. In the open world every tapper has a personal one (Creature::m_personalLoot, Unit.cpp:12135-12153);
@@ -19,6 +20,7 @@
 #pragma once
 
 #include "TbCompat_S5.h"           // WorldQueryCompat (slice 5): the guarded world database read the loot table copy uses
+#include "playerbot/policy/loot/SkinningLootPolicy.h"   // CorpseReadyForSkinning: the core's own skinning gate
 
 #include <algorithm>
 #include <sstream>
@@ -122,16 +124,23 @@ inline bool CorpseInLootRangeCompat(Player* bot, Creature* creature)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Skinning a looted corpse and game object loot. Skinning and gathering (herb, ore) stay the named feature "loot: gathering and skinning" (failure
-// value: false = "not skinnable by this bot", counted when something was refused). A CHEST is ported since slice 9: it may be looted when it is a chest
+// Skinning a looted corpse and game object loot. Skinning is ported: the corpse carries UNIT_FLAG_SKINNABLE, this bot's own loot is
+// gone or emptied and it has not taken the skin yet (T: UNIT_FLAG_SKINNABLE + creature->loot.isLooted() + Creature::IsSkinnableBy).
+// Herb and ore nodes (the brain's gather cast) stay the named feature "loot: game objects, pickpocketing and disenchant loot" (failure
+// value: false = "not skinnable by this bot"); the host gather errand works the nodes. A CHEST is ported since slice 9: it may be looted when it is a chest
 // in its ready state; the opening cast and the window are read like a corpse's (TbCompat_I2.h LootGatherUnportedCompat, TbCompat_S9.h poll).
 // ---------------------------------------------------------------------------------------------------------------------
-// T: the corpse is skinnable by the bot: flagged, its body loot gone, and the core's own IsSkinnableBy (Creature.h). F: false.
-inline bool CorpseSkinnableByCompat(Player* /*bot*/, Creature* creature)
+// T: the corpse is skinnable by the bot: flagged, its body loot gone, and the core's own IsSkinnableBy (Creature.h).
+// F: the same three facts from the core's own cast gate (Spell::CheckCast, SPELL_EFFECT_SKINNING: the flag, then the viewer's loot must be gone
+// or emptied) and the per-viewer "already skinned" test (Creature::IsSkinnedBy: the bot's loot is a LOOT_SKINNING window, Creature.cpp:1482).
+// Loot is per viewer on F (Creature::GetLootForPlayer, Creature.h:318): a bot with no loot object at all has nothing left, so it may skin.
+inline bool CorpseSkinnableByCompat(Player* bot, Creature* creature)
 {
-    if (creature->HasUnitFlag(UNIT_FLAG_SKINNABLE))
-        tbcompat::Unported(tbcompat::Feature::GatheringLoot);
-    return false;
+    if (!bot || !creature)
+        return false;
+    Loot* loot = creature->GetLootForPlayer(bot);
+    return ai::CorpseReadyForSkinning(creature->HasUnitFlag(UNIT_FLAG_SKINNABLE), creature->IsSkinnedBy(bot),
+        loot != nullptr, loot && loot->isLooted());
 }
 
 // T: true (a spawned game object in the ready state may be looted: the legacy code checks locks and skills next). F: only a chest; a node (herb, ore,
