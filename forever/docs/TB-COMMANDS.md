@@ -60,6 +60,7 @@ The verbs of rounds R1-R3 (`forever/docs/PC-R1-NOTES.md` .. `PC-R3-NOTES.md`; ev
 | `.bot service <bot>` | the bare query (tactical): one line `food=<0\|1> water=<0\|1> healthstone=<0\|1> portals=<id:City,...\|->`, any rank of a conjure line counting |
 | `.bot service <bot> portal <spellId>` | a mage's portal (owner tier): the policy decides first (`MagePortalPolicy.h`: `dead`, `combat`, `busy` while casting, `unknown` for a non-mage, an unknown city or a portal not learned, `group` when the caller is not in the bot's raid), then the rune is granted, the bot stops and stands, and the engine's `cast` action casts it. A build without that action answers `action-not-registered` |
 | `.bot service <bot> conjure <food\|water\|healthstone>` | the highest known rank of the line through the same `cast` action (owner tier): `dead`, `not-known` when the bot has no rank of the line, `action-not-registered` without the action |
+| `.bot lfg join <dungeon id> <tank\|healer\|dps>`, `.bot lfg status`, `.bot lfg leave` | the dungeon fill for the caller's own character (#160): queues it as its party's leader, lists the slots still open and the bots the fill added, and releases them. The same refusals as `.tb lfg`; the caller's own character only, never a named player |
 
 Summon rules (spec D-8): every map, instance, combat and death rule is the shared `TeleportBotNextTo`'s (the function
 `.tb tele <character> to <character>` calls), and its refusal codes pass through unchanged (`in-combat`, `in-flight`, `dead`, `teleporting`,
@@ -1065,3 +1066,54 @@ Rules:
 * The `ORDER_ACCESS` gold bit comes from the bot rank's own `guild_rank.rights` withdraw-gold right and
   only when the guild has a bank tab.
 
+## Dungeon finder fill (#160)
+
+The 1.60 client has no dungeon finder (the core answers its dungeon list empty), so the fill keeps its own queue and
+builds the party itself. A player queues as one role; every `AiPlayerbot.RandomBotLftUpdateInterval` (default 15000 ms,
+clamped to 5000-60000) the fill adds one free host bot until the party has the composition the core's finder asks for:
+one tank, one healer, three damage. The player's own role takes one of those slots, so a solo damage player gets a tank,
+a healer and two damage bots. `AiPlayerbot.RandomBotLftMaxFillsPerInterval` (default 1, at most 5) caps the bots one
+pass may add; with the defaults four bots take about a minute. `AiPlayerbot.RandomBotLftEnabled = 0` answers `disabled`
+and groups nobody.
+
+A candidate is a host bot in the world with a running engine, free (`BotMgr::IsFreeBot`: no master, not grouped), level
+10 or more, of the player's team, not in a battleground or its queue, not teleporting, not on a taxi, not in combat and
+alive. It fills a slot its own spec covers (`AiFactory::GetPlayerRoles`); with `AiPlayerbot.RandomBotLftAllowRoleBorrow
+= 1` a bot of a class with a kit for the slot may borrow it (a warrior tank, a druid bear, a protection paladin). The
+fill prefers a natural spec, then the smallest level gap to the player, then the lowest guid.
+
+Each bot joins through `BotMgr::GroupWith` (the core's own invite/accept path; the player leads), gets the group's LFG
+role bit (`Group::SetLfgRoles`, which the engine's role resolver reads) and its kit role (the `.tb role` commit, then
+`follow`). When the player leaves by `.tb lfg leave`, logs out or leaves the party, every bot of the fill is ungrouped,
+its role cleared and it plays free again. A bot taken over by someone else meanwhile is left where it is.
+
+| Command | What it does |
+|---|---|
+| `.tb lfg join <dungeon id> <tank\|healer\|dps> [#token]` | queues the sender's own character; the sender must lead the party (or have none). Refused `not-ready` (the engine config is not loaded), `disabled`, `bad-role`, `no-such-dungeon` (not in the client's dungeon list), `already-queued`, `raid`, `not-leader`, `party-full`, `needs-player` (from the console) |
+| `.tb lfg status [<player>] [#token]` | one `lfg` line per entry: player, dungeon id and name, role, `waiting|complete`, `need=` (tank first) and `filled=` |
+| `.tb lfg leave [#token]` | releases the bots and drops the entry; `not-queued` when there is none |
+
+Real output:
+```
+lfg-begin #f1
+lfg player=Flivmage dungeon=39 dungeon_name=Stratholme role=dps state=waiting need=tank;healer;dps;dps filled= #f1
+lfg-end count=1 records=1 state=queued entries=1 #f1
+lfg-begin #f2
+lfg player=Flivmage dungeon=39 dungeon_name=Stratholme role=dps state=waiting need=healer;dps;dps filled=tank:Mtank #f2
+lfg-end count=1 records=1 state=ok entries=1 #f2
+lfg-begin #f3
+lfg player=Flivmage dungeon=39 dungeon_name=Stratholme role=dps state=complete need= filled=tank:Mtank;healer:Mpriest;dps:Mmage;dps:Mrogue #f3
+lfg-end count=1 records=1 state=ok entries=1 #f3
+```
+
+The fill's `Server.log` lines (grep `LFG fill`):
+```
+TortoiseBots: LFG fill: Flivmage queued dps for dungeon 39 (Stratholme); need tank, healer, dps, dps
+TortoiseBots: LFG fill: Mtank joins as tank (Warrior 60), party 2/5
+TortoiseBots: LFG fill: party complete for Flivmage: tank=Mtank, healer=Mpriest, dps=Mmage,Mrogue
+TortoiseBots: LFG fill: released Mtank (player left)
+```
+
+`.bot lfg` is the same service for the caller's own character: `TortoiseBots: lfg: queued dps for Stratholme (39); need
+tank, healer, dps, dps`, `TortoiseBots: lfg: waiting for Stratholme (39) as dps; need ...; filled ...`,
+`TortoiseBots: lfg: left; released 2 bot(s)`, and a refusal as `TortoiseBots: lfg: refused <code>: <text>`.

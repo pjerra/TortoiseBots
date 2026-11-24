@@ -3,6 +3,7 @@
 // out of this one and filters THIS file out of the slice build). Every command answers the same refusal the real handlers give when
 // engine::Built() is false: `error code=engine-not-built cmd=<name> msg=<percent-encoded> [#token]` (grammar version 2, forever/docs/TB-COMMANDS.md).
 #include "host/TbH3.h"
+#include "host/TbHostLfgFill.h"
 
 #include "Chat.h"
 
@@ -115,5 +116,14 @@ bool HandleHear(ChatHandler* handler, Trinity::ChatCommands::Tail args)
 {
     return h3::NotBuilt(handler, args, "hear");
 }
+}
+namespace lfg
+{
+// The fill needs the engine's free bots; this build has none.
+bool HandleLfg(ChatHandler* handler, Trinity::ChatCommands::Tail args)
+{
+    return h3::NotBuilt(handler, args, "lfg");
+}
+void RegisterScripts() { }
 }
 }

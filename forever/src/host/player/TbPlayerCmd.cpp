@@ -34,6 +34,7 @@
 #include "WorldSession.h"
 #include "host/TbAddonInfo.h"
 #include "host/TbOrdersApi.h"
+#include "host/TbHostLfgFill.h"
 #include "host/TbAutogear.h"
 
 #include <algorithm>
@@ -239,6 +240,7 @@ bool HandleHelp(Player* player, Caller const& caller)
     Say(player, "TortoiseBots: help: .bot blessing <bot|party> <warrior|paladin|hunter|rogue|priest|shaman|mage|warlock|druid> <might|wisdom|kings|salvation|sanctuary|light|auto> | player <name> <blessing|auto> | status - a paladin's blessing orders, until logout");
     Say(player, "TortoiseBots: help: .bot choice <bot|party> <aura|aspect|curse|poison_mh|poison_oh|sting|pet> <value|auto> | status - the ordered buff, poison or demon, until logout");
     Say(player, "TortoiseBots: help: .bot service <bot> [portal <spellId> | conjure <food|water|healthstone>] - what a bot can conjure or portal");
+    Say(player, "TortoiseBots: help: .bot lfg join <dungeon id> <tank|healer|dps> | status | leave - the dungeon fill for your own character");
     return true;
 }
 
@@ -767,6 +769,8 @@ bool Dispatch(Player* player, std::string_view rest)
         return HandleSummon(player, caller, scope, AfterFirstWord(rest));
     if (verb == "stats")
         return HandleStats(player, caller, scope, AfterFirstWord(rest));
+    if (verb == "lfg")
+        return lfg::HandlePlayerLfg(player, AfterFirstWord(rest));
 
     Refuse(player, verb, "unknown-verb", "no such command; try .bot help");
     return true;
