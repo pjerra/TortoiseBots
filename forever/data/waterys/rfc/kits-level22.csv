@@ -13,8 +13,8 @@ protection warrior,finger,281927,Boulderheart Band,"armory (req 22, ilvl 27)",ST
 protection warrior,finger2,5001,Heart Ring,"armory (req 22, ilvl 27)",STRICT replacement; was 278018 (ilvl 35 over cap 32)
 protection warrior,trinket,276895,Transformative Cocoon,"armory (req 1, ilvl 31)",best green armory match; verify vendor/quest/drop origin on live
 protection warrior,trinket2,,,none,"EMPTY: only one green trinket at req<=22 exists in armory (Transformative Cocoon 276895, used in trinket slot)"
-protection warrior,main_hand,5752,Wyvern Tailspike,"armory (req 22, ilvl 27)",STRICT replacement; was 277515 (ilvl 33 over cap 32)
-protection warrior,off_hand,7958,Bronze Battle Axe,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,main_hand,4824,Blurred Axe,"ItemSparse 70959 (req 22, ilvl 27, main hand axe)","TBF #159: a one-hander, so the tank can hold a shield; was 5752 (Wyvern Tailspike, a dagger)"
+protection warrior,off_hand,4820,Guardian Buckler,"ItemSparse 70959 (req 20, ilvl 25, shield, green)","TBF #159: a protection warrior needs a shield; was 7958 (Bronze Battle Axe, a two-hander: inventory type 17)"
 protection warrior,food,3770,Mutton Chop,vendor (4 alliance vendors),level-15 food (was level-1 Tough Jerky); widely stocked alliance vendor food
 protection warrior,drink,1205,Melon Juice,vendor (16 alliance vendors),level-15 drink (was level-1 Refreshing Spring Water); widely stocked alliance vendor drink
 protection warrior,bandage,3531,bandage-skill 75,crafted via First Aid (bandages-by-skill.csv),highest bandage at First Aid <=150

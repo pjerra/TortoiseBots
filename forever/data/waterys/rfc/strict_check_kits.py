@@ -1,6 +1,9 @@
 import csv, pickle, struct, re, sys
 import os
 # Usage: ITEM_DB2=<70959 Item.db2> ARMORY_PKL=<armory item pickle> python3 strict_check_kits.py
+# The pickle: {item id: {name, q, req, ilvl, slot (InventoryType), cls, sub}}; TBF #159 built one from the 70959
+# ItemSparse.db2 + Item.db2 plus the TDB 2026-10-14 hotfix item_sparse/item rows (the items the client file lacks).
+# Weapon subclass 0 (one-hand axe) is a warrior weapon: it was missing from both warrior lists.
 W = os.path.dirname(os.path.abspath(__file__))
 arm = pickle.load(open(os.environ.get("ARMORY_PKL", "r11_armory.pkl"), "rb"))
 item_bin = open(os.environ.get("ITEM_DB2", "Item.db2"), "rb").read()
@@ -13,15 +16,15 @@ for _r in _csv.DictReader(open(os.path.join(W, "gear-level18.csv"))):
 QRE = re.compile(r"quest \((\d+)")
 BADNAME = re.compile(r"\btest\b|epic|90 |naxx|trial|deprecated|unused|\bQA\b|\bGM\b|Mock\b", re.I)
 WEAR = {"mage": [(4, 1)], "rogue": [(4, 2)], "priest": [(4, 1)],
-        "protection warrior": [(4, 3)], "arms warrior": [(4, 3)]}
+        "protection warrior": [(4, 3), (4, 6)], "arms warrior": [(4, 3)]}  # (4, 6) shield: the tank's off hand
 INV = {"head": [1], "neck": [2], "shoulder": [3], "back": [16], "chest": [5, 20],
        "wrist": [9], "hands": [10], "waist": [6], "legs": [7], "feet": [8],
        "finger": [11], "finger2": [11], "trinket": [12], "trinket2": [12],
        "main_hand": [21, 13], "off_hand": [22, 23, 13, 14, 17],
        "two_hand": [17], "ranged": [25, 16, 2, 8, 19, 26, 15]}
 MELEE_OK = {"rogue": [15, 7, 13, 4, 16, 2, 3, 18, 19], "mage": [15, 7, 10, 4, 19, 21],
-            "priest": [15, 10, 4, 19], "protection warrior": [15, 7, 10, 4, 13, 21, 14, 17, 22, 23, 16, 2, 3, 1, 5, 6, 8],
-            "arms warrior": [15, 7, 10, 4, 13, 21, 14, 17, 22, 23, 16, 2, 3, 6, 8, 1, 5]}
+            "priest": [15, 10, 4, 19], "protection warrior": [0, 15, 7, 10, 4, 13, 21, 14, 17, 22, 23, 16, 2, 3, 1, 5, 6, 8],
+            "arms warrior": [0, 15, 7, 10, 4, 13, 21, 14, 17, 22, 23, 16, 2, 3, 6, 8, 1, 5]}
 fails = []
 for fn, lvl, cap in [("kits-level18.csv", 18, 25), ("kits-level22.csv", 22, 32)]:
     rows = list(csv.DictReader(open(W + "/" + fn)))
@@ -49,6 +52,9 @@ for fn, lvl, cap in [("kits-level18.csv", 18, 25), ("kits-level22.csv", 22, 32)]
         slot = r["slot"]
         if a["slot"] not in INV[slot]:
             fails.append((tag, "invType %d not slot %s" % (a["slot"], slot)))
+        if r["role"] == "protection warrior" and slot == "off_hand" and a["slot"] != 14:
+            # a tank holds a shield (INVTYPE_SHIELD 14): the kits once gave him a two-hander here (TBF #159)
+            fails.append((tag, "protection warrior off_hand invType %d is not a shield (14)" % a["slot"]))
         if a["cls"] == 2 and slot in ("main_hand", "off_hand", "two_hand", "ranged"):
             if a["sub"] not in MELEE_OK[r["role"]] and a["slot"] not in (2, 16, 11, 12):
                 fails.append((tag, "weapon sub %d not for %s" % (a["sub"], r["role"])))

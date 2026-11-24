@@ -14,7 +14,7 @@ protection warrior,finger,11967,Zircon Band,"armory (req 18, ilvl 23)",STRICT re
 protection warrior,trinket,,,none,EMPTY: no wearable trinket for protection warrior at <=18 in gear-level18.csv
 protection warrior,trinket2,,,none,EMPTY: no wearable trinket2 for protection warrior at <=18 in gear-level18.csv
 protection warrior,main_hand,276888,Quilboar Toothpick,"armory (req 1, ilvl 24)",STRICT replacement; was 279874
-protection warrior,off_hand,276887,Big Bad Basher,"armory (req 1, ilvl 24)",STRICT replacement; was 6746
+protection warrior,off_hand,4821,Bear Buckler,"ItemSparse 70959 (req 18, ilvl 23, shield, green)","TBF #159: a protection warrior needs a shield; was 276887 (Big Bad Basher, a two-hander: inventory type 17)"
 arms warrior,head,281701,Restored Mail Coif,"armory (req 1, ilvl 1)",STRICT replacement; was 7130
 arms warrior,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",STRICT replacement; was 281265
 arms warrior,shoulder,3480,Rough Bronze Shoulders,"armory (req 17, ilvl 22)",STRICT replacement; was 17695
