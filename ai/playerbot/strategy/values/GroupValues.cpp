@@ -4,6 +4,7 @@
 #include "GroupValues.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/policy/group/PartyFollowPolicy.h"
 
 using namespace ai;
 
@@ -28,14 +29,9 @@ std::list<ObjectGuid> GroupMembersValue::Calculate()
 
 bool IsFollowingPartyValue::Calculate()
 {
-    if (ai->GetGroupMaster() == bot)
-        return true;
-
-    if (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
-        ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT))
-        return true;
-
-    return false;
+    return FollowingPartyCounts(ai->HasRealPlayerMaster(), ai->GetGroupMaster() == bot,
+        ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
+        ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT));
 }
 
 bool IsNearLeaderValue::Calculate()
