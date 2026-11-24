@@ -188,9 +188,13 @@ SLICE9_KEYS = {
 # W6a (package E6): auto-equip upgrades for every bot (`equipment audit` 300 s + `item push result` bag-generation poll); commanded bots self-equip iff ClaimedBotSelfEquip.
 # Pool gear top-up rides the same `equipment audit` row (PoolGearTopUpAction.cpp, AiPlayerbot.PoolGearTopUpOnLevel): its gear pass is
 # the host's W6b gear index, so only a masterless pool bot with the knob on does anything.
-# Other keys named by MaintenanceStrategy.cpp (`clean quest log`, `use random recipe`, `open random item`, `disenchant random item`,
-# `enchant random item`, `smart destroy item`, `use random quest item`, `auto share quest`, `auto complete quest`)
-# stay unregistered and are skipped by the engine.
+# Other keys named by MaintenanceStrategy.cpp (`clean quest log`, `use random recipe`, `open random item`, `smart destroy item`,
+# `use random quest item`, `auto share quest`, `auto complete quest`) stay unregistered and are skipped by the engine.
+# `disenchant random item` / `enchant random item` stay out on purpose: TbHostProfessionUpkeep already does both for the bots the
+# design gives the upkeep to (free bots, gated by TortoiseBots.World.Disenchant / .EnchantGear), while the slice gives `maintenance`
+# to every bot, so the legacy rows would also dismantle a commanded player's loot and spend its reagents outside those switches (TB
+# adds maintenance only to a bot without a live master; their isUseful has no master gate). The enchant row would also need
+# `has reagents for` (CraftValues.cpp, not on the list) before it could score a spell at all.
 W6_KEYS = {
     "strategy": "maintenance",
     "action": "equip upgrades, pool gear top up",
