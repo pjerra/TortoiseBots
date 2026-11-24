@@ -23,6 +23,10 @@ constexpr std::uint32_t kPoolGearOutdatedItemLevelGap = 6;
 // has nothing to do either.
 constexpr std::uint32_t kPoolGearTopUpMinLevel = 5;
 
+// Name of the in-memory value that remembers the last level a bot's gear was
+// topped up at (never a database column).
+inline constexpr char kPoolGearTopUpLevelValue[] = "poolGearTopUpLevel";
+
 // A real player's companions are never touched: hired companions (random
 // record but an active hire), guild-claimed bots and any bot with a live
 // player master keep the gear their player chose.

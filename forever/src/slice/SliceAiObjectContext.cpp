@@ -53,6 +53,7 @@
 #include "playerbot/strategy/actions/MoveToRpgTargetAction.h"
 #include "playerbot/strategy/actions/MoveToTravelTargetAction.h"
 #include "playerbot/strategy/actions/MovementActions.h"
+#include "playerbot/strategy/actions/PoolGearTopUpAction.h"
 #include "playerbot/strategy/actions/PositionAction.h"
 #include "playerbot/strategy/actions/PullActions.h"
 #include "playerbot/strategy/actions/QuestRewardActions.h"
@@ -369,7 +370,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (125 of its keys)
+    // the registry of ActionContext (126 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -433,6 +434,7 @@ namespace slice
             creators["attack anything"] = [](PlayerbotAI* ai) { return new AttackAnythingAction(ai); };
             creators["avoid elite"] = [](PlayerbotAI* ai) { return new AvoidEliteAction(ai); };
             creators["idle wander"] = [](PlayerbotAI* ai) { return new IdleWanderAction(ai); };
+            creators["pool gear top up"] = [](PlayerbotAI* ai) { return new PoolGearTopUpAction(ai); };
             creators["auto share quest"] = [](PlayerbotAI* ai) { return new AutoShareQuestAction(ai); };
             creators["avoid aoe"] = [](PlayerbotAI* ai) { return new AvoidAoeAction(ai); };
             creators["flee from area"] = [](PlayerbotAI* ai) { return new FleeFromAreaAction(ai); };
@@ -1155,7 +1157,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 85, kActions = 209, kTriggers = 241, kValues = 272;
+    constexpr unsigned kStrategies = 85, kActions = 210, kTriggers = 241, kValues = 272;
 }
 }
 

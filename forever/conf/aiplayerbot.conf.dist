@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 376 keys, 367 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 329 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 377 keys, 368 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 328 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -616,6 +616,9 @@ AiPlayerbot.LevelUpMounts = 1
 
 # AiPlayerbot.RandomBotShopMounts  (bool, PlayerbotAIConfig.cpp:980)
 AiPlayerbot.RandomBotShopMounts = 0
+
+# AiPlayerbot.PoolGearTopUpOnLevel  (bool, PlayerbotAIConfig.cpp:981)
+AiPlayerbot.PoolGearTopUpOnLevel = 0
 
 # AiPlayerbot.MountBreakEvenFactor  (float, PlayerbotAIConfig.cpp:983)
 AiPlayerbot.MountBreakEvenFactor = 1.5
