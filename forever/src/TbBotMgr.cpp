@@ -14,6 +14,7 @@
 #include "host/TbHostProfession.h"
 #include "host/TbHostThievery.h"
 #include "host/TbHostProfessionUpkeep.h"
+#include "host/TbHostWorldPvp.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
 #include "AreaTriggerPackets.h"
@@ -1677,6 +1678,9 @@ void BotMgr::Update(uint32 diff)
         if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported() && !pauseEngineForErrand)
             engine::Tick(bot.brain.get(), aiElapsed);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        // The open-world PvP seek role: rolled at login (the first tick with a brain), re-rolled on the configured
+        // interval, stripped as soon as the bot is no longer a free bot of the flagged share.
+        tbhost::worldpvp::Tick(me);
         // A free bot answers an outstanding guild invite, keeps clear of the member limit and (when the
         // founding key is on) founds its own guild. Cheap while no invite stands and forming is off.
         if (_guildsEnabled && bot.free)

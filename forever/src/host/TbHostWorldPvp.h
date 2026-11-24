@@ -22,6 +22,10 @@ void OnBotLogin(Player* bot);
 // AiPlayerbot.WorldPvpSeekRerollMinutes (with jitter, never in combat). Cheap and inert without a brain.
 void Tick(Player* bot);
 
+// The engine rebuilt this bot's kit (a brain, a strategy reset): put back a role the last roll granted. The rebuild drops
+// every strategy the kit does not name; a player's own `nc -world pvp` is not undone until the next rebuild or re-roll.
+void ApplyGrantedRole(Player* bot);
+
 // True when the bot holds the seek role on either engine (for `.tb where`-style diagnostics and the tests).
 bool HoldsRole(Player* bot);
 
