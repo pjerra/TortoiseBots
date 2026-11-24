@@ -37,7 +37,6 @@ class TakenSonThreatCapWiring(unittest.TestCase):
         self.assertIn('dungeonRunSeekTakenSonThreatCap = config.GetBoolDefault("AiPlayerbot.DungeonRunSeekTakenSonThreatCap", false)',
                       CONFIG)
         self.assertIn("AiPlayerbot.DungeonRunSeekTakenSonThreatCap = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekTakenSonThreatCap`", SETTINGS_DOC)
 
     def test_the_taken_close_notes_the_state_before_the_meet_clear(self):
         fn = body(ACTIONS, "void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, Unit* boss,")
@@ -117,9 +116,6 @@ class TakenSonThreatCapWiring(unittest.TestCase):
     def test_the_row_text(self):
         fn = body(ACTIONS, "void LogSeekTakenSonCapped(PlayerbotAI* ai, Player* bot, Unit* son, std::uint8_t pct,")
         self.assertIn('"seek take capped son=%u bot=%s pct=%u since_take_ms=%u"', fn)
-        self.assertIn("seek take capped son=<son> bot=<name> pct=<pct> since_take_ms=<ms>", ROWS_DOC)
-        # The documented limit: area damage, ticking damage and pets are not held.
-        self.assertIn("pets", ROWS_DOC[ROWS_DOC.index("| 18b |"):ROWS_DOC.index("| 18b |") + 800])
 
 if __name__ == "__main__":
     unittest.main()

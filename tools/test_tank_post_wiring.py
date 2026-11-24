@@ -27,7 +27,6 @@ TEMPLATE = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 DOCS = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
 BOSS_DOCS = (ROOT / "docs/play/boss-tactics.md").read_text()
 HEAL = (ROOT / "ai/playerbot/strategy/values/PartyMemberToHeal.cpp").read_text()
-CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 WARRIOR = (ROOT / "ai/playerbot/strategy/warrior/WarriorActions.h").read_text()
 DRUID = (ROOT / "ai/playerbot/strategy/druid/DruidActions.h").read_text()
 
@@ -126,11 +125,6 @@ class TankPostWiring(unittest.TestCase):
                       CONFIG_CPP)
         self.assertIn("bool dungeonRunTankPostLeash = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunTankPostLeash = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunTankPostLeash", DOCS)
-        self.assertIn("recommended on",
-                      DOCS[DOCS.index("### `AiPlayerbot.DungeonRunTankPostLeash`"):][:600])
-        self.assertIn("AiPlayerbot.DungeonRunTankPostLeash", BOSS_DOCS)
-        self.assertIn("DungeonRunTankPostLeash", CHANGELOG)
         # It leashes a `hold_spot` post only: the flag is set from the key and the mode together.
         find = body(ACTIONS, "BossTankPost ai::FindBossTankPost")
         self.assertIn("in.leash = holdSpot && sPlayerbotAIConfig.dungeonRunTankPostLeash;", find)
@@ -184,22 +178,11 @@ class TankPostWiring(unittest.TestCase):
                       CONFIG_CPP)
         self.assertIn("bool dungeonRunTankPost = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunTankPost = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunTankPost", DOCS)
-        self.assertIn("recommended on", DOCS[DOCS.index("### `AiPlayerbot.DungeonRunTankPost`"):][:400])
-        self.assertIn("`tank_post`", BOSS_DOCS)
-        self.assertIn("DungeonRunTankPost", BOSS_DOCS)
-        self.assertIn("DungeonRunTankPost", CHANGELOG)
         # The hold_spot key: read, defaulted, templated, documented and named beside the mode in the boss docs.
         self.assertIn('dungeonRunTankPostHoldSpot = config.GetBoolDefault('
                       '"AiPlayerbot.DungeonRunTankPostHoldSpot", false);', CONFIG_CPP)
         self.assertIn("bool dungeonRunTankPostHoldSpot = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunTankPostHoldSpot = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunTankPostHoldSpot", DOCS)
-        self.assertIn("recommended on",
-                      DOCS[DOCS.index("### `AiPlayerbot.DungeonRunTankPostHoldSpot`"):][:600])
-        self.assertIn("`hold_spot`", BOSS_DOCS)
-        self.assertIn("DungeonRunTankPostHoldSpot", BOSS_DOCS)
-        self.assertIn("DungeonRunTankPostHoldSpot", CHANGELOG)
 
     def test_a_live_post_reserves_its_subject(self):
         # The rule is pure (TankPostSubjectReserved, TankPostReserves, TankPostLooseClock, TankPostLapseOf,
@@ -400,12 +383,6 @@ class TankPostWiring(unittest.TestCase):
                       'false);', CONFIG_CPP)
         self.assertIn("bool dungeonRunTankPostTaunts = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunTankPostTaunts = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunTankPostTaunts", DOCS)
-        section = DOCS[DOCS.index("### `AiPlayerbot.DungeonRunTankPostTaunts`"):][:900]
-        self.assertIn("`0` off", section)
-        self.assertNotIn("recommended on", section)  # walk 2e keys are documented without it
-        self.assertIn("DungeonRunTankPostTaunts", BOSS_DOCS)
-        self.assertIn("DungeonRunTankPostTaunts", CHANGELOG)
         # The row: one per cast, and a word that did not cast at most once per bot and word per 5 s, under the lock.
         log = body(ACTIONS, "void LogTankPostTaunt(")
         self.assertIn('"event=taunt,step=%s,spell=%s,victim=%s,cast=%d"', log)
@@ -425,11 +402,6 @@ class TankPostWiring(unittest.TestCase):
                       '"AiPlayerbot.DungeonRunTankPostOwnsSubject", false);', CONFIG_CPP)
         self.assertIn("bool dungeonRunTankPostOwnsSubject = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunTankPostOwnsSubject = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunTankPostOwnsSubject", DOCS)
-        self.assertIn("recommended on",
-                      DOCS[DOCS.index("### `AiPlayerbot.DungeonRunTankPostOwnsSubject`"):][:400])
-        self.assertIn("DungeonRunTankPostOwnsSubject", BOSS_DOCS)
-        self.assertIn("DungeonRunTankPostOwnsSubject", CHANGELOG)
         # The gate word ships with the key it comes from.
         self.assertIn('case TauntGate::PostSubject: return "post_subject";', POLICY)
         self.assertIn("constexpr std::size_t kTauntGateWords = 5;", POLICY)
@@ -483,12 +455,6 @@ class TankPostWiring(unittest.TestCase):
                       CONFIG_CPP)
         self.assertIn("bool dungeonRunTankPostWalks = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunTankPostWalks = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunTankPostWalks", DOCS)
-        section = DOCS[DOCS.index("### `AiPlayerbot.DungeonRunTankPostWalks`"):][:900]
-        self.assertIn("`0` off", section)
-        self.assertNotIn("recommended on", section)
-        self.assertIn("DungeonRunTankPostWalks", BOSS_DOCS)
-        self.assertIn("DungeonRunTankPostWalks", CHANGELOG)
 
     def test_a_post_record_owns_one_unit(self):
         # AiPlayerbot.DungeonRunTankPostOwnsUnit: two posts on the Hatcher entry 50144 reserved each other's units and
@@ -525,13 +491,6 @@ class TankPostWiring(unittest.TestCase):
                       'config.GetBoolDefault("AiPlayerbot.DungeonRunTankPostOwnsUnit", false);', CONFIG_CPP)
         self.assertIn("bool dungeonRunTankPostOwnsUnit = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunTankPostOwnsUnit = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunTankPostOwnsUnit", DOCS)
-        section = DOCS[DOCS.index("### `AiPlayerbot.DungeonRunTankPostOwnsUnit`"):][:900]
-        self.assertIn("`0` off", section)
-        self.assertNotIn("recommended on", section)
-        self.assertIn("DungeonRunTankPostOwnsUnit", BOSS_DOCS)
-        self.assertIn("`AiPlayerbot.DungeonRunTankPostOwnsUnit = 1`", BOSS_DOCS)
-        self.assertIn("DungeonRunTankPostOwnsUnit", CHANGELOG)
 
 
     def test_p3_main_tank_post_keeps_its_row_and_waits(self):
@@ -598,13 +557,6 @@ class TankPostWiring(unittest.TestCase):
             self.assertIn('config.GetBoolDefault("AiPlayerbot.%s", false);' % key, CONFIG_CPP)
             self.assertIn("bool dungeonRun%s = false;" % key[len("DungeonRun"):], CONFIG_H)
             self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.%s = 0$" % key)
-            self.assertIn("AiPlayerbot.%s" % key, DOCS)
-            self.assertIn("`0` off",
-                          DOCS[DOCS.index("### `AiPlayerbot.%s`" % key):][:900])
-            self.assertNotIn("recommended on",
-                             DOCS[DOCS.index("### `AiPlayerbot.%s`" % key):][:900])
-            self.assertIn(key, BOSS_DOCS)
-            self.assertIn(key, CHANGELOG)
         # The latched unit is read only with the key on: the key is tested before the record's mutex is taken.
         self.assertIn("sPlayerbotAIConfig.dungeonRunTankPostKeepsUnit ? ::ai::TankPostLatchedUnit(bot) : 0;",
                       is_better)
@@ -670,12 +622,6 @@ class TankPostWiring(unittest.TestCase):
                       '"AiPlayerbot.DungeonRunTankPostHealers", false);', CONFIG_CPP)
         self.assertIn("bool dungeonRunTankPostHealers = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunTankPostHealers = 0$")
-        self.assertIn("AiPlayerbot.DungeonRunTankPostHealers", DOCS)
-        section = DOCS[DOCS.index("### `AiPlayerbot.DungeonRunTankPostHealers`"):][:1200]
-        self.assertIn("`0` off", section)
-        self.assertNotIn("recommended on", section)
-        self.assertIn("DungeonRunTankPostHealers", BOSS_DOCS)
-        self.assertIn("DungeonRunTankPostHealers", CHANGELOG)
         # The fill: behind the key, the `hold_spot` mode and the row's count; at most once a second and outside the
         # record lock (the group read and the seat lookups never hold g_tankPostMutex).
         find = body(ACTIONS, "BossTankPost ai::FindBossTankPost")

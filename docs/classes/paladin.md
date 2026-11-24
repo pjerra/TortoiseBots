@@ -29,20 +29,20 @@ Paladins provide resilient group utility, customizable auras, coordinated blessi
 - Uses *Flash of Light* for efficient maintenance and *Holy Light* for heavy damage spikes.
 - Downranks direct heals (*Holy Light*, *Flash of Light*) to match wounds per [shared downranking rules](overview.md#shared-bot-behaviors).
 - Casts *Holy Shock* on allies below 50% health (`LowHealth` default).
-- Weaves *Crusader Strike* only when already in melee reach, without moving out of healing position.
+- Weaves *Holy Strike* only when already in melee reach, without moving out of healing position.
 - Deals off-spec damage (*Hammer of Wrath* on dying targets, *Holy Shock*, *Judgement*, *Exorcism* on Undead or Demon targets, *Consecration* into packs) per [healer off-DPS rules](overview.md#shared-bot-behaviors).
 - Casts *Divine Shield* (Bubble) when personally critically wounded.
 
 ### Protection (Tank)
 - Maintains *Righteous Fury* in and out of combat to boost holy threat generation.
-- Taunts loose mobs with *Hand of Reckoning*, falling back to *Righteous Defense*.
+- Taunts loose mobs with *Hand of Reckoning* when it is learned. *Righteous Defense* is Not on WoW Forever yet.
 - Drops *Consecration* against 3 or more attackers in melee reach while above medium mana (40% default), or against 2 at 70%+ mana.
 - Keeps *Holy Shield* active on cooldown for block rating and reflective holy damage.
 - Judges *Seal of Righteousness* on the primary target for sustained threat.
 
 ### Retribution (Melee DPS)
 - Maintains *Seal of Command* (falling back to *Seal of Righteousness*) and unleashes *Judgement* on cooldown.
-- Uses *Crusader Strike* as primary builder ahead of *Holy Strike*.
+- Uses *Holy Strike* as its melee strike.
 - Fires *Exorcism* instantly upon *Art of War* procs (procced Exorcism hits any enemy; unprocced Exorcism only hits Undead and Demon targets).
 - Casts *Hammer of Wrath* as an execute when targets drop below 20% health.
 - Off-heals wounded allies (*Lay on Hands* at critical health, *Holy Light* at low health, *Blessing of Protection* on an attacked ally) per [off-healing rules](overview.md#shared-bot-behaviors).
@@ -61,19 +61,20 @@ When enabled, paladin bots coordinate to maintain *Judgement of Wisdom* and *Jud
 
 ---
 
-## Turtle WoW custom spells
+## Custom abilities
 
-- **Holy Strike:** Instant holy melee strike providing Retribution and Protection paladins an active physical/holy damage builder.
-- **Bulwark of the Righteous:** Protection talent granting an active shield-slam mitigation strike with damage reduction, auto-cast whenever ready.
-- **Art of War procs** let *Exorcism* damage any enemy while the proc holds.
+- **Holy Strike:** Forever's paladin melee strike, used by Retribution and Protection.
+- **The Art of War:** a proc that lets *Exorcism* hit any enemy instead of only Undead and Demons.
+- **Bulwark of the Righteous:** Not on WoW Forever yet.
+- **Crusader Aura:** Not on WoW Forever yet.
 
 ---
 
 ## Utility & interrupts
 
-- **Blessings Coordination:** Coordinates blessings across party classes (*Kings*, *Might*, *Wisdom*, *Salvation*, *Sanctuary*, *Light*). Each paladin assigns one blessing per member, and multiple paladins stack distinct blessing families. Buff claims prevent duplicate casts. Holy healers never re-buff mid-fight; blessings are an out-of-combat job.
+- **Blessings Coordination:** Coordinates blessings across party classes (*Kings*, *Might*, *Wisdom*, *Light*). Each paladin assigns one blessing per member, and multiple paladins stack distinct blessing families. Buff claims prevent duplicate casts. Holy healers never re-buff mid-fight; blessings are an out-of-combat job. *Blessing of Salvation* and *Blessing of Sanctuary* are Not on WoW Forever yet.
 - **Manual Blessing Assignment:** [`.bot blessing`](../play/commands/bot-panel.md#bot-blessing) sets, per paladin, the blessing each class gets; classes left on `auto` keep the coordination above.
-- **Hands:** Casts *Hand of Protection* on non-tank allies facing physical danger (checking *Forbearance* to prevent wasted casts) and *Hand of Freedom* on rooted tanks (Holy) or rooted allies (other specs).
+- **Hands & Blessings:** Casts *Blessing of Protection* on non-tank allies facing physical danger (checking *Forbearance* to prevent wasted casts) and *Blessing of Freedom* on rooted tanks (Holy) or rooted allies (other specs). *Hand of Freedom* is Not on WoW Forever yet.
 - **Auras:** Holy runs *Concentration Aura*, Protection runs *Retribution Aura*, and Retribution runs *Sanctity Aura*. In raids, the first paladin bot in the fight auto-swaps to *Fire* or *Shadow Resistance Aura* on applicable bosses, then drops it out of combat. [`.bot choice`](../play/commands/bot-panel.md#bot-choice) orders one aura per paladin instead; the spec upkeep and the raid swap both stand down.
 - **Cleansing:** Uses *Cleanse* and *Purify* to remove poisons, diseases, and magic debuffs from self and allies.
 - **Crowd Control & Stuns:** Casts *Hammer of Justice* to stun dangerous casters or runners. *Repentance* interrupts with no humanoid restriction and *Turn Undead* covers assigned-CC undead.
@@ -83,20 +84,20 @@ When enabled, paladin bots coordinate to maintain *Judgement of Wisdom* and *Jud
 
 ## Talent builds
 
-Bots learn pre-set talent orders at 5-level checkpoints (levels 10–60):
+Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
-| Spec Name | Config ID | Role | 60 Allocation | Key Signatures & Synergies |
-| :--- | :--- | :--- | :--- | :--- |
-| **Holy** | `2.0` | Healer | `40 / 11 / 0` | Holy Shock, Divine Favor, Daybreak, Blessed Strikes, Illumination, 11 Prot dip. |
-| **Protection** | `2.1` | Tank | `5 / 38 / 8` | Holy Shield, Bulwark of the Righteous, Righteous Strikes, Reckoning, Sanctuary. |
-| **Retribution** | `2.2` | Melee DPS | `11 / 0 / 40` | Seal of Command, Repentance, Vengeful Strikes, Sanctity Aura, Benediction. |
+| Spec Name | Role | 60 Points (Holy / Protection / Retribution) | Key Talents |
+| :--- | :--- | :--- | :--- |
+| **Holy** | Healer | `35 / 16 / 0` | Holy Shock, Divine Favor, Illumination, Holy Power, Light's Vigil. |
+| **Protection** | Tank | `0 / 41 / 10` | Holy Shield, Reckoning, Shieldsworn, Iron Creed, Swift Judgement. |
+| **Retribution** | Melee DPS | `10 / 5 / 36` | Seal of Command, Repentance, Vengeance, Champion of the Light, Sanctified Judgement. |
 
 <details>
-<summary>Leveling milestones and progression rationale</summary>
+<summary>Leveling order</summary>
 
-- **Holy (`2.0`):** Levels 10–35 take *Divine Intellect*, *Healing Light*, *Illumination*, and *Holy Shock* (35). Levels 35–45 take *Divine Favor* (40) and *Daybreak* (45). Levels 45–60 take *Blessed Strikes* and *Holy Power*, then dip 11 points into Protection.
-- **Protection (`2.1`):** Levels 10–40 take *Redoubt*, *Precision*, *Improved Righteous Fury*, *Blessing of Sanctuary* (20), *Shield Specialization*, and *Holy Shield* (40). Levels 40–50 take *Reckoning*, *Righteous Strikes*, and *Bulwark of the Righteous* (50). Levels 50–60 dip into Retribution (*Benediction* + *Improved Judgement*) and Holy (*Divine Strength*).
-- **Retribution (`2.2`):** Levels 10–35 take *Benediction*, *Improved Judgement*, *Conviction*, *Blessing of Kings* (20), *Two-Handed Weapon Specialization*, and *Seal of Command* (35). Levels 35–45 take *Vengeance*, *Vengeful Strikes*, and *Repentance* (45). Levels 45–60 dip 11 points into Holy (*Divine Strength*, *Divine Intellect*, *Sanctity Aura*).
+- **Holy:** Spiritual Focus, Healing Light, Reverence, Divine Favor, Illumination, Holy Conduit, Infusion of Light, Oath of Light, Holy Shock, Boundless Light, Purifying Power, Holy Power, Light's Vigil, Divine Precision and Consecrated Ground; the last 16 points go to Protection (Divine Intellect, Guardian's Favor, Sacred Duty, Redoubt, Toughness, Improved Hammer of Justice).
+- **Protection:** Redoubt, Precision, Guardian's Favor, Sacred Duty, Shield Specialization, Toughness, Templar's Bulwark, Improved Righteous Fury, Anticipation, Holy Shield, Stoicism, Iron Creed, Shieldsworn, Improved Hammer of Justice, Swift Judgement and Reckoning; the last 10 points go to Retribution (Benediction, Improved Judgement, Deflection).
+- **Retribution:** Benediction, Improved Judgement, Conviction, Seal of Command, Vindication, Pursuit of Justice, Two-Handed Weapon Specialization, Sacred Arbiter, Eye for an Eye, Repentance, Vengeance, Champion of the Light, Unsealed Wrath, Sanctified Judgement and Deflection; the last 10 points go to Holy (Divine Strength, Improved Seals) and 5 to Protection (Divine Intellect).
 
 </details>
 

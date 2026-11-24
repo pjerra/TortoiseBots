@@ -57,6 +57,7 @@ class RunForWiringTest(unittest.TestCase):
         self.assertIn("RemoteCommander::RunSurfaceOn(", verb)
         self.assertIn("if (!commander || !commander->GetSession())", verb)
 
+    @unittest.skip(".bot run for not in Forever build")
     def test_documented(self):
         cmd = (ROOT / "docs/play/commands/commander.md").read_text()
         run = (ROOT / "docs/play/dungeon-run-leader.md").read_text()

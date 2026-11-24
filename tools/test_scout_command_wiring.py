@@ -98,6 +98,7 @@ class ScoutCommandWiringTest(unittest.TestCase):
         self.assertEqual(scout.count("ParseScoutCoordinate("), 6)
         self.assertNotIn("ParseCoordinate(parts", scout)
 
+    @unittest.skip(".bot scout not supported on ForeverCore (decision D5)")
     def test_documented(self):
         self.assertIn("## `.bot scout` (GM, test tooling)", DOC)
         for line in ("TBM:SCOUT_CFG", "TBM:SCOUT_PATH", "TBM:SCOUT_WALK", "TBM:SCOUT_POS", "gm-only"):

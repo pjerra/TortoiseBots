@@ -20,7 +20,7 @@ categories:
   world:
     description: "Living world systems: bot lifecycles, leveling, economy, and PvP/dungeon queues."
   classes:
-    description: "Deep-dive documentation for all 9 playable classes, specs, and Turtle WoW content."
+    description: "Deep-dive documentation for all 9 playable classes, specs and shared behavior on WoW Forever."
   server:
     description: "Installation, server configuration, settings reference, pool management, and observability."
   developers:
@@ -33,11 +33,11 @@ nodes:
   - id: classes-overview
     path: classes/overview.md
     category: classes
-    summary: Summary of the nine Vanilla classes, spec detection, combat roles, and shared behaviors in TortoiseBots.
+    summary: Summary of the nine Classic classes, spec detection, combat roles, and shared behaviors in TortoiseBots.
   - id: classes-warrior
     path: classes/warrior.md
     category: classes
-    summary: Complete guide to Warrior bot AI, stance dancing, tanking rotations, melee DPS, shouts, and Turtle WoW custom abilities.
+    summary: Complete guide to Warrior bot AI, stance dancing, tanking rotations, melee DPS, shouts, and class abilities.
   - id: classes-paladin
     path: classes/paladin.md
     category: classes
@@ -53,11 +53,11 @@ nodes:
   - id: classes-priest
     path: classes/priest.md
     category: classes
-    summary: Complete guide to Priest bot AI, healing ladders, Power Word Shield rules, threat drops, Shadow DPS, and Turtle WoW custom spells.
+    summary: Complete guide to Priest bot AI, healing ladders, Power Word Shield rules, threat drops, Shadow DPS, and class abilities.
   - id: classes-shaman
     path: classes/shaman.md
     category: classes
-    summary: Complete guide to Shaman bot AI, totem sets, weapon imbues, chain heals, shocks, and Turtle WoW custom abilities.
+    summary: Complete guide to Shaman bot AI, totem sets, weapon imbues, chain heals, shocks, and class abilities.
   - id: classes-mage
     path: classes/mage.md
     category: classes
@@ -65,95 +65,95 @@ nodes:
   - id: classes-warlock
     path: classes/warlock.md
     category: classes
-    summary: Complete guide to Warlock bot AI, DoT spreading, demon summoning, Soul Shard economy, Life Tap, and custom Turtle abilities.
+    summary: Complete guide to Warlock bot AI, DoT spreading, demon summoning, Soul Shard economy, Life Tap, and class abilities.
   - id: classes-druid
     path: classes/druid.md
     category: classes
-    summary: Complete guide to Druid bot AI, shapeshifting forms, tanking, healing, DPS rotations, and Turtle WoW custom abilities.
+    summary: Complete guide to Druid bot AI, shapeshifting forms, tanking, healing, DPS rotations, and the Forever class spell kit.
 
   # Play
   - id: play-glossary
     path: play/glossary.md
     category: play
-    summary: Short explanations of abbreviations and TortoiseBots terms.
+    summary: Short explanations of abbreviations and TortoiseBots terms used across the WoW Forever documentation.
   - id: play-getting-started
     path: play/getting-started.md
     category: play
-    summary: How to set up your client, spawn companion bots from your own account, hire mercenaries, and adventure together.
+    summary: How to log your own characters in as bots on WoW Forever, order them, and meet the free bots.
   - id: play-features
     path: play/features.md
     category: play
-    summary: Comprehensive catalog of bot features, default states, configuration toggles, and engine limits.
+    summary: Catalog of what the WoW Forever build does, with its player commands, engine, pool, guild orders, market, queues, switches and defaults.
   - id: play-commands
     path: play/commands/README.md
     category: play
-    summary: Master index of all player bot commands, permission tiers, and control channels.
+    summary: "The command channels on WoW Forever: the player .bot verbs, the addon channel, the GameMaster .tb host commands and their permission tiers."
   - id: play-commands-party-actions
     path: play/commands/party-actions.md
     category: play
-    summary: Tactical party actions, live combat toggles, and direct movement commands for player-led parties.
+    summary: Party combat orders, toggles and movement on the party chat command, the addon and the GameMaster order commands.
   - id: play-commands-commander
     path: play/commands/commander.md
     category: play
-    summary: Remote commander mode and intent commands for directing bot-only parties from anywhere.
+    summary: GameMaster commands that bind bots to a commander, issue party orders, and report a binding.
   - id: play-commands-roster-and-hiring
     path: play/commands/roster-and-hiring.md
     category: play
-    summary: Commands for managing owned alts, hiring mercenary companions, and recruiter services.
+    summary: Commands for logging your own characters in as bots, listing them, summoning, gearing and maintaining them.
   - id: play-commands-bot-panel
     path: play/commands/bot-panel.md
     category: play
-    summary: Commands for inspecting bot state, managing gear and inventory, and toggling runtime behaviors.
+    summary: Chat and addon commands that inspect a bot, show its bags and professions, and set behaviours, totems, blessings and choices.
   - id: play-commands-whispers
     path: play/commands/whispers.md
     category: play
-    summary: Direct bot delegation and command reference via chat whispers and the CLI proxy.
+    summary: "The words a bot obeys when you whisper it or speak in its party, the permission tiers behind them, and what Forever does not answer yet."
   - id: play-commands-addon
     path: play/commands/addon.md
     category: play
-    summary: Installation, GUI features, and player transport protocol for the TortoiseBotsManager addon.
+    summary: Installing the TortoiseBotsForeverManager addon, what its tabs do, and the TBM messages the server answers.
   - id: play-guild-orders
     path: play/guild-orders.md
     category: play
-    summary: How to send guild bots to farm, buy or craft items for the guild bank, and what each order state means.
+    summary: How to send guild bots to farm or craft items for the guild bank, and what each order state means.
   - id: play-dungeons-and-raids
     path: play/dungeons-and-raids.md
     category: play
-    summary: Field manual for clearing 5-player dungeons and raids with companion bots, covering corner pulling, CC discipline, boss tactics, wipe recovery, and loot rules.
+    summary: How companion bots fight in WoW Forever instances, including pulling, crowd control, interrupts, hazards, wipe recovery, loot and the GameMaster run leader.
   - id: play-dungeon-reference
     path: play/dungeon-reference.md
     category: play
-    summary: Boss kill orders, creature IDs, pooled rares, and event triggers for 18 5-player dungeons in Turtle WoW.
+    summary: The dungeon plans the run leader uses on WoW Forever, with each plan's map and boss order, and the dungeons that have no plan yet.
   - id: play-dungeon-run-leader
     path: play/dungeon-run-leader.md
     category: play
-    summary: The run leader (.bot run, AiPlayerbot.DungeonSelfClear, on by default, work in progress) that lets a bound party clear a dungeon plan by itself, its safety rules, supported steps and the keys its doors need, and the plan tables turtle-agent's exporter fills.
+    summary: "The run leader (.tb run, AiPlayerbot.DungeonSelfClear, on by default, work in progress) that lets a bound bot party clear a stored dungeon plan by itself, its safety rules, supported steps and the keys its doors need, and the plan tables the exporter fills."
   - id: play-boss-tactics
     path: play/boss-tactics.md
     category: play
-    summary: The per-boss tactics table (ai_boss_tactic), the stand sets (ai_boss_stand) and the opt-in boss tactics strategy that applies them.
+    summary: Boss tactics are not on WoW Forever yet; bots fight with their ordinary class and raid AI.
   - id: play-refusal-rows
     path: play/refusal-rows.md
     category: play
-    summary: The inventory of log rows and run notes that record a decision not to act, the reason field each carries and the fixed word set behind it.
+    summary: "The rule that a decision not to act says why, the run notes and log rows that follow it on WoW Forever, and where the Turtle-only row inventory went."
   - id: play-known-limitations
     path: play/known-limitations.md
     category: play
-    summary: Authoritative list of current engine boundaries, blocked features, explicit non-goals, and gameplay quirks.
+    summary: What the WoW Forever build does not do yet, which Turtle WoW features are absent, and the timers and quirks to expect.
 
   # World
   - id: world-living-world
     path: world/living-world.md
     category: world
-    summary: How autonomous bots roam the world, level up, travel, gather, and manage their gear.
+    summary: How free pool bots roam the world on their own, level up, travel, quest, fish, rest and buy their gear.
   - id: world-social
     path: world/social.md
     category: world
-    summary: How bots greet players, form groups, create autonomous guilds, and trade items.
+    summary: How pool bots greet players, buff them, group for shared quests, join and run guilds, and trade with their owner.
   - id: world-queues
     path: world/queues.md
     category: world
-    summary: How bots participate in Looking for Turtles dungeon matchmaking and PvP battlegrounds.
+    summary: How pool bots fill a player's dungeon party through the module's own queue and play Warsong Gulch and Arathi Basin.
   - id: world-economy
     path: world/economy.md
     category: world
@@ -163,11 +163,11 @@ nodes:
   - id: server-install
     path: server/install.md
     category: server
-    summary: How to build, compile, and configure TortoiseBots natively with the Tortoise WoW core, and verify your running build version.
+    summary: How to build, install and update TortoiseBots for WoW Forever (ForeverCore), including configuration and database delivery.
   - id: server-configuration
     path: server/configuration.md
     category: server
-    summary: Configuration files, templates, restart rules, recommended presets, settings index, and removed dead keys.
+    summary: Configuration files, restart rules, a starting preset, the settings index, and keys the Forever build does not read.
   - id: server-config-keys
     path: server/config-keys.md
     category: server
@@ -175,11 +175,11 @@ nodes:
   - id: server-settings-party
     path: server/settings/party.md
     category: server
-    summary: Configuration settings for player-owned bots, alt-bots, follow behavior, summoning, and party loot.
+    summary: Configuration settings for owned bots, alt level sync, follow behaviour and formations, maintenance, autogear, party loot and quest sync.
   - id: server-settings-hiring
     path: server/settings/hiring.md
     category: server
-    summary: Configuration settings for hiring bot companions, gear tiers, contracts, and recruiter world buffs.
+    summary: Mercenary hiring, hire prices, gear tiers and recruiter world buffs are not part of the WoW Forever build; bots come from the bot pool or from a player's own characters.
   - id: server-settings-class-behaviour
     path: server/settings/class-behaviour.md
     category: server
@@ -187,15 +187,15 @@ nodes:
   - id: server-settings-dungeons-raids
     path: server/settings/dungeons-raids.md
     category: server
-    summary: Configuration flags for encounter mechanics, hazard avoidance, raid tactics, and creature auras.
+    summary: "Settings for the run leader and for bot behaviour in dungeons: pulls and rests, retreats, charmed allies, threat lines, crowd control, creature auras, bomb runout, raid reactions, the combat monitor and reach."
   - id: server-settings-combat
     path: server/settings/combat.md
     category: server
-    summary: Configuration thresholds for health, mana, engagement distances, casting pacing, pull rules, and strategy rotation.
+    summary: Configuration thresholds for health, mana, engagement distances, casting pacing, pull rules, and open-world PvP for bot AI.
   - id: server-settings-world-population
     path: server/settings/world-population.md
     category: server
-    summary: Configuration settings for random bot population, level seeding, wandering, lifecycle, and social interactions.
+    summary: The module's bot pool settings, the immersion keys the Forever build acts on, and the keys that do nothing here.
   - id: server-settings-economy
     path: server/settings/economy.md
     category: server
@@ -203,39 +203,39 @@ nodes:
   - id: server-settings-guild-orders
     path: server/settings/guild-orders.md
     category: server
-    summary: Configuration switches for guild bank supplies, guild bank gold and sub-orders between guild bots.
+    summary: Configuration switches for guild bank access, the bot rank that guild orders use, and keeping crafting tools.
   - id: server-settings-queues
     path: server/settings/queues.md
     category: server
-    summary: Configuration settings for Looking for Turtles (LFT) dungeon autofill and battleground auto-queue systems.
+    summary: Settings for the module's dungeon-party fill and the Warsong Gulch / Arathi Basin bot round.
   - id: server-settings-performance
     path: server/settings/performance.md
     category: server
-    summary: Configuration settings for AI time budgets, activity throttling, world tick targets, and core server tuning for large bot populations.
+    summary: Configuration settings for AI time budgets, activity throttling, the world tick target, and core server tuning for large bot populations.
   - id: server-settings-logging
     path: server/settings/logging.md
     category: server
-    summary: Configuration settings for module diagnostic log levels, CSV event logs, per-bot action logs, action counts, and retention.
+    summary: Configuration settings for the module's log category, bot log file, CSV event logs, per-bot action logs, action counts, healer and boss diagnostics, and run traces.
   - id: server-admin-commands
     path: server/admin-commands.md
     category: server
-    summary: GameMaster and server console commands for managing the bot pool, synthetic auction house, and server state.
+    summary: The .tb GameMaster and server console commands for the bot pool, dungeon fill, battlegrounds, guild orders, runs and diagnostics.
   - id: server-bot-pool
     path: server/bot-pool.md
     category: server
-    summary: How the managed pool registry works, adopting legacy accounts, and safely resetting autonomous pool characters.
+    summary: How the WoW Forever pool creates its accounts and characters, keeps a target online, prunes failed rows and resets at startup.
   - id: server-dashboard
     path: server/dashboard.md
     category: server
-    summary: Setup, architecture, Prometheus metrics, and feature guide for the real-time bot observability service.
+    summary: How the WoW Forever build feeds the optional web dashboard, the module settings behind it, and what its tabs and APIs show.
   - id: server-run-trace
     path: server/run-trace.md
     category: server
-    summary: Record what a party of bots did during one run as a bt-trace v1 JSONL file plus a per-run summary, and score it offline.
+    summary: The .tb trace recorder for a party's run as a bt-trace v1 JSONL file plus a summary, scored offline.
   - id: server-decision-capture
     path: server/decision-capture.md
     category: server
-    summary: Record every run-leader decision with the facts behind it, cut a live failure into a replay fixture, and keep it as a regression test.
+    summary: The opt-in run-leader decision recorder, the tb-decision-capture format, and the replay fixture workflow.
 
   # Developers
   - id: developers
@@ -245,39 +245,39 @@ nodes:
   - id: developers-architecture
     path: developers/architecture.md
     category: developers
-    summary: Non-negotiable architectural rules governing TortoiseBots modularity, headless sessions, and zero-core-coupling.
+    summary: "How the optional module sits on ForeverCore: module-owned bot sessions, script hooks, one world thread, and build invariants."
   - id: developers-guild-supply
     path: developers/guild-supply.md
     category: developers
-    summary: Supply ladder, persisted order progress, bank withdrawals, needitems recovery, and sub-orders between guild bots.
+    summary: "How the Forever host runs guild orders: store, step policy, providers, delivery, permissions and the addon transport."
   - id: developers-strategy-engine
     path: developers/strategy-engine.md
     category: developers
-    summary: Deep dive into the Playerbots AI cycle, action baskets, triggers, multipliers, reaction queues, failure backoff, and the per-tick module pass that schedules player-owned bots ahead of the pool.
+    summary: The PlayerbotAI decision cycle, registered keys, action relevance, failure backoff, and the host tick that schedules player-owned bots ahead of the pool.
   - id: developers-bot-mechanics
     path: developers/bot-mechanics.md
     category: developers
-    summary: Comprehensive technical deep-dive into target selection algorithms, threat distribution, movement, interrupts, resting, and internal quirks.
+    summary: Target selection, interrupt and crowd-control rules, movement, upkeep, and the guards active in the Forever engine build.
   - id: developers-donor-hierarchy
     path: developers/donor-hierarchy.md
     category: developers
-    summary: Evidence priority and architectural guidelines when referencing mod-playerbots and upstream core.
+    summary: Evidence priority and architectural guidelines when referencing mod-playerbots and ForeverCore.
   - id: developers-host-api
     path: developers/host-api.md
     category: developers
-    summary: Technical specification of the generic C++ host seams, headless session lifecycle, packet bridge, and module integration contracts.
+    summary: "How the Forever module attaches to ForeverCore: bot sessions, lifecycle, script hooks, command entry points, host services, and data mirrors."
   - id: developers-licensing-audit
     path: developers/licensing-audit.md
     category: developers
-    summary: Audit record of donor source licenses, compatibility with core AGPL-3.0, and release gates.
+    summary: Audit record of donor source licences, how they combine with ForeverCore and the module's AGPL-3.0 grant, and release gates.
   - id: developers-guild-supply
     path: developers/guild-supply.md
     category: developers
-    summary: How guild orders use the guild bank as the crafting store, including the bot rank and bank access rule.
+    summary: "How the Forever host runs guild orders: store, step policy, providers, delivery, permissions and the addon transport."
   - id: developers-data
     path: developers/data/README.md
     category: developers
-    summary: Tab-separated reference tables for bot capabilities, donor tracking, spell coverage, and talent builds.
+    summary: Tab-separated reference tables for the Forever build's capabilities, donor provenance, spell coverage, and talent builds.
 
   # Reference
   - id: docs-index

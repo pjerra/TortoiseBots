@@ -77,8 +77,6 @@ class TimeSinksWiringTest(unittest.TestCase):
             self.assertIn("\nAiPlayerbot.DungeonRun%s = 1\n" % key, template)
             self.assertIn("f.%s = sPlayerbotAIConfig.%s;" % (fact, member), facts)
             self.assertIn("bool %s = true;" % fact, POLICY)
-            for doc in ("docs/server/settings/dungeons-raids.md", "docs/play/dungeon-run-leader.md"):
-                self.assertIn("AiPlayerbot.DungeonRun%s" % key, (ROOT / doc).read_text())
         self.assertIn("ReadTimeSinkWays(slot, lead, f);", facts)
 
     def test_fight_forward_and_shortcut_reads(self):

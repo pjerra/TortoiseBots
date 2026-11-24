@@ -19,12 +19,12 @@ Decision capture answers "why did the run leader do that" and turns the answer i
 
 A live failure becomes a fixture: capture the walk, cut the window out of the file, write the decision the run leader should have made, fix the code, and the fixture goes from red to green.
 
-It is **off by default** (`AiPlayerbot.DecisionCapture.Enabled = 0`). Player-led runs (`.bot run start ... player`) are not captured; bot-led runs are. One record is about 12-40 KB at 1 Hz, so 45-145 MB per hour per run: test servers only.
+It is **off by default** (`AiPlayerbot.DecisionCapture.Enabled = 0`). Player-led runs (`.tb run start ... lead=player`) are not captured; bot-led runs are. One record is about 12-40 KB at 1 Hz, so 45-145 MB per hour per run: test servers only.
 
 ## Configuration
 
 | Key | Default | Meaning |
-| :--- | :--- | :--- |
+| :--- | :---: | :--- |
 | `AiPlayerbot.DecisionCapture.Enabled` | `0` | Capture the run leader's ticks. |
 | `AiPlayerbot.DecisionCapture.Dir` | `decisions` | Output folder. Relative paths sit under `LogsDir`; an absolute path stands as written. |
 | `AiPlayerbot.DecisionCapture.SegmentMiB` | `32` | A segment rotates past this many MiB (1..256). |
@@ -33,24 +33,24 @@ It is **off by default** (`AiPlayerbot.DecisionCapture.Enabled = 0`). Player-led
 | `AiPlayerbot.DecisionCapture.RecordKiB` | `512` | A record larger than this is written as a stub and the next tick is a keyframe (64..4096). |
 | `AiPlayerbot.DecisionCapture.KeyframeEvery` | `60` | A full keyframe every this many records, always at a segment start (1..600). |
 
-The keys are read when the configuration loads. `.reload config` does not change a capture.
+The keys are read when the engine configuration loads. `.reload config` does not change a capture.
 
 ### What `TotalMiB` measures
 
-The capture folder is measured once, at server start, on a background thread. After that the total comes from each capture's writer counts (for a finished capture, its final `index.json`), so the sweep never walks the folder on the world thread. Two consequences:
+The capture folder is measured once, at server start, on a background thread. After that the total comes from each capture's writer counts (for a finished capture, its final `index.json`), so the sweep never walks the folder on the world thread.
 
 - A file something else puts into the folder while the server runs is not counted until the next restart.
 - A running capture's counted bytes can trail the file size on disk by one writer queue.
 
 Retention deletes only what a folder's own `index.json` proves is a finished capture of this format (`complete`, `incomplete`, `failed` or `stopped`). A foreign folder, a malformed index, or a symlink is never touched. A folder without a finished `index.json` is kept and never deleted, but its bytes still count toward the cap.
 
-### Deploying it on the test servers
+### Deploying it on a test server
 
-The capture is off in the shipped template. To turn it on (with `LogsDir` being the core's own key in `mangosd.conf`):
+The capture is off in the shipped template. To turn it on (with `LogsDir` being the core's own key in `worldserver.conf`):
 
 ```ini
-# mangosd.conf: the core's log folder, whatever the server already uses.
-LogsDir = "/opt/turtle/logs"
+# worldserver.conf: the core's log folder, whatever the server already uses.
+LogsDir = "/srv/forever/logs"
 
 # aiplayerbot.conf: the capture on, under LogsDir/decisions, with the shipped caps.
 AiPlayerbot.DecisionCapture.Enabled = 1
@@ -62,7 +62,7 @@ AiPlayerbot.DecisionCapture.RecordKiB = 512
 AiPlayerbot.DecisionCapture.KeyframeEvery = 60
 ```
 
-That writes `/opt/turtle/logs/decisions/<captureId>/` (substitute the server's own `LogsDir`). An absolute `Dir` works the same way.
+That writes `/srv/forever/logs/decisions/<captureId>/`. An absolute `Dir` works the same way.
 
 ## Files
 
@@ -75,7 +75,7 @@ decisions/<captureId>/seg-0002.jsonl
 ```
 
 - The capture id is `<UTC yyyymmddThhmmssZ>-<plan>-<commander>`. Plan and commander names keep letters, digits and `_` (anything else becomes `_`); the plan is cut at 48 characters, the commander at 24. `-2`, `-3` and so on are appended when the folder already exists.
-- A capture starts with `.bot run start` and ends when the run's slot goes away (`.bot run stop`, a time limit, an unbind, a shutdown). The id is named on the start line in the server log.
+- A capture starts with `.tb run start` and ends when the run's slot goes away (`.tb run stop`, a time limit, an unbind, a shutdown). The id is named on the start line in the server log.
 - `index.json` is rewritten at capture open, at every segment open, and at the end, never per tick.
 
 `status` values:
@@ -83,7 +83,7 @@ decisions/<captureId>/seg-0002.jsonl
 - `running` while the capture runs.
 - `incomplete` from the moment it ends until every segment writer has flushed, then `complete`.
 - `failed`: a writer failed, a rotation's next segment could not be opened, or an `index.json` write failed. The failure is logged once with the path and reason. A failed first write stops the capture before it starts and removes the folder again.
-- `dropped` counts the records lost on the way. The final rewrite carries the bytes and records that actually reached the disk. The open segment's `lastSeq`, `records` and `bytes` are what was known at the last index write.
+- `dropped` counts the records lost on the way. The final rewrite carries the bytes and records that actually reached the disk.
 - A shutdown that does not wait for a busy writer leaves `incomplete` (or `failed`), never a false `complete`.
 
 ## Records
@@ -108,9 +108,11 @@ One JSON object per line, version 1. `seq` counts ticks of the capture from 1 an
 - `tick` carries only the top-level fields that changed. A keyframe (`"key":true`) carries all of them. `run` holds what was written between ticks (stand searches, refusals, pause/resume orders); `post` holds what the tick itself changed.
 - `stub` replaces a record over `RecordKiB`; the next tick is a keyframe.
 - `gap` says how many lines the disk could not take; the next tick is a keyframe.
-- `end` closes the capture. Reasons include `slot released`, `all slots released`, and `server shutdown`.
+- `end` closes the capture.
 
-`capUs` is the microseconds the tick spent encoding its two snapshots (budget 2 ms). Round-trip rules:
+`capUs` is the microseconds the tick spent encoding its two snapshots (budget 2 ms).
+
+Round-trip rules:
 
 - Floats round-trip exactly (`float` `%.9g`, `double` `%.17g`; `nan`/`inf` as strings).
 - Integers are exact up to `uint64`.
@@ -118,7 +120,7 @@ One JSON object per line, version 1. `seq` counts ticks of the capture from 1 an
 
 A schema change (a field added, removed, retyped or reordered, an enumerator moved) changes the schema hash in every header. An old capture or fixture then fails with a field diff instead of replaying wrongly.
 
-Replays do not see liquid queries (a callback the generator leaves out); captures made before `d774d05ea` need `replay_decisions upgrade`.
+Replays do not see liquid queries (a callback the generator leaves out); `replay_decisions upgrade` refreshes an older fixture.
 
 ## Privacy
 
@@ -136,10 +138,12 @@ A 20-bot Zul'Gurub tick in a fight is about 20 member facts and up to 30 unit fa
 
 ## Pulling a capture
 
-- **Dashboard** (when a dashboard is configured with a decisions folder): `GET /api/v1/decisions?commander=<name>&since=<RFC3339>&until=<RFC3339>` lists the captures, and `GET /api/v1/decisions/<id>/<file>` serves `index.json` or a segment, behind the usual login.
-- **External driver**: a walk copies its own character's captures into `<out>/decisions/<id>/`, or pulls them with a `decisions pull` command for a walk that died early.
+- **From disk**: read the capture directly from `<LogsDir>/decisions/<captureId>/` (the folder `AiPlayerbot.DecisionCapture.Dir` sets). The dashboard serves no decision captures yet.
+- **External driver**: a walk copies its own character's captures into `<out>/decisions/<id>/`, or pulls them for a walk that died early.
 
 ## A failure becomes a fixture
+
+`replay_decisions` is the offline tool built from `tools/replay_decisions.cpp`.
 
 1. Find the moment: `replay_decisions find decisions/<id>/seg-*.jsonl --step 315 --order-contains pull` prints the `seq` of the pull tick. `show <segments> --seq N --facts` shows what the run leader saw.
 2. Cut the window: `replay_decisions extract <segments> --from N-20 --to N+5 --name zg-g12-pull --out-dir tools/fixtures/decisions` writes the fixture with status `open` and no expectations.

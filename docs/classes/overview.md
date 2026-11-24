@@ -18,7 +18,7 @@ relates_to:
 
 # Class AI & Roles Overview
 
-Bots cover all nine Vanilla classes. Each bot reads its spent talent points, picks the matching spec strategy, and fights in that spec's style.
+Bots cover all nine Vanilla classes. Each bot is assigned a spec for its class and spends its talent points along that spec's preset build, then fights in that spec's style.
 
 ## Supported Roles & Classes
 
@@ -29,7 +29,7 @@ Bots cover all nine Vanilla classes. Each bot reads its spent talent points, pic
 | **[Hunter](hunter.md)** | - | - | - | BM, MM, Survival | Freezing Trap, Scare Beast | None (Scatter Shot snares) |
 | **[Rogue](rogue.md)** | - | - | All Specs | - | Sap, Blind, Gouge | Kick |
 | **[Priest](priest.md)** | - | Holy, Disc | - | Shadow | Shackle Undead, Psychic Scream (PvP and close range only) | Silence (Shadow) |
-| **[Shaman](shaman.md)** | Tank (experimental) | Resto | Enhancement | Elemental | None | Earth Shock |
+| **[Shaman](shaman.md)** | - | Resto | Enhancement | Elemental | None | Earth Shock |
 | **[Mage](mage.md)** | - | - | - | All Specs | Polymorph | Counterspell |
 | **[Warlock](warlock.md)** | - | - | - | All Specs | Fear, Banish | Spell Lock (Felhunter) |
 | **[Druid](druid.md)** | Bear | Resto | Cat | Balance | Entangling Roots, Hibernate | Bash |
@@ -40,12 +40,11 @@ Bots cover all nine Vanilla classes. Each bot reads its spent talent points, pic
 
 The bot counts spent talent points in each of its three class trees. The tree with the most points picks the combat strategy. Hybrid classes also read stance, form, and gear to confirm the role.
 
-Players can use [`.bot role <Name|self>`](../play/commands/roster-and-hiring.md#bot-role) to override the result.
+GameMasters can use `.tb role <bot> <tank|healer|dps|none>` to override the result.
 Without an override, role detection uses:
 - Party composition, stance or form, and tanking gear.
-- A shaman needs a shield, *Rockbiter Weapon*, and *Totemic Alignment* or *Spirit Armor*.
-- A bot that rolled the tank build counts as a tank from its talents alone — see [Shaman tank](shaman.md#class-settings).
-- A detected shaman tank fights alongside a warrior, paladin, or druid tank instead of standing down.
+- A feral druid plays Bear only when given the tank role; otherwise it plays Cat.
+- The shaman tank spec is Not on WoW Forever yet, so no shaman is detected as a tank from its build.
 
 ---
 
@@ -62,7 +61,7 @@ Without an override, role detection uses:
 | **DPS Off-Healing** | An ally drops into a wound band (see below). | Casts emergency heals instead of attacking. Controlled by the `offheal` strategy. |
 | **Spell Downranking** | Friendly target wounded but not in critical danger. | Casts the lowest rank that covers the missing health. |
 | **Healer Positioning** | Party member out of heal range or line of sight. | Moves toward the tank or the injured member. |
-| **Looting & Gathering** | Corpse or nearby gathering node. | Pool bots approach corpses, loot quest items, and roll. Hired companions pass unless [`AiPlayerbot.HireLoot`](../server/settings/hiring.md#aiplayerbothireloot) is on. |
+| **Looting & Gathering** | Corpse or nearby gathering node. | Pool and party bots approach corpses, loot quest items, and roll on group loot. |
 
 <details>
 <summary>Runner finishing, threat back-off, off-DPS, downranking, and healer positioning details</summary>
@@ -80,7 +79,7 @@ When an enemy mob flees below 30% health (fleeing or fleeing for help, still in 
 
 ### Party Threat Back-Off
 
-In groups with the `threat` strategy active, damage dealers watch their threat against the tank. AoE threat at 50% of the tank's pauses area spells (*Volley*, *Multi-Shot*, *Blizzard*, *Flamestrike*, *Rain of Fire*, *Chain Lightning*) until threat stabilizes. Single-target threat pauses nukes only once it is climbing to pass the tank (at or above 80% with a rising trend), not on a flat 80% reading. On a boss whose fight data names a threat successor (`ai_boss_tactic` kind `threat_successor`, shipped for Hakkar) no tank can take the mob back, so the reference is the highest threat among the assigned off-tanks: damage dealers stay below the off-tank, and a threat reset hands the mob to that tank instead of to a damage dealer. A taunt-immune boss without that row (most raid bosses in this world data) keeps the highest tank as the reference, so the raid still has a working cap. On a taunt-immune target, with or without the row, the back-off also holds in a commanded group while the mob hits a member; elsewhere it still yields.
+In groups with the `threat` strategy active, damage dealers watch their threat against the tank. AoE threat at 50% of the tank's pauses area spells (*Volley*, *Multi-Shot*, *Blizzard*, *Flamestrike*, *Rain of Fire*, *Chain Lightning*) until threat stabilizes. Single-target threat pauses nukes only once it is climbing to pass the tank (at or above 80% with a rising trend), not on a flat 80% reading. Boss-specific threat-successor rows (`ai_boss_tactic` kind `threat_successor`) are **Not on WoW Forever yet**; without one, a taunt-immune boss keeps the highest tank as the reference, so the raid still has a working cap. On a taunt-immune target, with or without the row, the back-off also holds in a commanded group while the mob hits a member; elsewhere it still yields.
 
 ### Healer Off-DPS (`offdps`)
 
@@ -92,7 +91,7 @@ Healing specs get `offdps` by default (Discipline and Holy priests, Restoration 
 
 Damage rows sit at the lowest priority, so any firing heal outbids them. Solo or far from the group, the healer fights like a normal bot.
 
-What each class casts: priests use *Shadow Word: Pain*, *Holy Fire*, *Smite*, *Starshards*, *Mind Blast* (*Holy Nova* into packed melee, wand when mana is spent); druids leave Tree of Life Form for *Moonfire*, *Wrath*, *Starfire*; shamans use *Flame Shock* and *Lightning Bolt* (*Chain Lightning* into packs); paladins use *Hammer of Wrath* on dying targets, *Holy Shock*, *Judgement* and *Exorcism* on Undead or Demon targets (*Consecration* into packed melee). See the class pages for details.
+What each class casts: priests use *Shadow Word: Pain*, *Holy Fire*, *Smite*, *Starshards*, *Mind Blast* (*Holy Nova* into packed melee, wand when mana is spent); druids cast *Moonfire*, *Wrath*, *Starfire*; shamans use *Flame Shock* and *Lightning Bolt* (*Chain Lightning* into packs); paladins use *Hammer of Wrath* on dying targets, *Holy Shock*, *Judgement* and *Exorcism* on Undead or Demon targets (*Consecration* into packed melee). See the class pages for details.
 
 ### DPS Off-Healing (`offheal`)
 
@@ -110,12 +109,12 @@ Off-heals outbid damage, so they fire the moment an ally enters a band; outside 
 
 ### Switching off-spec behavior on and off
 
-Per bot, use [`.bot behavior <bot|party|raid> offheal|offdps <on|off>`](../play/commands/bot-panel.md#bot-behavior) (the addon's bot panel shows the switch that fits the bot's current spec), whisper the bot, or use [`.bot strategy`](../play/commands/party-actions.md#bot-strategy):
+Per bot, use [`.bot behavior <bot|party> offheal|offdps <on|off>`](../play/commands/bot-panel.md#bot-behavior) (the addon's bot panel shows the switch that fits the bot's current spec), whisper the bot, or use `.tb strategy` (GameMaster):
 - `/w <BotName> co +offheal` or `/w <BotName> co -offdps` (`co ?` lists active combat strategies).
-- `.bot strategy -offdps @heal` for one bot, a role, or the party.
+- `.tb strategy <bot> co +offdps`, or use `role:<tank|healer|dps>` in place of the bot, for one bot or every bot of a role.
 - Changes are saved per bot.
-- A spec change (`.bot role <bot> <spec>`, the addon's role buttons, or a talent respec) sets the new spec's default again: a healer spec gets `offdps` and loses `offheal`, a damage spec the other way round, a tank spec neither. The priest `hybrid` spec keeps its own `offdps`.
-- Server admins change the default for new bots with [`AiPlayerbot.EnableOffSpecStrategies`](../server/settings/class-behaviour.md#aiplayerbotenableoffspecstrategies) (`0` leaves the off-spec kit off and a spec change turns both off; players can still toggle it per bot).
+- A spec change (`.tb role <bot> <tank|healer|dps|none>`, the addon's role buttons, or a talent respec) sets the new spec's default again: a healer spec gets `offdps` and loses `offheal`, a damage spec the other way round, a tank spec neither.
+- Server admins cannot change the default on WoW Forever yet: `AiPlayerbot.EnableOffSpecStrategies` is not read by this build, and players can still toggle off-spec per bot.
 
 ### Spell Downranking
 

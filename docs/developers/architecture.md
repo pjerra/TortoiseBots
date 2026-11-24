@@ -2,8 +2,8 @@
 id: developers-architecture
 title: Architecture Invariants & Core Boundaries
 category: developers
-summary: Non-negotiable architectural rules governing TortoiseBots modularity, headless sessions, and zero-core-coupling.
-tags: [architecture, invariants, core, headless, modularity]
+summary: "How the TortoiseBots module sits on ForeverCore: optional build, module-owned bot sessions, script hooks, and world-thread ownership."
+tags: [architecture, invariants, core, sessions, modularity]
 relates_to:
   - developers-strategy-engine
   - developers-donor-hierarchy
@@ -12,116 +12,95 @@ relates_to:
 
 # Architecture Invariants & Core Boundaries
 
-TortoiseBots adheres to strict architectural rules to prevent the severe code coupling that crippled earlier PlayerBots implementations.
+TortoiseBots is an optional module for ForeverCore (a TrinityCore-based core). The core builds and runs without it; everything bot-specific lives in the module.
 
 ## Architectural Boundaries
 
 ```mermaid
 flowchart TD
-    subgraph Core ["Core Server (tortoise-wow)"]
-        World["World Server Tick (World::Update)"]
-        HeadlessMgr["HeadlessSessionMgr"]
-        Sessions["WorldSessions (SessionTransport::Headless)"]
-        World --> HeadlessMgr
-        HeadlessMgr --> Sessions
+    subgraph Core ["ForeverCore"]
+        Tick["World tick"]
+        Hooks["ScriptMgr hooks<br/>WorldScript / PlayerScript / UnitScript /<br/>GroupScript / ServerScript / CommandScript"]
+        Session["WorldSession<br/>(isBot flag, no socket)"]
     end
 
-    subgraph Module ["TortoiseBots Module (modules/TortoiseBots)"]
-        BotMgr["BotManager (Lifecycle & Records)"]
-        Adapters["Host Adapters (BotSessionAdapter / BotPlayerAdapter)"]
-        Engine["Strategy Engine (AiObjectContext / PlayerbotAI)"]
-        BotMgr --> Adapters
-        Adapters <--> HeadlessMgr
-        BotMgr --> Engine
+    subgraph Module ["TortoiseBots module<br/>forever/src + slice files"]
+        BotMgr["BotMgr<br/>(records, sessions, lifecycle)"]
+        BotSession["BotSession : WorldSession"]
+        Brain["Engine brain<br/>(PlayerbotAI, slice build)"]
+        Host["Host services<br/>(forever/src/host)"]
     end
 
-    subgraph Client ["Client Interface"]
-        TBM["TortoiseBotsManager Addon (separate addon repo; TBM prefix)"]
-        TBM -- "TBM<verb> addon messages" --> World
-        Sessions -- "TBM: responses" --> TBM
-    end
+    Tick --> Hooks
+    Hooks --> BotMgr
+    BotMgr --> BotSession
+    BotSession --> Session
+    BotMgr --> Brain
+    BotMgr --> Host
 ```
 
-## The 4 Core Invariants
+For ForeverCore, the module is built by this repository's root CMake (`BUILD_TORTOISEBOTS=1`); the Turtle core ignores that file and collects `src/` through `TortoiseBots.cmake` instead. The legacy bot engine is a separate option, `TORTOISEBOTS_SLICE1`, which adds the `ai/playerbot` files listed in `forever/SLICE-W4.txt`.
 
-| Invariant | Architectural Principle | Violations to Prevent | Enforcement Mechanism |
-| :--- | :--- | :--- | :--- |
-| **1. 100% Modular Native C++** | Module lives entirely in `modules/TortoiseBots/`. | Direct core edits, mandatory module dependencies. | CMake `-DMODULES=disabled` build gate. |
-| **2. Zero Core Coupling** | Core server contains zero bot AI or state. | `WorldSession::GetBot()`, `Player::m_bot`, `if (IsBot())`. | `tools/verify_penqle_host_contract.sh --core <path>` audit. |
-| **3. Generic Headless Sessions** | Bots use standard `WorldSession` with `SessionTransport::Headless`. | Custom socket subclasses, bypassing network auth. | Headless checks, Human Reclaim protocol. |
-| **4. Narrow Host Boundary** | All host interaction passes through explicit adapters in `host/`. | Direct header pollution, leaking module types into core. | `tools/verify_penqle_host_contract.sh`. |
+## The four invariants
 
----
+| Invariant | Rule | How the build enforces it |
+| :--- | :--- | :--- |
+| **1. Optional module** | The core compiles and runs with `BUILD_TORTOISEBOTS=0`. Bot AI, commands and host services never enter core source. | CMake returns early when the option is off; module sources live under `forever/src`. |
+| **2. No bot AI in the core** | The core owns sessions, maps, spells and packets; the module owns bot records, decisions and strategies. The core's bot-specific surface is the session `isBot` flag and the generic accommodations that read it. | Module-only sources; the core is unmodified apart from the public script and session API. |
+| **3. Module-owned bot sessions** | A bot is a `TortoiseBots::BotSession`, a `WorldSession` subclass constructed with the core's `isBot` flag. It logs in through the normal character load, has no socket, and drops everything the server sends except the cast-result packets the engine reads. | `BotSession` uses only public `WorldSession` members; the core writes `online` state per character for bot sessions. |
+| **4. One world thread** | Bot records, AI objects, strategy graphs and host services are touched on the world thread only. Hooks that can run elsewhere queue a copy and the world tick drains it. | `BotMgr::Update` runs from `WorldScript::OnBeforeMapsUpdate`; the addon channel has its own queue. |
 
-## Detailed Invariant Specifications
+The build also refuses to configure with the core's own PlayerbotV2 module enabled: two bot systems would register two `.bot` command sets and two session drivers.
 
-### 1. 100% Modular Native C++ Module
-The core server ([tortoise-wow](https://github.com/tortoise-wow/tortoise-wow)) must compile cleanly without TortoiseBots enabled (`-DMODULES=disabled`). TortoiseBots lives entirely inside `modules/TortoiseBots/`.
+## 1. Optional module
 
-### 2. Zero Core Coupling (No `GetBot()` or `m_bot`)
-Direct bot references are never introduced into core engine code:
-* No `WorldSession::GetBot()` or `Player::m_bot`.
-* No scattered `if (IsBot())` checks in core combat, movement, or spell systems.
-* All bot state, AI decision engines, strategies, and inventories are owned exclusively by the `TortoiseBots` module.
+`CMakeLists.txt` is for ForeverCore only. It declares `BUILD_TORTOISEBOTS` (default off) and returns immediately when it is off. The module target is a static library built from `forever/src`; the slice build adds the legacy engine files from `forever/SLICE-W4.txt`, the replaced factory/context sources, and the shared trace, decision-capture and combat-monitor runtime units.
 
-### 3. Generic Headless Sessions (`SessionTransport::Headless`)
-Bot sessions are not special core subclasses. They are standard `WorldSession` instances backed by `SessionTransport::Headless`:
-* One Headless entry per character (duplicate starts for the same character are rejected); any number of headless character sessions per account — the headless side has no cap.
-* **Human Reclaim Always Wins:** If a human logs into an account while a bot is active on the same character, the bot is cleanly logged out and human control takes precedence immediately.
-* Headless sessions never manipulate `LoginDatabase` online account status, preserving normal network authentication boundaries.
+The Turtle build path still exists in the repository (`TortoiseBots.cmake`, `src/`, `host/`, `runtime/`), but it is not what this documentation describes: those host adapters are not compiled into the Forever module.
 
-### 4. Narrow, Centralized Host Boundary
-All interaction between the module and core server passes through explicit adapters in `host/` (full boundary: [host-api.md](host-api.md)):
-* `BotHostAdapter`: world-tick entry (`WorldScript` `OnUpdate`) driving `BotManager`/AI updates.
-* `BotSessionAdapter`: Manages headless session allocation and termination via `World::StartHeadlessSession`.
-* `BotPacketAdapter`: Handles packet routing and interception.
-* `BotAddonAdapter`: addon-message entry (`PLAYERHOOK_ON_ADDON_MESSAGE`, `TBM` prefix) forwarding to the single `.bot` command entry.
-* `BotChatAdapter`: chat-command entry (`AllCommandScript` for `.bot`); owns the drain of the queued player commands.
-* `BotPlayerAdapter`: Interacts with standard `Player` objects through native server APIs; answers the core LFT managed-bot hooks (`IsManagedBot` gate + `GetBotRoles` role answer).
+## 2. No bot AI in the core
 
-The world-tick entry returns before updating module services when
-`AiPlayerbot.Enabled = 0` (also when no AI configuration file is found).
-This leaves disabled services inert, including periodic performance reporting
-and stale-hire recovery. The AI enable flag is read at startup; changing it
-requires a restart.
+The core knows a session can have no socket and that a player can be driven by a module; it does not know what a bot decides. There is no `WorldSession::GetBot()`, no `Player::m_bot`, no `sPlayerBotMgr` and no `PlayerBotEntry` anywhere in the core source.
 
-Within that world-tick pass, `BotManager::UpdateBots` schedules bots without any core involvement: bots under a real player update first and unbudgeted, while the random pool follows as a turn queue whose per-tick budget engages only while the previous world tick ran long. For scheduling details, see [Strategy Engine & Action Scheduling](strategy-engine.md).
+The `isBot` flag is read by generic mechanics that must treat a socketless actor correctly, not by bot AI: session teardown and `online` bookkeeping, the group rolecheck/repop participants, battleground queue accounting, achievements, pet handling, death recap, and auto-equipping of new bags. Anything the engine needs from the world arrives through script hooks, public `Player`/`Unit` APIs, or the module's own compat layer.
 
-Module and bot AI state is touched on the world thread only. A player's `.bot` or `TBM` command can arrive on a map or AsyncPackets thread, so the command adapters queue it (requester guid + text, never a pointer) and the world tick drains it before the bot update (every tick, also with the AI disabled); commands without an in-game player run inline (they are already on the world thread). See [host-api.md](host-api.md). The packet hooks follow the same rule: chat delivered to a bot is copied and handled by the world tick, and master -> bot lookups off the world thread read a guid view `BotManager` publishes under a lock once per tick instead of walking its records. A bot's AI is deleted on the world thread, and the AI storage lock covers only the lookup, so a packet hook off the world thread never keeps a `PlayerbotAI` or bot `Player` pointer: every packet an AI handles is copied, keyed by the bot's guid, and handed to the AI by the same world-tick drain, which resolves the guid again. Only a hook on the world thread itself, and the master's map-thread mimic summary (the world thread waits for map threads), use an AI directly. Commands, deferred chat and deferred packets share one sequence number stamped at enqueue, and the drain runs them merged by it, so a player's chat and `.bot` commands reach the bots in the order the module received them. To keep that world-thread drain cheap, each AI publishes which chat it reads (party chat and whispers, where its orders come from; `runtime/BotChatGate.h`) and the hook does not copy the other lines.
+## 3. Module-owned bot sessions
 
----
+`BotSession` is a normal `WorldSession` created with the core's `isBot` flag. It:
 
-## Related Player-Facing Boundaries
+- starts the ordinary character load (`LoginQueryHolder`) and enters the world through `HandlePlayerLogin`;
+- sends nothing and keeps nothing the server sends, except `SMSG_SPELL_FAILURE`, `SMSG_CAST_FAILED` and `SMSG_SPELL_DELAYED` for the bot's own cast, copied into a bounded queue for the engine;
+- has no socket, so the core skips socket teardown and the account-level `online` write, and clears only that character's online flag;
+- is owned by the module's `BotMgr`, not by the core's session map.
 
-Player-facing boundaries, gameplay quirks, and project non-goals are cataloged in [Known Limitations & Quirks](../play/known-limitations.md). Key architectural invariants include:
-- **Summon Sequencing:** Re-binding the master occurs before follow movement is resumed to guarantee ownership cannot be hijacked during a teleport transition.
-- **Out-of-AH Inventory Queries:** Bots check their inventory values using cached vendor and pricing models rather than sending world-wide auction queries.
+`BotMgr::Login` refuses a second session on the same game account (owned bots of one Battle.net account may share a game account under the stated conditions). A bot is also logged out when the account's real session begins loading, so an owner reclaiming the character keeps it.
 
-## Optional raid boss observations
+## 4. One world thread
 
-`RaidBossDiagnostics` uses the existing unit-update and packet-send hooks to
-record engaged raid bosses when explicitly enabled. The synchronous combat
-opcode is observed on its owning map/world thread; asynchronous packet handling
-remains deferred. No player, creature or AI pointer is retained. Per-instance
-throttle metadata is mutex-protected, and threat lists are read only when a
-snapshot is due. Health fields are samples/estimates, not post-damage guarantees.
-See [the host contract](host-api.md#raid-boss-diagnostics-module-only).
+The host tick is `WorldScript::OnBeforeMapsUpdate`: it calls `BotMgr::Update` and then the pool, battleground, dashboard and (in the slice build) run/feed/trace services. Bots with a master and owned bots are visited first and whole; the rest form a turn queue that the per-tick budget may cut. Bot sessions that are still loading, teleporting or logging out are never cut.
+
+Player-facing entry points:
+
+| Entry | Thread and handling |
+| :--- | :--- |
+| `.bot` command | `PlayerScript::OnCommand`, inline on the world thread (chat opcodes are thread-unsafe and run there). It refuses without the engine or with the module off, and the core then answers the word normally. |
+| TBM addon message | `PlayerScript::OnAddonMessageSent` copies the requester key and text into a bounded queue (never a `Player` or session pointer); a separate world `OnUpdate` script drains it. Bots cannot drive the channel. |
+| Bot chat (whispers/party) | `PlayerScript::OnChat` (`host/chat/TbChatIn.cpp`) hands a copy to the bot's inbox; the world tick drains the arrivals before the bot pass and the engine reads them on its next turn. |
+| `.tb` console/GM command | `CommandScript` table in `forever/src/TbScripts.cpp`; each handler validates the caller and reads live state through the public API. |
+| Cast result | `BotSession::SendPacket` may be called from any sending thread; it only touches the cast-result queue's mutex and counters. The engine drains it on the world thread. |
+
+## Lifecycle and shutdown
+
+`BotMgr` owns every bot record and session. Logout paths drop the engine brain before the `Player` is deleted, because the legacy engine holds a `Player` pointer. At server shutdown the module saves and logs out every bot while the world is still up. A bot whose master logs out waits for the configured grace period, then logs out; an owned bot leaves with its owner instead of waiting.
 
 ## Policy headers by domain
 
-Pure decision rules live in `*Policy.h` headers grouped by domain, so the
-policy for a feature is found by folder instead of by guessing a file name:
-`ai/playerbot/policy/<domain>/` for bot-AI rules (combat, pull, raid,
-dungeon, travel, heal, loot, quest, gear, class, rpg) and
-`runtime/policy/<domain>/` for lifecycle/service rules (pvp, hire, ah, pet,
-class, provision, infra, lfg). Includes use paths relative to the existing
-include roots (e.g. `playerbot/policy/travel/TravelRoutePolicy.h`), so no
-new include directory is needed. Headers still referenced by an open
-feature branch stay at their old flat path until that branch lands; the
-flat names disappear once the last branch moves over.
+Pure decision rules live in `*Policy.h` headers grouped by domain: `ai/playerbot/policy/<domain>/` for bot-AI rules (ah, bg, class, combat, death, dungeon, gear, group, guild, heal, item, loot, profession, pull, quest, raid, rpg, town, travel, world) and `runtime/policy/<domain>/` for lifecycle/service rules (ah, class, guild, hire, infra, lfg, movement, pet, provision, pvp). Includes use paths relative to the existing include roots (for example `playerbot/policy/travel/TravelRoutePolicy.h`), so no new include directory is needed.
 
-The Forever port's opt-in Onyxia observer is a module host service
-(`forever/src/host/TbOnyxia`), not a core boss-script modification. Its
-core-free phase state has a standalone fixture; native API access stays in
-the host, on the existing world-thread engine tick. Observations and watches
-are cleared independently for each bot and instance.
+## Onyxia observer
+
+The opt-in Onyxia observer is a module host service (`forever/src/host/TbOnyxia`), not a core boss-script change. It exists only in the slice build and only while a GM starts it with `.tb onyxia`; observations and watches are cleared independently for each bot and instance. Its core-free phase policy is covered by `tools/test_forever_onyxia.cpp`.
+
+## Related boundaries
+
+Player-facing boundaries, gameplay quirks and project non-goals are catalogued in [Known Limitations & Quirks](../play/known-limitations.md).

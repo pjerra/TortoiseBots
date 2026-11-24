@@ -2,7 +2,7 @@
 id: classes-priest
 title: Priest Bot Guide
 category: classes
-summary: Complete guide to Priest bot AI, healing ladders, Power Word Shield rules, threat drops, Shadow DPS, and Turtle WoW custom spells.
+summary: Complete guide to Priest bot AI, healing ladders, Power Word Shield rules, threat drops, Shadow DPS, and class abilities.
 tags: [classes, priest, healer, dps, ranged]
 relates_to:
   - classes-overview
@@ -35,9 +35,7 @@ Priests select healing spells based on health bands (bands follow [Combat settin
 Direct heals are downranked to match target wounds per [shared downranking rules](overview.md#shared-bot-behaviors), using the lowest rank covering missing health. Full ranks are used at or below critical health (20% default) — or when heavy incoming damage would push the target below it before the cast lands. *Desperate Prayer* serves as a self-only emergency heal.
 
 ### Power Word: Shield & Weakened Soul Refusal
-The bot verifies that the target does not have the *Weakened Soul* debuff before casting *Power Word: Shield*. If present, the shield is skipped in favor of direct heals. Above 20% health the shield is also held off a warrior or bear tank, in or out of combat, since absorbed hits give no rage and starve the tank's threat (a shield cast between pulls still eats the next pull's opening hits); the shield still lands as the save at or below 20%. A warrior in Defensive Stance or a druid in Bear Form counts as a tank for this rule even without Protection or Feral talents, but an explicitly assigned non-tank role wins over the stance (for a hired bot, its own assigned role counts only while it has an active master). A damage-dealing warrior who switches to Defensive Stance counts as a tank while he holds it, unless he has an assigned non-tank role.
-
-In a Patchwerk fight with the opt-in tank roles ([Patchwerk roles](../play/dungeons-and-raids.md#patchwerk-opt-in-roles)) a priest in range pre-shields an engaged soaker below critical heals while no tank or Patchwerk-assigned member sits below almost-full health (90%).
+The bot verifies that the target does not have the *Weakened Soul* debuff before casting *Power Word: Shield*. If present, the shield is skipped in favor of direct heals. Above 20% health the shield is also held off a warrior or bear tank, in or out of combat, since absorbed hits give no rage and starve the tank's threat (a shield cast between pulls still eats the next pull's opening hits); the shield still lands as the save at or below 20%. A warrior in Defensive Stance or a druid in Bear Form counts as a tank for this rule even without Protection or Feral talents, but an explicitly assigned non-tank role wins over the stance. A damage-dealing warrior who switches to Defensive Stance counts as a tank while he holds it, unless he has an assigned non-tank role.
 
 ### Threat Drops & Loose Adds
 - **Fade:** Casts *Fade* when climbing toward the tank's threat (60% or more) on a mob the tank holds, or immediately when attacked by a mob in a group (the attacked row runs at the highest priority; the climbing-threat row sits below heal rows).
@@ -56,16 +54,16 @@ In a Patchwerk fight with the opt-in tank roles ([Patchwerk roles](../play/dunge
 <summary>Healer off-spec damage and wand stops</summary>
 
 - **Off-spec DPS:** Enabled by default via the `offdps` strategy per [healer off-DPS rules](overview.md#shared-bot-behaviors), casting *Shadow Word: Pain*, *Holy Fire*, *Smite*, *Starshards* (only above 50% mana and beyond 15 yards), or *Mind Blast* (*Holy Nova* into packed melee) against engaged mobs.
-- **Wand Stops:** Because wand shots incur global cooldown on Turtle WoW, the `wand blocks cast` trigger stops active wanding as soon as a heal or a nuke needs the cast window. A separate `wand blocks cc` trigger stops wanding while a *Shackle Undead* cast is queued. A Holy or Discipline priest in a group checks every moment while it wands (not once per shot), so it stops the wand and heals within one wand swing of a hit.
+- **Wand Stops:** The bot stops wanding as soon as a heal or a nuke needs the cast window. A separate `wand blocks cc` trigger stops wanding while a *Shackle Undead* cast is queued. A Holy or Discipline priest in a group checks every moment while it wands (not once per shot), so it stops the wand and heals within one wand swing of a hit.
 
 </details>
 
 ---
 
-## Turtle WoW custom spells
+## Custom abilities
 
-- **Chastise:** Custom talent providing a ranged snare at interrupt priority, locking enemy casters at high priority.
-- **Ascendance:** Holy capstone talent providing an emergency healing throughput boost during intense phases. The bot holds the cooldown until someone actually needs healing (a party member low or the group hurt), instead of firing it on a quiet tick.
+- **Chastise:** a ranged disorient at interrupt priority, used to stop enemy casters.
+- **Ascendance:** Not on WoW Forever yet.
 
 ---
 
@@ -74,27 +72,27 @@ In a Patchwerk fight with the opt-in tank roles ([Patchwerk roles](../play/dunge
 - **Party Buffs:** Maintains *Power Word: Fortitude*, *Divine Spirit*, and *Shadow Protection*. Replaces single-target casts with group prayers (*Prayer of Fortitude*, etc.) when trained and reagents are stocked.
 - **Fear Ward:** Casts *Fear Ward* on the party tank first to prevent fear-based wipes, re-applying once the cooldown clears.
 - **Dispels:** Uses *Dispel Magic* on allies, and *Abolish Disease* (falling back to *Cure Disease*) on infected party members.
-- **Crowd Control:** Casts *Shackle Undead* on assigned undead CC marks (in dungeons only on the assigned mark unless `auto cc` is on; open world and raids also free-pick). *Psychic Scream* is off by default in dungeons, raids, and real-player groups; re-enable with `co +aoe fear`.
+- **Crowd Control:** Casts *Shackle Undead* on assigned undead CC marks (in dungeons only on the assigned mark unless `auto cc` is on; open world and raids also free-pick). *Psychic Scream* is off in dungeons, raids, and real-player groups (the `aoe fear` override is not registered on WoW Forever yet).
 - **Resurrection:** Revives fallen allies out of combat with *Resurrection* (dropping *Shadowform* first).
 
 ---
 
 ## Talent builds
 
-Bots learn pre-set talent orders at 5-level checkpoints (levels 10–60):
+Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
-| Spec Name | Config ID | Role | 60 Allocation | Key Signatures & Synergies |
-| :--- | :--- | :--- | :--- | :--- |
-| **Holy** | `5.0` | Healer | `14 / 37 / 0` | Spirit of Redemption, Ascendance, Spiritual Guidance, Inspiration, Discipline dip. |
-| **Shadow** | `5.1` | Ranged DPS | `20 / 0 / 31` | Mind Flay, Shadowform, Vampiric Embrace, Discipline dip. |
-| **Discipline** | `5.2` | Healer / Support | `40 / 11 / 0` | Resurgent Shield, Enlighten, Chastise, Force of Will, Inner Focus, Holy dip. |
+| Spec Name | Role | 60 Points (Discipline / Holy / Shadow) | Key Talents |
+| :--- | :--- | :--- | :--- |
+| **Holy** | Healer | `13 / 38 / 0` | Spirit of Redemption, Spiritual Guidance, Spiritual Healing, Prayer of Mending, Holy Nova. |
+| **Shadow** | Ranged DPS | `15 / 0 / 36` | Mind Flay, Shadowform, Vampiric Embrace, Vampiric Touch, Shadow Weaving. |
+| **Discipline** | Healer / Support | `40 / 11 / 0` | Power Infusion, Penance, Divine Aegis, Renewed Hope, Soul Warding. |
 
 <details>
-<summary>Leveling milestones and progression rationale</summary>
+<summary>Leveling order</summary>
 
-- **Holy (`5.0`):** Early levels build healing throughput (*Improved Renew*, *Divine Fury*, *Inspiration*, *Improved Healing*), reaching *Spirit of Redemption* (40). Mid levels take *Spiritual Guidance*, *Spiritual Healing*, and *Ascendance* (50). Late levels dip into Discipline (*Mental Agility*, *Improved Power Word: Fortitude*, *Inner Focus*).
-- **Shadow (`5.1`):** Early levels build Shadow damage (*Improved Mind Blast*, *Shadow Focus*, *Mind Flay* at 25, *Shadow Weaving*), reaching *Vampiric Embrace* (35). Mid levels take *Vampiric Touch* (35) and *Darkness*. Late levels dip into Discipline (*Mental Agility*, *Inner Focus*, *Improved Power Word: Shield*, *Meditation*).
-- **Discipline (`5.2`):** Early levels build mitigation and efficiency (*Silent Resolve*, *Unbreakable Will*, *Inner Focus*, *Improved Power Word: Shield*, *Meditation*). Mid levels take *Mental Strength*, *Searing Light* (40), *Enlighten* (45), *Resurgent Shield*, and *Chastise* (50). Late levels take *Force of Will* plus 11 points in Holy (*Improved Renew*, *Holy Focus*, *Divinity*, *Divine Fury* 1/5).
+- **Holy:** Improved Renew, Holy Specialization, Divine Fury, Inspiration, Holy Nova, Blessed Recovery, Holy Reach, Improved Healing, Spirit of Redemption, Spiritual Guidance, Litany of Light, Spiritual Healing, Prayer of Mending, Twilight Focus and Holy Specialization; the last 13 points go to Discipline (Wand Specialization, Twin Disciplines, Martyrdom, Mental Strength, Mental Agility, Inner Focus).
+- **Shadow:** Shadow Focus, Improved Mind Blast, Mind Flay, Improved Mind Flay, Improved Shadow Word: Pain, Vampiric Embrace, Shadow Weaving, Dark Inspiration, Silence, Devouring Contagion, Darkness, Early Demise, Shadowform, Shadow Reach and Spirit Tap; the last 15 points go to Discipline (Twin Disciplines, Mental Strength, Mental Agility, Inner Focus, Meditation).
+- **Discipline:** Twin Disciplines, Silent Resolve, Mental Strength, Inner Focus, Improved Power Word: Shield, Meditation, Mental Agility, Improved Inner Fire, Soul Warding, Penance, Renewed Hope, Divine Aegis, Power Infusion and Power in Light; the last 11 points go to Holy (Improved Renew, Twilight Focus, Divine Fury, Holy Specialization).
 
 </details>
 

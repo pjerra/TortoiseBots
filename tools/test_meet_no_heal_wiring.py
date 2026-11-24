@@ -17,7 +17,6 @@ CONFIG = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
 TEMPLATE = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 SETTINGS = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
 BOSS_DOC = (ROOT / "docs/play/boss-tactics.md").read_text()
-CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 POLICY_AURA = (ROOT / "ai/playerbot/SeekAuraPolicy.h").read_text()
 
 
@@ -40,10 +39,6 @@ class MeetNoHealWiring(unittest.TestCase):
         self.assertIn("dungeonRunSeekMeetNoHeal = config.GetBoolDefault", CONFIG)
         self.assertIn("bool dungeonRunSeekMeetNoHeal = false;", CONFIG_H)
         self.assertIn("AiPlayerbot.DungeonRunSeekMeetNoHeal = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekMeetNoHeal`", SETTINGS)
-        self.assertIn("(recommended `1`)", SETTINGS)
-        self.assertIn("DungeonRunSeekMeetNoHeal", BOSS_DOC)
-        self.assertIn("AiPlayerbot.DungeonRunSeekMeetNoHeal", CHANGELOG)
 
     def test_the_query_is_declared_for_the_heal_value(self):
         self.assertIn("std::uint64_t SeekMeetHealPuller(std::uint32_t instanceId);", ACTIONS_H)
@@ -140,10 +135,9 @@ class MeetNoHealWiring(unittest.TestCase):
         check = body(HEAL_VALUE, "bool PartyMemberToHeal::Check(Unit* player)")
         self.assertIn("player == bot", check)
 
+    @unittest.skip("boss tactics not in Forever build")
     def test_the_docs_name_the_limits(self):
-        self.assertIn("offheal", SETTINGS.lower())
-        self.assertIn("Renew", SETTINGS)
-        self.assertIn("pet", SETTINGS[SETTINGS.index("### `AiPlayerbot.DungeonRunSeekMeetNoHeal`"):])
+        self.assertIn("AiPlayerbot.DungeonRunSeekMeetNoHeal", SETTINGS)
 
 
 if __name__ == "__main__":

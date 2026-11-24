@@ -2,7 +2,7 @@
 id: docs-index
 title: TortoiseBots Documentation
 category: reference
-summary: Start page, role-based navigation, task finder, and audience directory for the documentation catalog.
+summary: Start page, role-based navigation, task finder, and audience directory for the WoW Forever documentation catalog.
 tags: [index, start, navigation, directory]
 relates_to:
   - play-getting-started
@@ -14,121 +14,104 @@ relates_to:
 
 # TortoiseBots Documentation
 
-Welcome to the TortoiseBots documentation catalog for Tortoise WoW 1.18.1. This knowledge base covers player commands, class mechanics, living world systems, server configuration, and developer architecture.
+Welcome to the TortoiseBots documentation catalog for **WoW Forever** (ForeverCore, Classic 1.60.1 client). This knowledge base covers player commands, class mechanics, the living world, server configuration and developer architecture.
 
 ## Start Here
 
-- [Getting started](play/getting-started.md) — install the addon, spawn your first alts, and build your party.
-- [What bots can do](play/features.md) — complete catalog of bot capabilities, defaults, and feature flags.
-- [Commands](play/commands/README.md) — full command directory for party actions, whispers, and roster management.
-- [Known limitations](play/known-limitations.md) — engine boundaries, deliberate non-goals, and known quirks.
+- [Getting started](play/getting-started.md) — install the addon, log your own characters in as bots, and build your party.
+- [What bots can do](play/features.md) — catalog of what the Forever build does, with its switches and defaults.
+- [Commands](play/commands/README.md) — the player command directory.
+- [Known limitations](play/known-limitations.md) — what is not built yet, deliberate gaps, and timers.
 - [Glossary](play/glossary.md) — what the abbreviations and bot terms mean.
-- [Install (for admins)](server/install.md) — build, compile, and configure TortoiseBots with the core server.
+- [Install (for admins)](server/install.md) — build and configure TortoiseBots for ForeverCore.
 
 ## I Want To...
 
 | I want to... | Where to go |
 | :--- | :--- |
-| Set up the client and summon my first bot alt | [Getting started](play/getting-started.md) |
-| See every bot feature and toggle flag in one place | [What bots can do](play/features.md) |
-| Order my party to pull a pack and retreat around a corner | [Pullback tactics](play/commands/party-actions.md#bot-action-pullback) |
-| Stop bots from breaking crowd control like Polymorph | [Crowd control discipline](play/commands/party-actions.md#bot-action-cc) |
-| Direct my party to interrupt enemy spellcasters | [Interrupt command](play/commands/party-actions.md#bot-action-interrupt) |
-| Hire a mercenary companion or full raid roster at an inn or capital recruiter | [Hiring mercenaries](play/commands/roster-and-hiring.md#capital-recruiter-services) |
-| Train my own alts at a class trainer | [Trainer whisper](play/commands/whispers.md#w--trainer) |
-| Inspect bot equipment, bags, trade windows, or combat stats | [Bot panel](play/commands/bot-panel.md#bot-panel-commands) |
-| Look up kill orders and mechanics for 5-man dungeons (a reference for you, not bot behaviour) | [Dungeon reference](play/dungeon-reference.md) |
-| Handle wipe recovery and run back to the instance | [Wipe recovery](play/dungeons-and-raids.md#wipe-recovery--instance-navigation) |
-| Level my companion alts automatically with my character | [Sync alt level](server/settings/party.md#aiplayerbotsyncaltleveltomaster) |
-| Fill missing tank or healer roles in dungeon finder queues | [LFT autofill](world/queues.md#looking-for-turtles-lft-dungeon-autofill) |
-| Send a guild bot to farm, buy or craft items for the guild bank | [Guild orders](play/guild-orders.md) |
-| See how bots sell and buy on the Auction House | [Living AH](world/economy.md#living-auction-house) |
-| Blacklist or override an item price on the Auction House | [Admin commands](server/admin-commands.md#autonomous-auction-house-administration-bot-ah--ahbot) |
-| Summon lost or stuck companion bots | [Summon alts](play/commands/roster-and-hiring.md#bot-summon) |
-| Understand Turtle WoW custom spells and abilities | [Class AI](classes/overview.md) |
-| Watch the bot fleet and stuck bots on a live web map | [Observability dashboard](server/dashboard.md) |
-| Reset the random bot pool and re-seed character levels | [Bot pool reset](server/bot-pool.md) |
-| Build and compile the module from source | [Server install](server/install.md) |
-| Port a feature or contribute a bugfix | [Developer index](developers/README.md) |
+| Log my own alt in as a bot and summon it | [Getting started](play/getting-started.md) |
+| See every bot feature and switch in one place | [What bots can do](play/features.md) |
+| Pull a pack around a corner | [Pullback](play/commands/party-actions.md#addon-action-buttons) |
+| Stop bots from breaking crowd control | [Toggles](play/commands/party-actions.md#toggles) |
+| Direct my party to interrupt a caster | [Interrupt](play/commands/party-actions.md#addon-action-buttons) |
+| Inspect a bot's stats | [Bot panel](play/commands/bot-panel.md#inspection) |
+| Read the kill orders and mechanics of a 5-man dungeon | [Dungeon reference](play/dungeon-reference.md) (Turtle data: layouts only, not Forever IDs) |
+| Handle a wipe and get back to the instance | [Dead bots and wipes](play/dungeons-and-raids.md#dead-bots) |
+| Fill a missing tank or healer role with free bots | [Dungeon fill](play/commands/roster-and-hiring.md) and [Queues](world/queues.md) |
+| Send a bot in my guild to farm, buy or craft for the bank | [Guild orders](play/guild-orders.md) |
+| See how bots use the auction house | [Living AH](world/economy.md#living-auction-house) |
+| Summon a lost or stuck companion | [Summon](play/commands/roster-and-hiring.md#summon) |
+| Understand the class AI | [Class overview](classes/overview.md) |
+| Watch the bot fleet on a live web map | [Observability dashboard](server/dashboard.md) |
+| Create, start or reset the bot pool | [Bot pool](server/bot-pool.md) |
+| Trace a party's dungeon run | [Run trace](server/run-trace.md) |
+| Build the module from source | [Server install](server/install.md) |
+| Port a feature or fix a bug | [Developer index](developers/README.md) |
 
 ## Players
 
 | Page | What you find there |
 | :--- | :--- |
-| [Getting started](play/getting-started.md) | Client setup, `/tbm` addon, spawning owned alts, and first party setup. |
-| [What bots can do](play/features.md) | Complete feature catalog, default states, and setting toggles per area. |
-| [Command directory](play/commands/README.md) | Overview of all bot commands, permission levels, and channel syntax. |
-| [Tactical party actions](play/commands/party-actions.md) | Direct combat intents (`attack`, `pullback`, `interrupt`, `cc`, formations). |
-| [Remote commander](play/commands/commander.md) | Directing bot-only parties from anywhere in the world. |
-| [Guild orders](play/guild-orders.md) | Sending guild bots to fetch items, order states, and bank delivery. |
-| [Roster and hiring](play/commands/roster-and-hiring.md) | Adding alts, hiring mercenaries, recruiter buffs, and gear progression. |
-| [Bot panel and inspection](play/commands/bot-panel.md) | Equipment and inventory management, behavior toggles, and diagnostic views. |
-| [Whisper commands](play/commands/whispers.md) | Quick one-to-one bot orders grouped by combat, rest, trade, and town. |
-| [Addon (TortoiseBotsManager)](play/commands/addon.md) | In-game UI guide and silent addon communication protocol. |
-| [Dungeon and raid tactics](play/dungeons-and-raids.md) | Pull mechanics, boss tactics, hazard evasion, wipe runs, and loot rules. |
-| [Dungeon reference](play/dungeon-reference.md) | Kill orders, creature IDs, pooled rares, and events for 18 dungeons (reference for you; bots do not read it). |
-| [Dungeon run leader](play/dungeon-run-leader.md) | `.bot run` (on by default, work in progress): a bound party walks a stored dungeon route by itself; route tables and safety rules. |
-| [Boss tactics table](play/boss-tactics.md) | Opt-in per-boss rows (`ai_boss_tactic`): interrupts, kill order, stay behind. |
-| [Known limitations](play/known-limitations.md) | Engine limits, deliberate non-goals, targeting rules, and known quirks. |
-| [Glossary](play/glossary.md) | Abbreviations and TortoiseBots terms in plain words. |
-| [Classes overview](classes/overview.md) | Shared class AI, spec detection, combat roles, and interrupt logic. |
-| [Warrior](classes/warrior.md) | Stance dancing, Protection tanking, Arms/Fury DPS, and shouts. |
-| [Paladin](classes/paladin.md) | Holy healing, Protection tanking, Retribution DPS, and judgements. |
-| [Hunter](classes/hunter.md) | Pet upkeep, ranged rotations, melee Survival, and Aspect of the Viper. |
-| [Rogue](classes/rogue.md) | Stealth openers, combo finishers, poisons, and Feint/Vanish threat drops. |
-| [Priest](classes/priest.md) | Holy/Discipline healing ladder, Power Word Shield rules, and Shadow DPS. |
-| [Shaman](classes/shaman.md) | Four-element totem sets, Chain Heal triage, melee Enh, and shocks. |
-| [Mage](classes/mage.md) | Frost, Fire, and Arcane rotations, Polymorph crowd control (CC), and Counterspell. |
-| [Warlock](classes/warlock.md) | DoT spreading, demon pet selection by spec, Soul Shards, and Life Tap. |
-| [Druid](classes/druid.md) | Bear tanking, Cat DPS, Restoration healing, and Tree of Life. |
+| [Getting started](play/getting-started.md) | Client setup, `/tbfm`, your own alts, first party, free bots. |
+| [What bots can do](play/features.md) | The feature catalog, default states and setting names per area, plus what is not on Forever. |
+| [Command directory](play/commands/README.md) | All player commands, permissions and channel syntax. |
+| [Party actions](play/commands/party-actions.md) | Combat intents: attack, pull, pullback, interrupt, CC clear, toggles and object tasks. |
+| [Roster and character commands](play/commands/roster-and-hiring.md) | Adding and logging out your alts, summoning, maintenance and gearing. |
+| [Bot panel](play/commands/bot-panel.md) | Inspection, gear, inventory and behaviour toggles. |
+| [Whisper commands](play/commands/whispers.md) | One-to-one bot orders grouped by combat, rest, trade and town. |
+| [Addon (TortoiseBotsForeverManager)](play/commands/addon.md) | The `/tbfm` UI and the `TBM:` message protocol. |
+| [Guild orders](play/guild-orders.md) | Sending a bot in your guild to farm, buy or craft; order states and delivery. |
+| [Dungeons and raids](play/dungeons-and-raids.md) | Pulling, CC, interrupts, hazards, wipes, loot and the GameMaster run leader. |
+| [Dungeon reference](play/dungeon-reference.md) | Creature IDs and events of Turtle WoW 5-mans; layouts only for Forever. |
+| [Run leader](play/dungeon-run-leader.md) | `.tb run` and the plan tables, for server admins. |
+| [Boss tactics](play/boss-tactics.md) | The Turtle-era per-boss table; not applied on Forever. |
+| [Known limitations](play/known-limitations.md) | Missing features, the unported list, timers and workarounds. |
+| [Glossary](play/glossary.md) | Abbreviations and TortoiseBots terms. |
+| [Classes overview](classes/overview.md) | Shared class AI, spec detection, roles and interrupts. |
+| [Warrior](classes/warrior.md), [Paladin](classes/paladin.md), [Hunter](classes/hunter.md), [Rogue](classes/rogue.md), [Priest](classes/priest.md), [Shaman](classes/shaman.md), [Mage](classes/mage.md), [Warlock](classes/warlock.md), [Druid](classes/druid.md) | Per-class rotations and utility. |
 
 ## What Bots Do on Their Own
 
 | Page | What you find there |
 | :--- | :--- |
-| [Living world](world/living-world.md) | Autonomous questing, grinding, level seeding, gear upkeep, and travel. |
-| [Social](world/social.md) | Group invites, getting bots into your guild, greetings, and player trading. |
-| [Queues and matchmaking](world/queues.md) | Looking for Turtles dungeon autofill and PvP battleground matchmaking. |
-| [Economy](world/economy.md) | Autonomous auction house market, vendor trips, repairs, and gold flow. |
+| [Living world](world/living-world.md) | Questing, grinding, gear upkeep, professions and travel. |
+| [Social](world/social.md) | Invites, guild participation, greetings and trading. |
+| [Queues and matchmaking](world/queues.md) | The dungeon fill and WSG/AB battlegrounds. |
+| [Economy](world/economy.md) | Vendors, repairs, the auction market and gold flow. |
 
 ## Server Admins
 
 | Page | What you find there |
 | :--- | :--- |
-| [Installation](server/install.md) | CMake compilation, module dependencies, updates, and version verification. |
-| [Configuration](server/configuration.md) | Configuration files, templates, quick presets, and live reload rules. |
-| [Admin commands](server/admin-commands.md) | GameMaster commands for bot pools, AH market control, and account adoption. |
-| [Bot pool management](server/bot-pool.md) | Managed pool registry, account structures, and safe pool reset procedures. |
-| [Observability dashboard](server/dashboard.md) | Real-time web dashboard, 2D live map, Prometheus metrics, and issue tracker. |
-| [Run trace](server/run-trace.md) | Opt-in recorder of a party's run (`.bot trace`), the `bt-trace` v1 schema, and the offline scorer. |
-| [Decision capture](server/decision-capture.md) | Opt-in recorder of every run-leader decision, the `tb-decision-capture` format, and the replay fixture workflow. |
-| [Party settings](server/settings/party.md) | Follow distances, summon rules, alt-bot persistence, and loot rolling. |
-| [Hiring settings](server/settings/hiring.md) | Mercenary hiring fees, recruiter quests, gear tiers, and world buffs. |
-| [Class behavior settings](server/settings/class-behaviour.md) | AI flags for Aspect of the Viper, Judgements, threat drops, and demon choices. |
-| [Dungeon and raid settings](server/settings/dungeons-raids.md) | Boss encounter flags, bomb runout ranges, and creature aura avoidance. |
-| [Combat settings](server/settings/combat.md) | Health and mana percentage thresholds, ranges, global cooldown (GCD) delays, and pull pacing. |
-| [World population settings](server/settings/world-population.md) | Bot population limits, level ladder rotation, wandering, greetings, and trading. |
-| [Economy settings](server/settings/economy.md) | Auction house market pacing, synthetic supply, and vendor batch sizes. |
-| [Guild order settings](server/settings/guild-orders.md) | Guild bank material withdrawals, guild bank gold, and sub-orders between guild bots. |
-| [Queue settings](server/settings/queues.md) | Dungeon finder backfill intervals and battleground queue parameters. |
-| [Performance settings](server/settings/performance.md) | AI tick time budgets, activity throttling, and core server optimizations. |
-| [Logging settings](server/settings/logging.md) | Module verbosity, structured CSV logs, action traces, and UDP telemetry. |
-| [Hire gear sets](reference/hire-gear.md) | Static level-60 hire equipment sets per class and tier. |
+| [Installation](server/install.md) | CMake build for ForeverCore, config and SQL delivery, version checks. |
+| [Configuration](server/configuration.md) | Config files, templates, restart and reload rules, presets. |
+| [Admin commands](server/admin-commands.md) | `.tb` commands for the pool, fill, battlegrounds, guild orders, runs and diagnostics. |
+| [Bot pool](server/bot-pool.md) | Registry, scheduler, pruning and the startup reset. |
+| [Observability dashboard](server/dashboard.md) | UDP telemetry, the web dashboard, metrics and APIs. |
+| [Run trace](server/run-trace.md) | The `.tb trace` recorder, the `bt-trace` schema and the offline scorer. |
+| [Decision capture](server/decision-capture.md) | The run-leader decision recorder and the replay fixture workflow. |
+| [Party settings](server/settings/party.md) | Follow distances, summoning, formations and loot. |
+| [Class behavior settings](server/settings/class-behaviour.md) | AI flags for Aspect of the Viper, Judgements, threat drops and demons. |
+| [Dungeon and raid settings](server/settings/dungeons-raids.md) | Encounter flags, hazard ranges and aura avoidance. |
+| [Combat settings](server/settings/combat.md) | Health and mana thresholds, ranges, GCD delays and pull pacing. |
+| [World population settings](server/settings/world-population.md) | Pool sizes, level seeding, wandering, greetings and trade. |
+| [Economy settings](server/settings/economy.md) | Auction market pacing, supply and vendor batches. |
+| [Guild order settings](server/settings/guild-orders.md) | Bank withdrawals, gold and sub-orders. |
+| [Queue settings](server/settings/queues.md) | Dungeon-fill intervals and battleground parameters. |
+| [Performance settings](server/settings/performance.md) | Tick budgets, activity and core tuning. |
+| [Logging settings](server/settings/logging.md) | Module log level, action logs, traces and telemetry. |
+| [Hire gear sets](reference/hire-gear.md) | Generated level-60 hire sets from the Turtle-era generator; the Forever build has no hire system. |
 
 ## Developers
 
 | Page | What you find there |
 | :--- | :--- |
-| [Developer index](developers/README.md) | Contributor workflows, coding standards, tools, and testing commands. |
-| [Architecture invariants](developers/architecture.md) | Decoupled C++ modularity, headless session lifecycle, and zero core coupling. |
-| [Guild supply chain](developers/guild-supply.md) | Supply ladder, guild bank withdrawals, and waiting for missing materials. |
-| [Strategy engine](developers/strategy-engine.md) | AI update loop, action baskets, triggers, multipliers, and failure backoffs. |
-| [Bot mechanics and quirks](developers/bot-mechanics.md) | Targeting and interrupt logic, movement physics, gear evaluation, and technical quirks. |
-| [Donor hierarchy](developers/donor-hierarchy.md) | Provenance precedence across shyalya, mod-playerbots, and upstream core. |
-| [Host API contract](developers/host-api.md) | C++ generic seam interfaces, session hooks, and packet bridge contracts. |
-| [Licensing audit](developers/licensing-audit.md) | AGPL and GPL lineage compatibility, donor tracking, and release gates. |
-| [Data reference tables](developers/data/README.md) | Overview of TSV reference tables for bot data and donor mapping. |
-| [Capabilities census](developers/data/capabilities.tsv) | Tab-separated inventory of donor features vs TortoiseBots implementation. |
-| [Donor map](developers/data/donor-map.tsv) | Tab-separated file-by-file mapping of donor lineages and sources. |
-| [Spell coverage](developers/data/spell-coverage.tsv) | Tab-separated census of game spells mapped to bot actions and strategies. |
-| [Talent builds](developers/data/talent-builds.tsv) | Tab-separated reference of preset leveling talent allocations. |
+| [Developer index](developers/README.md) | Contributor workflows, coding standards, tools and tests. |
+| [Architecture invariants](developers/architecture.md) | Modularity, headless sessions and the core boundary. |
+| [Guild supply chain](developers/guild-supply.md) | Supply ladder, bank withdrawals and sub-orders. |
+| [Strategy engine](developers/strategy-engine.md) | AI update loop, action baskets, triggers and multipliers. |
+| [Bot mechanics](developers/bot-mechanics.md) | Targeting, threat, movement, interrupts and resting. |
+| [Donor hierarchy](developers/donor-hierarchy.md) | Provenance precedence across donors. |
+| [Host API contract](developers/host-api.md) | Host seams, session hooks and packet bridges. |
+| [Licensing audit](developers/licensing-audit.md) | AGPL/GPL lineage and release gates. |
+| [Data tables](developers/data/README.md) | Capabilities, donor map, spell coverage and talent builds. |

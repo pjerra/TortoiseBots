@@ -2,7 +2,7 @@
 id: server-bot-pool
 title: Managing & Resetting the Bot Pool
 category: server
-summary: How the managed pool registry identifies pool accounts, adopting legacy accounts, and safely resetting autonomous pool characters.
+summary: How the WoW Forever pool creates its own accounts and characters, keeps a target number online, prunes failed rows, and resets at world startup.
 tags: [server, pool, reset, admin, database, registry]
 relates_to:
   - server-settings-world-population
@@ -12,142 +12,108 @@ relates_to:
 
 # Managing & Resetting the Bot Pool
 
-Pool bots are autonomous characters that level, wander, run dungeons, and trade. Player characters and owned alts are never part of the pool. This page covers how the server tells them apart, how to adopt legacy bot accounts, and how to rebuild the pool.
+The pool is a set of bot characters the module **creates itself** and logs in as free bots on a schedule. Player characters and your own alts are never part of the pool. This page covers the registry, the scheduler, pruning and the opt-in reset.
 
-For pool size and creation settings, see [World population settings](settings/world-population.md).
+The features the bots use while online are in [What bots can do](../play/features.md#the-living-world).
 
-## The Managed Pool Registry
+## The pool registry
 
-An account counts as a pool account **only** if it has a record in the registry table. The registry is the character-database table that tracks managed pool accounts.
+Three character-database tables hold the pool:
 
-- **Prefix is not ownership.** [`AiPlayerbot.RandomBotAccountPrefix`](settings/world-population.md#aiplayerbotrandombotaccountprefix) names new bot accounts and finds legacy candidates. A matching prefix alone never authorizes deletion.
-- **Validation before deletion.** Every registered account is checked against the login database (account ID and username) before anything destructive runs. A renamed or missing account fails validation instead of being deleted.
-- **Player accounts stay out.** Personal accounts and owned alts are never registered, even if a name looks like a bot prefix.
-
-## Adopting Legacy Bot Accounts
-
-Servers upgraded from older systems may have bot accounts that were never registered. At startup the server logs an error for accounts that match the bot prefix but are not registered. They are ignored by the pool until adopted.
-
-Adoption runs **only at the server console**:
-
-1. Preview candidates with [`bot pool adopt preview`](admin-commands.md#bot-pool-adopt-preview). The output lists matching accounts and gives a confirmation token, valid for 5 minutes.
-2. Review the list. The token is derived from the exact previewed set: any change before confirming invalidates it.
-3. Confirm with [`bot pool adopt confirm <challenge>`](admin-commands.md#bot-pool-adopt-confirm).
-4. Check enrollment with [`bot pool status`](admin-commands.md#bot-pool-status).
-
-Confirming is idempotent: already-registered accounts are counted, not errored. Adoption only adds registry rows. It never deletes, renames, or modifies characters or accounts.
-
-## Lineages: level 60s roll new level 1 alts
-
-Pool bots level on their own, so given enough time the whole pool reaches level 60 and the low zones empty. Lineages keep them alive without a reset: when the pool holds too few characters below level 60, a level 60 pool bot "rolls an alt", a new level 1 character, the way a veteran player starts an alt. The 60 is not removed; it stays in the pool and keeps taking turns online.
-
-- **When:** once a minute the server counts the pool characters below level 60. While there are fewer than [`LineageLowBandReserve`](settings/world-population.md#aiplayerbotlineagelowbandreserve) times the number the [level ladder](settings/world-population.md#aiplayerbotlevelladder) wants online in those bands, it rolls alts, spaced out to at most [`LineagePerHour`](settings/world-population.md#aiplayerbotlineageperhour) per hour. It stops by itself once there are enough, and never runs during a pool reset.
-- **Who:** a level 60 pool bot from the smallest lineage. Hired companions, pinned bots, claimed guild bots and the player's own characters never roll alts.
-- **The alt:** always level 1 (the start-level range only populates a fresh world), same faction as the parent on any pool account of that faction (a new account when they are all full), a class the lineage does not have yet (random once all are taken), any race of the faction and a new name. No gold or items from the parent. It joins the parent's guild when [`LineageJoinParentGuild`](settings/world-population.md#aiplayerbotlineagejoinparentguild) is on, the guild has only bots, and it is below [`GuildMaxBotLimit`](settings/world-population.md#aiplayerbotguildmaxbotlimit).
-- **No extra CPU:** the number of bots online does not change. The level ladder simply finds someone to log in at low level again.
-- **Nothing is deleted.** At [`LineagePoolCeiling`](settings/world-population.md#aiplayerbotlineagepoolceiling) times the online bot count no more alts are created, the server log says so once and the dashboard shows "ceiling reached".
-
-Each alt is recorded in the `tortoise_bots_lineage` table with its parent, the founder (the first character of the line), its name, race and class at creation, when it was created and when it reached 60. Existing characters are founders of their own line, so nothing needs migrating. A pool reset clears the table.
-
-The dashboard shows the line on a bot's page ("alt of X", every member with class, level, created, reached 60 and last online) and pool health on the Server panel: pool characters per level band, alts per day and per faction, the longest a level 60 has gone unseen against its expected turn, the distance to the ceiling and the character database size.
-
-## Resetting the Managed Bot Pool
-
-Use a reset when fresh-character rules change (level seeding, starter gear, talent or profession seeding) and you want every pool character regenerated. The reset deletes all managed characters but keeps the login accounts, so auto-create refills the pool with new characters.
-
-Resetting needs `AiPlayerbot.RandomBotAutoCreate = 1`. Without auto-create the reset is refused, so the world is never left empty.
-
-The reset runs **only during world startup**, one step per world tick:
-
-- `.reload config` never starts a reset.
-- No live in-game reset command exists. A running world is never mutated.
-
-### ForeverCore: `TortoiseBots.Pool.Reset`
-
-The ForeverCore build reads its own module key instead of the `AiPlayerbot` keys above, from `modules/tortoise_bots.conf`:
-
-| Setting Value | Behavior |
+| Table | What it holds |
 | :--- | :--- |
-| `"off"` | Never reset. Default. |
-| `"once:<token>"` | Reset on the next startup while `<token>` differs from the last completed one (1-128 printable, non-space characters). Leaving the token in place makes later starts a no-op. |
-| `"always"` | Reset on every startup. Development only; never overwrites a stored one-shot token. |
-| *(anything else)* | One error line and no reset. |
+| `tb_pool_account` | The accounts the module made (`TBPOOL0001` ...). `username`, a random creation stamp (written as the account's e-mail, the one field the core's account lookup reads back) and a state. |
+| `tb_pool_character` | The characters on those accounts: name, guid (empty until the character exists), race, class, gender, state, last login and last logout. |
+| `tb_pool_state` | One row: the last completed reset generation and when it finished. |
 
-What it does, in the same startup-only state machine:
+- **Ownership is the row, not the name.** Only a registered row is used. A character on a pool account without a ready row is kept and counted, never deleted. A real player's account has no row, so it can never enter the pool.
+- **States.** `creating` is written before the account or character exists; only `ready` rows are used. A row whose account id, name or stamp no longer agree (a restored auth database, a reused id, a manual repair) becomes `stale` and is never acted on. A creation that cannot be finished becomes `failed`; only `.tb pool prune` removes it.
+- **The module creates the tables itself** when `TortoiseBots.Pool.Enable = 1` and the database user may create tables. If it may not, apply the files in `forever/sql/characters/` by hand (see [Install](install.md#database)). With a table missing, the pool is off and logs one error line; the server stays up.
+- **One character per account.** One session per account is the core's rule, so a second character on a pool account could never be online.
 
-- Targets **only** `ready` rows of the pool registry (`tb_pool_character`) whose account still passes the pool's username/id/creation-stamp proof. A character on a pool account that has no ready pool row is **kept and counted**, never deleted; a normal player account has no registry row, so it is never a target.
-- Deletes one character per world tick through the core's character deletion, after re-reading that row, the character's account, the account's session and its auction listings.
-- Refuses the whole reset before the first deletion when: a guild led by a pool character holds any member outside the pool (including a member with no character row), a target owns an auction listing (the core deletion does not remove listings), a target account carries a player session, or a database read does not answer.
-- Records the generation in `tb_pool_state` only after the characters table proves every target gone, then refills with normal pool creation to `TortoiseBots.Pool.MaxCharacters` (a pool larger than that cap shrinks to it).
-- `.tb pool status` ends with `pool reset=... phase=... targets=... applied=...`.
+## Enabling and creating
 
-Needs `TortoiseBots.Pool.Enable = 1` and `TortoiseBots.Pool.CreatePerMinute > 0`; the reset is refused otherwise.
-
-### Reset Modes
-
-Set [`AiPlayerbot.RandomBotPoolReset`](settings/world-population.md#aiplayerbotrandombotpoolreset) in `aiplayerbot.conf`:
-
-| Setting Value | Behavior |
-| :--- | :--- |
-| `off` | Never reset. Default and recommended for live servers. |
-| `once:<token>` | Reset on next startup only, if `<token>` differs from the last completed token. The token is 1-128 printable, non-space characters. |
-| `always` | Reset on every startup. Development only: wipes progression on each restart. Never overwrites a stored one-shot token. |
-| *(anything else)* | Logs an error and aborts the reset. `once:` with no token counts as invalid. |
-
-### Step-by-Step Reset Workflow
-
-1. **Back up the character database.**
-2. Start the server with `AiPlayerbot.RandomBotPoolReset = off`.
-3. Check the pool with [`bot pool status`](admin-commands.md#bot-pool-status) (server console, or in-game as a GameMaster).
-4. If upgrading an old database, adopt legacy accounts first ([preview](admin-commands.md#bot-pool-adopt-preview), then [confirm](admin-commands.md#bot-pool-adopt-confirm), both console only).
-5. Confirm managed accounts with [`bot pool accounts`](admin-commands.md#bot-pool-accounts) (console only).
-6. Stop `mangosd` cleanly.
-7. Edit `aiplayerbot.conf`:
-   ```ini
-   AiPlayerbot.RandomBotPoolReset = once:fresh-build-01
-   AiPlayerbot.RandomBotAutoCreate = 1
-   ```
-8. Start the server and watch `Server.log` for reset progress.
-9. Verify the rebuild with [`bot pool status`](admin-commands.md#bot-pool-status). Auto-create refills the pool toward the target between `MinRandomBots` and `MaxRandomBots`.
-10. Leave the token in place. Since it matches the completed generation, it will not run again. If the server stops mid-reset, the unfinished generation is not recorded and the reset resumes on next startup.
-
-### What a Reset Intentionally Deletes
-
-- Character progress for pool bots: levels, equipment, inventory, bank, quests, professions (deleted through core character deletion).
-- Module rows tied to those characters: AI state, custom strategies, ownership, hire ledger, armory snapshots, hire-unlock kills, transmogs, unclaimed guild claims, guild orders, lineage records.
-- Hired mercenaries riding pool accounts: their hire state is forgotten and ledger rows go with the character.
-- Guilds made up only of pool bots, as a side effect of deleting every member.
-- Active auction listings posted by pool bots, after refunding bidders by mail. Hardcore bidders follow core rules and are not refunded. If a bidder cannot be resolved, the reset stops before deleting the listing.
-
-What survives or is guaranteed:
-
-- **Login accounts are never deleted.** The server keeps them. Auto-create makes level 1 characters on them, and each fresh bot is level-seeded on first login to a random level between `AiPlayerbot.RandomBotStartLevelMin` and `RandomBotStartLevelMax` (defaults `5` and `60`).
-- **Claimed bots survive.** A pool bot that accepted your guild invite (claimed) is excluded from the deletion set.
-- **Friends survive.** A pool bot on a player's friends list is excluded from the deletion set too. Only friends lists of characters outside the managed pool count.
-- **Pinned names do not resurrect.** Pinned bots on managed accounts are deleted with the pool. Pinned resolution looks names up, so a deleted pinned name does not come back by itself; auto-create picks new random names.
-- **An empty pool is a verified no-op.** The generation is still recorded, so a token cannot silently wipe a pool that auto-create builds afterwards.
-
-### Safety Guarantees & Multi-Phase Execution
-
-The startup reset runs in safety phases:
-
-```mermaid
-flowchart TD
-    Start["Startup Hook: Plan, After Guild and Human Preflight"] --> Plan["1. Planning: Drain Sessions"]
-    Plan --> Settle["2. Settle Auctions: Refund Bidders (1 Character per Tick)"]
-    Settle --> Delete["3. Deleting: 1 Character per Tick (Abort on Human Login)"]
-    Delete --> Verify["4. Verify 0 Characters Remain"]
-    Verify --> Record["5. Record Token; Reload Candidates; Auto-Create Refills"]
+```ini
+# worldserver.conf.d/tortoisebots.conf
+TortoiseBots.Enable = 1
+TortoiseBots.Pool.Enable = 1
+TortoiseBots.Pool.CreatePerMinute = 30
+TortoiseBots.Pool.MaxCharacters = 50
 ```
 
-<details>
-<summary>Detailed safety invariants and auction settlement</summary>
+1. Set the keys.
+2. Create characters with [`.tb pool create <n>`](admin-commands.md#the-bot-pool). Creation is paced: one character per world tick at most, at most `CreatePerMinute` per minute, never past `MaxCharacters`.
+3. Start the schedule with [`.tb pool start`](admin-commands.md#the-bot-pool).
 
-- **Session draining.** Pool bot sessions are disconnected before deletion starts. If a bot session fails to disconnect within 120 seconds, the reset fails without deleting characters.
-- **Human session protection.** If a player logs into a pool character, the reset aborts before deleting that character: a preflight abort happens before anything is deleted, and a mid-reset login stops the reset.
-- **Auction refunds first.** Each listing posted by a pool bot is settled one character per world tick. Active bidders get full refunds by mail before any character is removed. If a bidder cannot be resolved, the reset stops and leaves the listing untouched.
-- **Guild protection.** Before anything is deleted, the reset checks guilds led by pool characters. If a pool-led guild has even one member outside the managed pool, the reset aborts and logs the guild name, leader, and offending member.
-- **Token recorded last.** The new token is stored only after all managed characters are deleted and verified. If the server stops mid-reset, the next startup resumes it.
-- **Maintenance lock.** While a reset is running, failed, or the registry cannot be validated, the pool stays unavailable: auto-creation, pool logins, pinned resolution, hiring, and battleground bot selection stay locked until it resolves.
+`CreatePerMinute = 0` means nothing may be created; `MaxCharacters = 0` means the pool cannot grow. `.tb pool create` creates only what still fits under the cap and refuses a full pool.
 
-</details>
+## The scheduler
+
+Once a second, the scheduler keeps `TortoiseBots.Pool.TargetOnline` pool bots of both factions online:
+
+| Key | Default | Meaning |
+| :--- | :---: | :--- |
+| `TortoiseBots.Pool.TargetOnline` | 0 | Bots to keep online. 0 runs the schedule but logs nobody in. Up to 5000. |
+| `TortoiseBots.Pool.LoginsPerMinute` | 20 | At most this many logins in any 60 seconds, and at most one per second. 0 = no logins. |
+| `TortoiseBots.Pool.SessionMinutes.Min` / `.Max` | 30 / 90 | A session's rolled length in minutes. A living bot in combat keeps its session until the fight ends. |
+| `TortoiseBots.Pool.OfflineMinutes.Min` / `.Max` | 5 / 20 | How long a bot stays away after its session. |
+| `TortoiseBots.Pool.PopulationLow` / `.PopulationHigh` | 10 / 50 | The presets behind `.tb pool population low\|high`. |
+
+- Logins alternate factions and take the bot that has been offline longest first, and only on an account without a session.
+- A bot that gets a master is **bound**: it leaves the online count and the pool never logs it out. Its account is out of reach until the binding ends, so the pool may need more characters than its target to refill that slot. `.tb pool status` says `capped by accounts: N` when the target is above the accounts left.
+- A lowered target logs out the newest sessions first, never a dead or fighting bot.
+- `.tb pool stop` drains every pool bot at five logouts per second. A bot held in a running battleground is released when the match ends or after `TortoiseBots.Bg.MaxMinutes`.
+- No login is planned while the core's shutdown countdown runs.
+
+## Pruning failed rows
+
+A creation the reconciliation cannot finish is marked `failed` and kept. It is never used and never deleted automatically:
+
+```text
+.tb pool prune            # dry run: what would be removed
+.tb pool prune confirm    # remove it (needs the account-delete permission)
+```
+
+`confirm` re-verifies the database first. `.tb pool prune` alone changes nothing.
+
+## Resetting the pool
+
+A reset deletes every **ready** pool character, one per world tick, then refills to `TortoiseBots.Pool.MaxCharacters`. It is opt-in and runs **only during world startup**. `.reload config` never starts one, and there is no live reset command.
+
+```ini
+TortoiseBots.Pool.Reset = "off"              # default: never
+TortoiseBots.Pool.Reset = "once:fresh-01"   # once, while the token differs from the last completed one
+TortoiseBots.Pool.Reset = "always"           # every startup: development only
+```
+
+- A token is 1-128 printable, non-space characters. Leaving the same token in place makes every later start a no-op. `always` never overwrites a stored one-shot token.
+- Needs `TortoiseBots.Pool.Enable = 1` and `TortoiseBots.Pool.CreatePerMinute > 0`, otherwise the reset refuses.
+- The reset moves through planning, deleting, verifying and rebuilding. It records the generation in `tb_pool_state` only after the characters table proves every target gone; a crash mid-reset leaves it unrecorded, so the next start plans again from the remaining rows.
+- A reset can shrink a pool that is larger than `MaxCharacters`.
+
+### What it refuses before deleting anything
+
+- A guild led by a pool character has any member outside the pool (including a member with no character row).
+- A target owns an auction listing (the core's character deletion does not remove listings).
+- A target account carries a player session.
+- A database read does not answer.
+
+Unlike the Turtle build, there is no auction settlement phase: the reset refuses a target with a live listing instead of refunding bidders.
+
+### What a reset deletes
+
+- The pool characters and their progress: levels, equipment, bags, bank, quests, professions. Deletion goes through the core's own character deletion.
+- The `tb_pool_character` rows for those targets, then the row's state changes to the new generation.
+- Lineage rows if that old table happens to exist; the Forever pool keeps no lineages.
+
+Login accounts are **not** deleted by a reset; the refill creates new characters on the accounts the registry already holds (or new pool accounts when it needs more). Player accounts and characters are never touched.
+
+### Safe workflow
+
+1. Back up the character database.
+2. Set `TortoiseBots.Pool.Reset = "off"` and restart once.
+3. Check the pool with [`.tb pool status`](admin-commands.md#the-bot-pool), and prune failed rows if any.
+4. Stop the world cleanly.
+5. Set `TortoiseBots.Pool.Reset = "once:<token>"` (and keep `Pool.Enable = 1`, `CreatePerMinute > 0`).
+6. Start the world and watch the server log and `.tb pool status`. The status line ends with `reset=<mode> phase=<phase> targets=<n> applied=<generation>`.
+7. Leave the token in place; a later start with the same token does nothing.

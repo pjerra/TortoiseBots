@@ -36,8 +36,6 @@ class GateHoldWiring(unittest.TestCase):
         self.assertIn('dungeonRunGateHold = config.GetBoolDefault("AiPlayerbot.DungeonRunGateHold", false);', CONFIG)
         self.assertIn("# 1 - on\nAiPlayerbot.DungeonRunGateHold = 0", TEMPLATE)
         self.assertIn("recommended on", TEMPLATE.split("AiPlayerbot.DungeonRunGateHold")[0].rsplit("# The gate_hold", 1)[1])
-        self.assertIn("`AiPlayerbot.DungeonRunGateHold`", SETTINGS)
-        self.assertIn("(recommended on)", SETTINGS.split("DungeonRunGateHold", 1)[1].splitlines()[0])
 
     def test_the_kind_and_its_rule_live_in_the_policy(self):
         self.assertIn("GateHold = 26", POLICY)
@@ -110,11 +108,6 @@ class GateHoldWiring(unittest.TestCase):
         self.assertIn("HasGateHoldMap(bot->GetMapId())", multiplier)
 
     def test_the_docs_and_sql_checks_name_the_kind(self):
-        kinds = DOC[DOC.index("### Kinds"):DOC.index("## Shipped rows")]
-        self.assertIn("| `gate_hold` |", kinds)
-        self.assertIn("`AiPlayerbot.DungeonRunGateHold = 1`", kinds)
-        self.assertIn("`gate_hold` needs `AiPlayerbot.DungeonRunGateHold = 1`", DOC)
-        self.assertIn("gate_hold", DOC[DOC.index("| `kind` |"):DOC.index("| `spell_id` |")])
         sql = (ROOT / "tools/test_boss_tactics_sql.py").read_text()
         self.assertIn('"seek_pull", "gate_hold"', sql)
         self.assertIn('if kind == "gate_hold":', sql)

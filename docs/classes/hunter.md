@@ -18,7 +18,7 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 | :--- | :--- | :--- |
 | **Beast Mastery** | Ranged DPS | Pet empowerment, high physical damage, and enrage burst. |
 | **Marksmanship** | Ranged DPS | Heavy ranged shot rotations, party attack power, and *Trueshot Aura*. |
-| **Survival** | Ranged DPS | Front-line melee strikes, front-cone cleaves, and trap mastery (keeps the full ranged shot kit and weaves melee). |
+| **Survival** | Ranged DPS | Front-line melee strikes and trap talents (keeps the full ranged shot kit and weaves melee). |
 
 ---
 
@@ -27,21 +27,19 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 ### Beast Mastery & Marksmanship (Ranged DPS)
 - Opens with *Hunter's Mark* and *Auto Shot*. With a living tank in the group the mark goes only on the mob the tank is fighting.
 - Fires *Aimed Shot* (Marksmanship, once trained, within range) or *Arcane Shot* on cooldown.
-- Uses *Steady Shot* as a filler timed to fit inside the Auto Shot swing window.
+- Uses *Steady Shot* as a filler when it is trained.
 - Uses *Multi-Shot* only when the splash around the target catches a second fighting enemy, and never into a crowd-controlled mob standing beside it.
 - Channels *Volley* against grouped mobs, cancelling the channel if fewer than 2 mobs remain in the area or a mob under the party's crowd control stands in it.
 - Multi-Shot and Volley respect [party threat back-off](overview.md#shared-bot-behaviors) when holding 50% or more of the tank's threat.
 - Keeps *Serpent Sting* ticking on high-health targets (skipping targets near death).
-- Replaces Serpent Sting with *Viper Sting* when the hunter's mana is below 50% and the target has mana (10% or more); manual `sting viper` or `sting serpent` orders override this gate.
-- [`.bot choice <bot> sting <serpent|scorpid|viper|auto>`](../play/commands/bot-panel.md#bot-choice) orders one sting per hunter: it goes on any target without a sting, and the automatic Serpent and Viper rows stand down while it is set. Boss tactics that burn a boss's mana with *Viper Sting* still do so.
-- Beast Mastery activates *Bestial Wrath* and *Kill Command* on cooldown. *Rapid Fire* fires for all specs on cooldown.
+- Replaces Serpent Sting with *Viper Sting* when the hunter's mana is below 50% and the target has mana (10% or more); a `.bot choice <bot> sting ...` order overrides this gate.
+- [`.bot choice <bot> sting <serpent|scorpid|viper|auto>`](../play/commands/bot-panel.md#bot-choice) orders one sting per hunter: it goes on any target without a sting, and the automatic Serpent and Viper rows stand down while it is set.
+- Beast Mastery activates *Bestial Wrath* on cooldown. *Rapid Fire* fires for all specs on cooldown.
 - Switches between *Aspect of the Hawk* for damage and *Aspect of the Viper* when low on mana. [`.bot choice`](../play/commands/bot-panel.md#bot-choice) orders one aspect per hunter instead; the Hawk upkeep and the low-mana Viper switch both stand down.
 - Threat handling (Feign Death, Disengage, multi-mob kiting): see [Threat drops](#threat-drops).
 
 ### Survival (Melee / Ranged Hybrid)
 - Fights at range with the full shot kit and weaves melee strikes when enemies close in.
-- Delivers front-cone melee cleave using *Carve* on targets already in melee reach; `AiPlayerbot.HunterCarveInReachOnly` is off by default but recommended on: with `1` it never walks in for it, so a hunter at a tank-held boss stays at range.
-- Stacks bleed damage using *Lacerate* (manual action, only cast by player order).
 - Uses *Raptor Strike* and *Mongoose Bite* on cooldown without requiring a dodge proc.
 - Employs *Counterattack* after parrying incoming strikes (parry legality is enforced by the core).
 
@@ -59,7 +57,7 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 <details>
 <summary>Pet management and lifecycle details</summary>
 
-- **Lifecycle:** Hunters obtain their pet at level 10; pool hunters logging in below level 10 give up any previously seeded pet, while player-owned, hired, or adopted hunters keep theirs.
+- **Lifecycle:** Hunters obtain their pet at level 10; pool hunters logging in below level 10 give up any previously seeded pet, while player-owned or adopted hunters keep theirs.
 - Automatically summons, feeds, and revives pets out of combat.
 - Sends pets to attack the primary target, holding them back for about two seconds after the group enters combat so a grouped tank can build a lead first (solo hunters and tankless groups send the pet in at once).
 - Casts *Mend Pet* below 40% in combat (channeled, below rotation shots in priority) and below 70% out of combat.
@@ -70,11 +68,11 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 
 ---
 
-## Turtle WoW custom spells
+## Custom abilities
 
-- **Aspect of the Viper:** Custom aspect converting physical damage into mana regeneration while reducing total damage output. Automatically triggered when hunter mana falls below 20%, swapping back to Hawk once mana recovers above 60%.
-- **Carve:** Front-cone melee strike for Survival hunters hitting multiple targets.
-- **Lacerate:** Stacking melee bleed attack for sustained melee damage.
+- **Aspect of the Viper:** a hunter aspect that trades damage for mana regeneration; the bot switches to it when mana is low and back to *Aspect of the Hawk* once mana recovers.
+- **Aspect of the Wolf:** Not on WoW Forever yet.
+- **Lacerate:** Not on WoW Forever yet.
 
 ---
 
@@ -92,20 +90,20 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 
 ## Talent builds
 
-Bots learn pre-set talent orders at 5-level checkpoints (levels 10–60):
+Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
-| Spec Name | Config ID | Role | 60 Allocation | Key Signatures & Synergies |
-| :--- | :--- | :--- | :--- | :--- |
-| **Beast Mastery** | `3.0` | Ranged DPS | `45 / 6 / 0` | Bestial Wrath, Frenzy, Kill Command, Unleashed Fury, Scent of Blood. |
-| **Marksmanship** | `3.1` | Ranged DPS | `9 / 42 / 0` | Aimed Shot, Mortal Shots, Lock and Load, Experimental Ammunition, Barrage. |
-| **Survival** | `3.2` | Ranged DPS | `8 / 0 / 43` | Carve, Lacerate, Trap Mastery, Savage Strikes, pet-support dip. |
+| Spec Name | Role | 60 Points (Beast Mastery / Marksmanship / Survival) | Key Talents |
+| :--- | :--- | :--- | :--- |
+| **Beast Mastery** | Ranged DPS | `36 / 15 / 0` | Bestial Wrath, Frenzy, Intimidation, Spirit Bond, Unleashed Fury. |
+| **Marksmanship** | Ranged DPS | `11 / 40 / 0` | Trueshot Aura, Mortal Shots, Barrage, Scatter Shot, Sniper Shot. |
+| **Survival** | Ranged DPS | `10 / 0 / 41` | Counterattack, Lacerating Strikes, Expose Prey, Predator's Edge, Clever Traps. |
 
 <details>
-<summary>Leveling milestones and progression rationale</summary>
+<summary>Leveling order</summary>
 
-- **Beast Mastery (`3.0`):** Early levels build pet damage and sustain (*Endurance Training*, *Thick Hide*, *Unleashed Fury*, *Ferocity*), picking up *Intimidation* (30), *Bestial Wrath* (40), *Spirit Bond*, *Frenzy*, and *Kill Command* (50), with a small Marksmanship dip.
-- **Marksmanship (`3.1`):** Early levels build shot damage (*Efficiency*, *Lethal Shots*, *Aimed Shot* at 20, *Mortal Shots* at 30), then *Barrage*, *Experimental Ammunition*, *Ranged Weapon Specialization*, and *Lock and Load* (50), with a small Beast Mastery dip for pet support.
-- **Survival (`3.2`):** Early levels build melee and trap strength (*Savage Strikes*, *Carve* at 35, *Trap Mastery*, *Lacerate* at 50), then *Lightning Reflexes* and *Untamed Trapper* (60), with a small Beast Mastery dip for pet support.
+- **Beast Mastery:** Deadly Aspects, Endurance Training, Focused Fire, Bestial Swiftness, Unleashed Fury, Ferocity, Improved Mend Pet, Intimidation, Spirit Bond, Bestial Discipline, Frenzy and Bestial Wrath; the last 15 points go to Marksmanship (Lethal Attacks, Efficiency, Hawk Eye, Rapid Killing).
+- **Marksmanship:** Lethal Attacks, Efficiency, Careful Aim, Improved Arcane Shot, Trueshot Aura, Mortal Shots, Barrage, Scatter Shot, Ranged Weapon Specialization, Sniper Shot and Hawk Eye; the last 11 points go to Beast Mastery (Deadly Aspects, Endurance Training, Focused Fire).
+- **Survival:** Deflection, Survivalist, Savage Strikes, Improved Wing Clip, Surefooted, Deterrence, Clever Traps, Survival Tactics, Counterattack, Predator's Edge, Expose Prey, Survivalist's Discipline, Lightning Reflexes, Lacerating Strikes and Entrapment; the last 10 points go to Beast Mastery (Endurance Training, Deadly Aspects).
 
 </details>
 
@@ -113,5 +111,5 @@ Bots learn pre-set talent orders at 5-level checkpoints (levels 10–60):
 
 ## Class settings
 
-- [`AiPlayerbot.HunterCarveInReachOnly`](../server/settings/class-behaviour.md#aiplayerbothuntercarveinreachonly): Survival hunters cast Carve only on a target already in melee reach.
+- [`AiPlayerbot.HunterCarveInReachOnly`](../server/settings/class-behaviour.md#aiplayerbothuntercarveinreachonly): When the hunter has Carve, only uses it on a target already in melee reach.
 - [`AiPlayerbot.HunterViperOnLowMana`](../server/settings/class-behaviour.md#aiplayerbothunterviperonlowmana): Controls whether hunters swap to Aspect of the Viper when low on mana.

@@ -316,8 +316,8 @@ relates_to:
 | `AiPlayerbot.SitDelay` | `20000` | int | yes | `ai/playerbot/strategy/actions/StayActions.cpp`, `ai/playerbot/strategy/triggers/GenericTriggers.h` |
 | `AiPlayerbot.ReturnDelay` | `7000` | int | yes | `ai/playerbot/strategy/actions/MovementActions.cpp`, `ai/playerbot/strategy/generic/FleeStrategy.cpp`, `ai/playerbot/strategy/triggers/GenericTriggers.h` |
 | `AiPlayerbot.LootDelayDelay` | `1000` | int | yes | `ai/playerbot/strategy/actions/LootAction.cpp` |
-| `AiPlayerbot.FarDistance` | `20.0` | float | yes | `ai/playerbot/strategy/actions/CheckMountStateAction.cpp`, `ai/playerbot/strategy/actions/ReviveFromCorpseAction.cpp`, `ai/playerbot/strategy/values/NearestGameObjects.h` +1 more |
-| `AiPlayerbot.SightDistance` | `60.0` | float | yes | `ai/cmangos-compat-bg.h`, `ai/playerbot/DungeonFollowStallPolicy.h`, `ai/playerbot/PlayerbotAI.cpp` +56 more |
+| `AiPlayerbot.FarDistance` | `20.0` | float | yes | `ai/playerbot/strategy/actions/CheckMountStateAction.cpp`, `ai/playerbot/strategy/actions/EmoteAction.cpp`, `ai/playerbot/strategy/actions/ReviveFromCorpseAction.cpp` +2 more |
+| `AiPlayerbot.SightDistance` | `60.0` | float | yes | `ai/cmangos-compat-bg.h`, `ai/playerbot/DungeonFollowStallPolicy.h`, `ai/playerbot/PlayerbotAI.cpp` +57 more |
 | `AiPlayerbot.SpellDistance` | `26.0` | float | yes | `ai/playerbot/AvoidAoePolicy.h`, `ai/playerbot/PlayerbotAI.cpp`, `ai/playerbot/PlayerbotAIConfig.cpp` +9 more |
 | `AiPlayerbot.ShootDistance` | `26.0` | float | yes | `ai/playerbot/PlayerbotAI.cpp` |
 | `AiPlayerbot.HealDistance` | `30.0` | float | yes | `ai/playerbot/HealReachPolicy.h`, `ai/playerbot/PlayerbotAI.cpp` |
@@ -331,7 +331,7 @@ relates_to:
 | `AiPlayerbot.GroupMemberGatheringDistance` | `10.0` | float | yes | `ai/playerbot/strategy/actions/AddLootAction.cpp` |
 | `AiPlayerbot.GroupMemberGatheringDistanceWithActiveMaster` | `5.0` | float | yes | `ai/playerbot/strategy/actions/AddLootAction.cpp` |
 | `AiPlayerbot.FleeDistance` | `8.0` | float | yes | `ai/playerbot/AvoidAoePolicy.h`, `ai/playerbot/PlayerbotAI.cpp`, `ai/playerbot/PlayerbotAIConfig.cpp` +2 more |
-| `AiPlayerbot.TooCloseDistance` | `5.0` | float | yes | `ai/playerbot/AvoidAoePolicy.h`, `ai/playerbot/FleeManager.cpp`, `ai/playerbot/TravelNode.cpp` +8 more |
+| `AiPlayerbot.TooCloseDistance` | `5.0` | float | yes | `ai/playerbot/AvoidAoePolicy.h`, `ai/playerbot/FleeManager.cpp`, `ai/playerbot/TravelNode.cpp` +9 more |
 | `AiPlayerbot.MeleeDistance` | `1.5` | float | yes | `ai/playerbot/strategy/triggers/RangeTriggers.h`, `ai/playerbot/strategy/values/DpsTargetValue.cpp`, `ai/playerbot/strategy/values/Stances.cpp` |
 | `AiPlayerbot.FollowDistance` | `1.5` | float | yes | `ai/playerbot/FleeManager.cpp`, `ai/playerbot/PlayerbotAI.cpp`, `ai/playerbot/strategy/actions/MovementActions.cpp` +2 more |
 | `AiPlayerbot.RaidFollowDistance` | `4.0` | float | yes | `ai/playerbot/PlayerbotAI.cpp`, `ai/playerbot/strategy/values/Formations.cpp`, `ai/playerbot/strategy/values/MaintenanceValues.h` |

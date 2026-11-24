@@ -2,7 +2,7 @@
 id: server-dashboard
 title: Observability Dashboard & Telemetry
 category: server
-summary: Setup, architecture, Prometheus metrics, and feature guide for the real-time bot observability service.
+summary: How the WoW Forever build feeds the optional web dashboard over UDP, the module settings that control it, and what each tab and API answers.
 tags: [server, observability, telemetry, dashboard, metrics, prometheus]
 relates_to:
   - server-settings-logging
@@ -12,235 +12,181 @@ relates_to:
 
 # Observability Dashboard & Telemetry
 
-The observability service is an optional standalone program that shows what the bot population is doing: a web dashboard with a live map, plus a Prometheus metrics endpoint. The game server sends it status updates as non-blocking UDP datagrams. Telemetry has zero overhead while turned off.
+The observability service is an optional standalone program that shows what the bot population is doing: a web dashboard with a live map, plus a Prometheus metrics endpoint. The game server sends it status updates as non-blocking UDP datagrams.
 
-For the settings that control it, see [Logging & diagnostic settings](settings/logging.md).
+For the module's logging settings, see [Logging & diagnostic settings](settings/logging.md).
 
 ## Architecture
 
-A small C++ emitter in the game server sends UDP datagrams (default port 9195) to an external Go daemon in `tools/observability`. The daemon serves the dashboard and metrics:
+The module's dashboard sender (`TortoiseBots.Dashboard.*`) builds the datagrams on the world thread and sends them over UDP (default `127.0.0.1:9195`). The Go daemon in `tools/observability` serves the dashboard and metrics:
 
 ```text
-Game Server (TortoiseBots C++)
-    │
-    │  UDP Datagrams (non-blocking, default port 9195)
+Game server (TortoiseBots module)
+    │  UDP: HEARTBEAT + BOT_BATCH, SERVER_INFO, BOT_EVENTS, anomalies
     ▼
-Go Observability Daemon (tools/observability)
-    │
-    ├──► Web Dashboard (:8095/dashboard)
-    ├──► Prometheus Metrics (:8095/metrics)
+Go daemon (tools/observability)
+    ├──► Web dashboard (:8095/dashboard)
+    ├──► Prometheus metrics (:8095/metrics)
     ├──► REST API (/api/v1/status, /api/v1/bots, /api/v1/issues, ...)
-    └──► Live stream (/api/v1/live: Server-Sent Events with positions and fight events)
+    └──► Live stream (/api/v1/live)
 ```
 
-## Quick Setup
+While `TortoiseBots.Dashboard.Enable = 0` nothing is built or sent.
 
-The dashboard is a separate small program that runs next to your server. Every daily release has a ready file for Windows (`tortoise-observability-windows-amd64.exe`) and Linux (`tortoise-observability-linux-amd64`).
+## Module settings
 
-What you need before you start:
+All keys live in `worldserver.conf.d/tortoisebots.conf`:
 
-- Your server running (database and `mangosd`).
+| Key | Default | Meaning |
+| :--- | :---: | :--- |
+| `TortoiseBots.Dashboard.Enable` | 1 | Send the roster to the dashboard. Only while `TortoiseBots.Enable = 1`. |
+| `TortoiseBots.Dashboard.Host` | `127.0.0.1` | Where the daemon listens. A host name is resolved at config load. |
+| `TortoiseBots.Dashboard.Port` | 9195 | The daemon's `-udp-port`. |
+| `TortoiseBots.Dashboard.IntervalMs` | 2000 | How often the roster is sent (at least 500). |
+| `TortoiseBots.Dashboard.ItemsFile`, `UiMapsFile`, `SpellsFile`, `TalentsFile`, `NamesFile` | empty | Where the module writes the data tables the daemon reads. Empty = `<LogsDir>/tortoisebots-*.json`. Point the daemon's `-data-dir` at that folder. |
+| `TortoiseBots.Dashboard.Runs` | 1 | Send dungeon runs to the Commanders tab. Engine build only, and only while the dashboard is enabled. |
+| `TortoiseBots.Dashboard.RunSummaryDir` | empty | Folder for `<run>.summary.json` files (Dungeon runs tab). Empty = no summary files. |
+| `TortoiseBots.Dashboard.TraceDir` | empty | Folder for a summary of every dungeon or raid run with bots. Empty = `<LogsDir>/runs`. |
+
+Point the daemon's `-trace-dir` (`TBDASH_TRACE_DIR`) at the same folder.
+
+## Quick setup
+
+What you need:
+
+- The server running (database and worldserver), with the module enabled.
 - A game account with GM rank 2 or higher. You sign in to the dashboard with the same name and password you use in the game.
-- Your `mangosd.conf` file. The dashboard reads the game's database, so it needs the same database login as your server.
+- The daemon binary and the database login the server uses.
 
-### The easy way: the start script (recommended)
+### The Forever start script
 
-The script finds the newest release, downloads the program, reads the database login from your `mangosd.conf`, turns on telemetry in `aiplayerbot.conf`, and starts the dashboard. The scripts are in the `tools/observability` folder of the TortoiseBots module.
-
-**Windows** — open PowerShell in the TortoiseBots folder and run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\observability\run-dashboard.ps1 -MangosdConf C:\path\to\mangosd.conf
-```
-
-`-ExecutionPolicy Bypass` applies to this one script run. Without it, Windows may refuse with "running scripts is disabled on this system".
-
-**Linux** — in the TortoiseBots folder:
+`tools/observability/run-dashboard-forever.sh` starts the binary with ForeverCore's defaults and accepts extra flags:
 
 ```bash
-./tools/observability/run-dashboard.sh --mangosd-conf /path/to/mangosd.conf
+./tools/observability/run-dashboard-forever.sh
 ```
 
-Then:
+It expects `tools/observability/tortoise-observability`. Its environment variables and defaults:
 
-1. **Restart `mangosd` once**, so it picks up the telemetry setting the script turned on. Without that you can sign in, but the dashboard stays empty.
-2. Open `http://localhost:8095` in your browser and sign in with your GM account.
-   If another program (for example Docker) already uses port `8095`, the dashboard takes the next free port (`8096`, `8097`, ... up to `8104`); its log shows the address.
+| Variable | Default |
+| :--- | :--- |
+| `TBDASH_CORE` | `forever` |
+| `DB_HOST`, `DB_PORT` | `127.0.0.1`, `3310` |
+| `DB_USER`, `DB_PASSWORD` | `trinity`, `trinity` |
+| `DB_LOGIN`, `DB_CHAR`, `DB_WORLD` | `auth`, `characters`, `world` |
+| `HTTP_HOST`, `HTTP_PORT` | `127.0.0.1`, `8095` |
+| `UDP_HOST`, `UDP_PORT` | `127.0.0.1`, `9195` |
+| `MIN_GM_LEVEL` | `2` |
 
-The program keeps running in the background. Its log is `dashboard.log` next to the script (on Windows also `dashboard.err.log`). Running the script again while the dashboard is up does nothing: stop the dashboard first if you want to update it.
+Set the variables for your server, then open `http://localhost:8095` and sign in. If port 8095 is taken, the daemon says so; pass `-http-port` (or set `HTTP_PORT`) to move it.
 
-### The manual way: run the program yourself
-
-Only use this if the script does not work for you.
-
-1. Download the file for your system from the [latest release](https://github.com/Sagiroth/TortoiseBots/releases/latest).
-2. In `aiplayerbot.conf` set `AiPlayerbot.Observability = 1` and restart `mangosd` (more options in [Logging settings](settings/logging.md#aiplayerbotobservability)).
-3. Find the `LoginDatabase.Info` line in `mangosd.conf`. It looks like `"127.0.0.1;3306;mangos;mangos;tw_logon"`: host, port, user, password, database name.
-4. Start the program with those values. If you start it without them (for example by double-clicking it), it assumes user `mangos` with password `mangos` and database `tw_logon`. When your server uses something else, sign-in fails.
-
-**Windows** (Command Prompt or PowerShell, in the folder with the file):
-
-```powershell
-.\tortoise-observability-windows-amd64.exe -db-host 127.0.0.1 -db-port 3306 -db-user YOUR_DB_USER -db-pass YOUR_DB_PASSWORD -db-name tw_logon -db-char tw_char -db-world tw_world
-```
-
-**Linux:**
+### Manual start
 
 ```bash
-chmod +x tortoise-observability-linux-amd64
-./tortoise-observability-linux-amd64 -db-host 127.0.0.1 -db-port 3306 -db-user YOUR_DB_USER -db-pass YOUR_DB_PASSWORD -db-name tw_logon -db-char tw_char -db-world tw_world
+./tortoise-observability -core forever \
+  -db-host 127.0.0.1 -db-port 3310 -db-user USER -db-pass PASSWORD \
+  -db-name auth -db-char characters -db-world world \
+  -http-host 127.0.0.1 -http-port 8095 -udp-host 127.0.0.1 -udp-port 9195 -min-gm-level 2
 ```
-
-`-db-char` and `-db-world` are the database names from the `CharacterDatabase.Info` and `WorldDatabase.Info` lines. Keep the window open while you use the dashboard, then open `http://localhost:8095`.
 
 ### Sign-in problems
 
-**"invalid username or password"** usually means the dashboard cannot read your database, not that your password is wrong. The dashboard shows the same message for every sign-in problem. Check, in this order:
+| Symptom | Check |
+| :--- | :--- |
+| "invalid username or password" | The dashboard shows this for every sign-in problem. Check the database login first, then the GM rank, then that the account belongs to this realm. |
+| Blocked after 5 attempts | Wait 5 minutes or restart the daemon. |
+| Page opens but stays empty | `TortoiseBots.Enable = 1`, `TortoiseBots.Dashboard.Enable = 1`, and the host/port match the daemon. |
+| Page does not open | The daemon is not running; check its log. |
 
-1. **Database login.** If you started the program yourself, pass the values from `LoginDatabase.Info` as shown above, or use the start script.
-2. **Too many tries.** After 5 failed sign-ins from your address, the dashboard blocks it for 5 minutes. Restart the program (or wait) before you try again.
-3. **GM rank.** The account needs rank 2 or higher. In the server console: `account set gmlevel <name> 3`, then sign in again.
-4. **Same realm.** The account must exist on the server whose `mangosd.conf` you used.
+## What the dashboard shows
 
-**The page opens but stays empty.** Telemetry is off, or `mangosd` was not restarted after turning it on. Check that `AiPlayerbot.Observability = 1` in `aiplayerbot.conf` and restart `mangosd`.
-
-**The page does not open.** The program is not running. Look at `dashboard.log` (start script) or the program's window (manual start) for the error.
-
-### Running from source
-
-With Go installed, run it straight from the checkout:
-
-```bash
-cd tools/observability
-go run ./cmd/server --http-port 8095 --udp-port 9195
-```
-
-## Web Dashboard Features
-
-| Tab | Key Questions Answered | Primary Features |
+| Tab | Key questions | What it reads |
 | :--- | :--- | :--- |
-| **Overview** | Is the server healthy? | Active population, world tick rate, population graphs, and state census. |
-| **Bots** | Who is online and what are they doing? | Roster list, filterable by level, class, spec, gold, average item level, or guild. |
-| **Map** | Where is the fleet distributed? | 2D world and zone map with player and bot markers and breadcrumb paths. |
-| **Commanders** | Who is leading bot groups? | Party health bars, tactical warnings, commander orders, and live fight view. |
-| **Dungeon runs** | How are the dungeon runs going? | Success rate, clear and boss kill times, wipes and deaths per dungeon, read from the run trace summaries. |
-| **Dungeons** | What dungeon runs are active? | Live view of active dungeon copies with bots: member health and player badges. |
-| **Raids** | What raid runs are active? | Live view of active raid copies by group, no binding needed. |
-| **Raid coverage** | Which boss abilities can the bots answer? | Which raid boss abilities have a coded answer, and which gaps are still open. |
-| **Progress** | Are bots levelling up smoothly? | XP per hour, level-up timelines, and average gear item level by level band. |
-| **Activity** | What events have occurred? | Feed of completed quests, rare loot drops, gathered nodes, and kills. |
-| **Guild orders** | What are guild bots doing? | Who works on what, where it goes, and what it gathered. |
-| **Auction House** | What is currently on the market? | Searchable catalog of all active auction listings posted by bots and players. |
-| **Agent maps** | What did a turtle-agent test run do? | Test run maps. Hidden unless the daemon is given a maps folder. |
-| **Issues** | Which bots are stuck or in trouble? | Tracked navigation stalls, long deaths, and unreachable combat targets. |
-| **Server** | What settings are active? | Live server rates, active configuration flags, and diagnostic reports. |
+| **Overview** | Is the server healthy? | Population, world tick rate, population graphs, state census. |
+| **Bots** | Who is online and what are they doing? | Roster with level, class, role, gold, gear and guild; real players are shown too. |
+| **Map** | Where is the fleet? | 2D world and zone map with player and bot markers and trails. |
+| **Commanders** | Who leads a bot party? | Bound commanders, party health, orders, live fight view and map layers. |
+| **Dungeon runs** | How did the traced runs go? | Run summaries from `-trace-dir`: success rate, clear times, boss kills, wipes, deaths. |
+| **Dungeons** | What is running now? | Instance copies with bots, member health, player badges. |
+| **Raids** | What raid copies hold bots? | Raid copies by group; a bound group links to its Commanders card. |
+| **Raid coverage** | Which boss abilities have an answer? | The coded answers and the gaps. |
+| **Progress** | Are bots levelling? | XP per hour, level-up timeline, average gear item level. |
+| **Activity** | What happened? | Quests, rare loot, gathered nodes, kills. |
+| **Guild orders** | What are guild bots doing? | Orders, progress and destinations. |
+| **Auction House** | What is on the market? | Listings by bots and players. |
+| **Issues** | Which bots are stuck? | Navigation stalls, long deaths, unreachable targets. |
+| **Server** | What settings are live? | Rates and the engine's live configuration flags. |
 
-### State Census
+**What the Forever sender does not send:** per-bot AI visit counters and pool lineage/level-band health. Those panels read empty or say so; the Forever pool has no lineages and no AI visit counter. Everything else in the roster is filled from the live engine and the core.
 
-On the Overview tab, bots are grouped into three states:
+### State census
 
-- **Busy:** standing still but doing real work (loot, cast, eat, or movement in the last 45 s).
-- **Stalled:** standing still for 45+ s with only a travel target or action-name changes, no progress.
-- **Idle:** no activity for 45+ s, doing nothing.
+| State | Meaning |
+| :--- | :--- |
+| **Combat** | In combat. |
+| **Moving** | A movement generator owns the bot. |
+| **Busy** | Standing still but doing real work: looting, casting, sitting to eat/drink, movement within 45 s, or a fight/XP gain within 60 s. |
+| **Stalled** | Standing still for 45+ s with only churn: an active travel target or a changing action name, no movement, loot, cast, sit, fight or XP gain. |
+| **Resting** | The rest flag is set. |
+| **Idle** | No movement, action, cast, loot or target for 45+ s. |
+| **Dead** | A corpse. |
 
-### Bot Profile Inspector
+### Bot profile
 
-Clicking any bot name or map marker opens a slide-over profile panel that reads character data from the database:
+Clicking a bot opens a profile read from the character database: vitals, location, strategies, gear and item level, talents, spells, professions, skills, bags, and recent kills, quests and loot.
 
-- **Overview:** vital stats, current location, active strategy flags, and group status.
-- **Gear & Stats:** paperdoll equipment view, average item level, and item quality distribution.
-- **Talents:** talent trees with DBC layout.
-- **Spells:** learned spells versus default starting spells granted by race/class.
-- **Professions:** profession skill ranks with their trade spells.
-- **Skills:** weapon, armor, language, and other skill ranks.
-- **Bags & Containers:** inventory slots and bag contents.
-- **Activity History:** recent kills, quest completions, and loot transactions.
+### Dungeons and raids
 
-### Dungeons Tab
+- **Dungeons** groups live copies by instance id, so two runs of the same dungeon stay apart. Selecting one shows the map, the party and the first living tank as the anchor.
+- **Raids** groups copies by raid and group. An unbound group shows roster data only; a bound group links to its Commanders card and its run line.
 
-The **Dungeons** tab shows every active dungeon run that has bots in it, grouped by instance copy so concurrent runs of the same dungeon stay separate. Real players in bot parties get a distinct badge.
+### Commanders and maps
 
-Selecting a run shows a live view: an interactive map with bot positions and health bars. The first living tank is the run's lead: the map anchors on it and draws its mark and path.
+Each Commanders card draws a live map of its party with a **Map layers** panel (map picture, party, enemies, route, threat, events, objects). The choice is kept in the browser.
 
-The Dungeons tab lists dungeon copies; raid copies live on the Raids tab. Raid groups without a commander binding also appear on the Raids tab.
+With a folder of client map pictures the maps draw the game's map under the party; without one the markers still work and the map says the picture is missing.
 
-### Raids Tab
+### Dungeon runs tab
 
-The **Raids** tab lists every raid map copy that holds a bot, with or without a commander binding: the instance, the groups inside it, each group's rows (with a name and an offline marker for members not online), the map, and a link to a bound group's Commanders card.
-+
-- **Groups:** one card per group with the leader, offline members and the live combat window. The party, map and fights reuse the Commanders views: subgroup blocks, the live per-bot window, the This fight | Total role tables, the run totals, the Underperforming bots section, and threat and deaths panels. Controls stay hidden: the card says "controls need a bound commander".
-- **Observed vs roster only:** a live `RAIDS` report marks the group `observed` (leader, offline members, fight numbers). Without one the card says `roster only` (the server sends no RAIDS: `AiPlayerbot.ObservabilityRaids = 0`). A bound group shows `bound · <commander>` linking to its Commanders card and carries the run line. With the detail key off (`AiPlayerbot.ObservabilityRaidsDetail = 0`) the ready and debuff sections say "detail off".
-- **Live strip:** the open group's card follows its fight on the live stream, so fight events arrive as they happen and the map glides between the 2 s reports.
-- **Ungrouped:** units of the copy with no group read as one muted "Not in a group" block.
-- **Known limit:** past 40 raid groups the module rotates which groups it reports, so the tab cycles through them instead of showing all at once.
+The **Dungeon runs** tab reads the run summaries the server writes to `TortoiseBots.Dashboard.RunSummaryDir` or `TraceDir` (see [Run trace](run-trace.md)). It shows per dungeon: runs, success rate, best and median clear time, boss kill times, wipes and deaths. Build and driver filters narrow every number. This is not the live **Dungeons** tab: that one shows the instance copies right now, this one the finished and running traced runs.
 
-### Commanders Maps
+## Issue tracking
 
-Every Commanders card and Dungeons run draws a live map of its party, with a **Map layers** panel that chooses what every map draws (map picture, party, enemies, lines and run). The choice is kept in this browser.
+The daemon turns persistent problems into episodes:
 
-With a folder of map pictures from your own client (see [Map Artwork Generation](#map-artwork-generation)), the maps draw the game's map under the party. Without pictures, the map shows a note instead while bot position markers keep working.
+- **Stuck navigation (`STUCK`)**: a moving bot whose position stays frozen for 60+ seconds.
+- **Prolonged death (`DEAD_LONG`)**: a dead bot that neither releases nor revives for more than 2 minutes.
+- **Unreachable target (`UNREACHABLE_TARGET`)**: a bot keeps a hostile target more than 45 yards away or out of line of sight for 10 seconds.
+- **Action loop (`ACTION_LOOP`)**: the same action fails five times within 2 seconds (a counter only, not an episode).
 
-### Dungeon Runs Tab
+Episodes pass an age gate before alerting (5 minutes by default; `UNREACHABLE_TARGET` after 2 minutes), so transient pathing pauses do not alert.
 
-The **Dungeon runs** tab (`#/dungeon-runs`) shows how the traced dungeon runs go, per dungeon: runs, success rate (full clears of the runs that finished), best and median clear time, the kill time of each boss per run, wipes and deaths per run, and the same numbers by server build and by driver. Build and driver filters narrow every number on the tab. The data comes from the run trace summaries (`.bot trace`, [run-trace.md](run-trace.md)) in the folder the daemon was given.
+## Telemetry APIs and metrics
 
-It is not the live **Dungeons** tab above: that one shows the instance copies bots are in right now, this one the finished (and running) traced runs.
+Prometheus metrics at `http://localhost:8095/metrics` include:
 
-### Agent Maps Tab
+- `tortoisebots_active_count{class,role}`
+- `tortoisebots_state_ratio{state}`
+- `tortoisebots_grinding_xp_per_hour_total`
+- `tortoisebots_issues_active{type}`
+- `tortoisebots_anomalies_total{type}`
+- `tortoisebots_snapshots_total`
 
-This tab is a tool for [turtle-agent](https://github.com/pjerra/turtle-agent), the headless test client used to test bots in dungeons. If you do not run turtle-agent, you will never see it and can skip this section.
+Selected REST endpoints (login required, same GM rank):
 
-The **Agent maps** tab shows the run maps that `turtle-agent map` writes: one SVG per run, with an optional self-contained HTML replay next to it. Click a file to view it inline.
+- `GET /api/v1/status`, `/api/v1/bots`, `/api/v1/issues`
+- `GET /api/v1/armory/bots`, `/api/v1/armory/bot/{guid}`
+- `GET /api/v1/commanders`, `/api/v1/dungeons`, `/api/v1/raids`
+- `GET /api/v1/dungeon-runs`, `/api/v1/dungeon-runs/<map>/runs`
+- `GET /api/v1/activity`, `/api/v1/activity/loot`, `/api/v1/activity/quests`
+- `GET /api/v1/auctions`
+- `WS /api/v1/stream`
 
-The tab is off by default. Start the daemon with an agent maps folder to turn it on. Without it the tab stays hidden.
+For the fight debugger, map layers, agent maps and per-endpoint fields, see [`tools/observability/README.md`](../../tools/observability/README.md).
 
-## Issue Tracking & Stalls
+## Pool KPI report
 
-The service tracks persistent problems and groups them into episodes on the **Issues** tab:
-
-- **Stuck Navigation (`STUCK`):** a bot remains in a moving state but its position stays frozen for 60+ seconds.
-- **Prolonged Death (`DEAD_LONG`):** a dead bot remains a ghost without releasing or reviving for more than 2 minutes.
-- **Unreachable Target (`UNREACHABLE_TARGET`):** a bot tries to engage a hostile target that is far away (over 45 yards) or out of line of sight for 10 seconds.
-- **Anti-flapping filter:** episodes must persist past an age gate (default 5 minutes; `UNREACHABLE_TARGET` surfaces after 2 minutes) before alerting, so transient pathing pauses do not clutter alerts.
-- **Restart blackout:** `DEAD_LONG` alerts are suppressed for the first 5 minutes following a game server restart.
-
-## Telemetry APIs & Metrics
-
-### Prometheus Metrics Endpoint
-
-The daemon exports Prometheus metrics at `http://localhost:8095/metrics` for scraping by Prometheus and Grafana:
-
-- `tortoisebots_active_count{class,role}`: number of active bots grouped by class and role.
-- `tortoisebots_state_ratio{state}`: ratio of time spent in each operational state over rolling windows.
-- `tortoisebots_grinding_xp_per_hour_total`: collective XP gain rate across the bot pool.
-- `tortoisebots_issues_active{type}`: current count of active issue episodes by type.
-- `tortoisebots_anomalies_total{type}`: cumulative anomalies and loop triggers encountered.
-- `tortoisebots_snapshots_total`: number of telemetry roster snapshots ingested.
-
-### Selected JSON REST Endpoints
-
-The daemon provides admin-relevant HTTP REST endpoints under `/api/v1` (login required, same GM rank as the dashboard):
-
-- `GET /api/v1/status`: daemon health, connected game server status, and pool population summary.
-- `GET /api/v1/bots`: complete bot fleet state, coordinates, active strategies, and gear summaries.
-- `GET /api/v1/armory/bots`: searchable roster summary for the bot profile inspector.
-- `GET /api/v1/armory/bot/{guid}`: detailed character profile, paperdoll gear, talents, and inventory.
-- `GET /api/v1/issues`: active and historical navigation and combat stall episodes.
-- `GET /api/v1/commanders`: active commander bindings, party member positions, and recent orders.
-- `GET /api/v1/dungeons`: live view of active dungeon copies with member states and player indicators.
-- `GET /api/v1/raids`: live view of active raid copies by group.
-- `GET /api/v1/dungeon-runs`, `GET /api/v1/dungeon-runs/<map>/runs`: run trace summaries per dungeon and the runs of one map.
-- `GET /api/v1/activity`, `/activity/loot`, `/activity/quests`: feed of bot actions, items, and quests.
-- `GET /api/v1/auctions`: listings currently posted on the auction house by bots and players.
-- `WS /api/v1/stream`: real-time event feed streaming live bot updates to connected clients.
-
-Activity counters are periodically saved to `activity-state.json` so statistics persist across daemon restarts.
-
-For the fight debugger, fight history, agent maps, and per-endpoint field lists, see [`tools/observability/README.md`](../../tools/observability/README.md).
-
-## Pool KPI Report (`tools/pool_kpi_report.py`)
-
-For offline analysis of bot fleet health over extended runs, use the Python KPI reporting tool:
+For offline analysis of a long run:
 
 ```bash
 python3 tools/pool_kpi_report.py \
@@ -250,17 +196,11 @@ python3 tools/pool_kpi_report.py \
   --baseline tools/pool_kpi_baseline_2026-10-02.json
 ```
 
-Additional flags include `--db-cmd` (database query command), `--save-baseline` (saving output baseline files), `--out` (writing the Markdown report), and `--anomaly-totals-json` for recording anomaly counters.
+It reports level progression and XP rate, deaths per minute and prolonged ghosts, and whether bots move to level-appropriate zones. Other flags: `--db-cmd`, `--save-baseline`, `--out`, `--anomaly-totals-json`.
 
-The script generates a Markdown summary evaluating:
+## Map artwork
 
-- Bot level progression and median XP gain rates.
-- Deaths per minute and prolonged-ghost counts.
-- Zone migration fit: whether bots advance to level-appropriate zones as they outgrow starter areas.
-
-## Map Artwork Generation
-
-Zone and continent map images are client assets that are not bundled with the server repository. You can extract and composite them from your own client:
+Map images are client assets and are not bundled:
 
 ```bash
 python3 -m pip install mpyq Pillow
@@ -269,4 +209,4 @@ python3 tools/observability/scripts/gen_zone_maps.py \
   --out tools/observability/maps
 ```
 
-The `--out` path feeds the Map tab. Commander map views use the folder configured via `--map-dir` or the `TBDASH_MAP_DIR` environment variable. If map images are absent, the Map tab displays a note instead of the picture while bot position markers continue to function normally.
+Point the Map tab and the daemon's `-map-dir` (or `TBDASH_MAP_DIR`) at that folder.

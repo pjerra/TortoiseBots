@@ -2,7 +2,7 @@
 id: classes-warlock
 title: Warlock Bot Guide
 category: classes
-summary: Complete guide to Warlock bot AI, DoT spreading, demon summoning, Soul Shard economy, Life Tap, and custom Turtle abilities.
+summary: Complete guide to Warlock bot AI, DoT spreading, demon summoning, Soul Shard economy, Life Tap, and class abilities.
 tags: [classes, warlock, dps, ranged, pet]
 relates_to:
   - classes-overview
@@ -16,7 +16,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 
 | Spec | Role | Primary Focus |
 | :--- | :--- | :--- |
-| **Affliction** | Ranged DPS | Multi-target DoT spreading, Drain Life sustain, and Dark Harvest burst. |
+| **Affliction** | Ranged DPS | Multi-target DoT spreading and Drain Life sustain. |
 | **Demonology** | Ranged DPS / Tanky | Heavy demon empowerment, Soul Link damage sharing, Demonic Sacrifice, and high durability. |
 | **Destruction** | Ranged DPS | Fire burst damage, Shadow Bolt nukes, and instant Conflagrate explosions. |
 
@@ -27,14 +27,12 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 ### Affliction
 - Applies and maintains *Curse of Agony*, *Siphon Life*, and *Immolate* on primary targets. *Corruption* upkeep runs through the shared warlock rotation.
 - Spreads *Corruption*, *Siphon Life*, and *Immolate* across secondary attackers under the AoE strategy.
-- Casts *Dark Harvest* when 2 or more of *Corruption*, *Siphon Life*, *Curse of Agony*, or *Curse of Doom* are active on the target (*Immolate* does not count).
-- Uses *Dark Pact* (pet mana) and *Life Tap* (own health) to replenish mana.
+- Uses *Life Tap* (own health) to replenish mana.
 - Channels *Drain Life* for self-sustain and *Drain Soul* on dying enemies (at or below 20% health) to harvest shards.
 
 ### Demonology
 - Summons resilient demons, links damage via *Soul Link*, and utilizes *Demonic Sacrifice* in raids.
 - Maintains *Immolate* while casting *Shadow Bolt* fillers. *Corruption* upkeep runs through the shared warlock rotation.
-- Commands the demon to cast *Power Overwhelming* whenever a live enemy stands and the demon stays above 60% health.
 - Channels *Health Funnel* when the active demon falls below 50% health in combat, provided personal health exceeds 60%.
 - Burns the *Fel Domination* cooldown to summon a replacement demon during combat if the active pet dies (Demonology kit only).
 
@@ -49,17 +47,18 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 
 - **Shard Harvest:** Warlocks harvest Soul Shards organically with *Drain Soul* when targets drop to at or below 20% health. Bots keep up to 5 shards, destroying excess shards out of combat.
 - **Life Tap Safety:** *Life Tap* requires personal health above the low-health line (50% default). The urgent tap fires at or below medium mana (40% default) in combat, while top-up tapping occurs only out of combat between pulls to avoid pausing spell damage. Top-up tapping stops at 85% mana.
-- **Wand Stops:** Wand swings incur global cooldown on Turtle WoW. Dedicated triggers stop active wanding immediately when spells become affordable (only when Shadow Bolt is GCD-blocked, not for intentional raid or no-mana wands) or crowd control is needed.
+- **Wand Stops:** Dedicated triggers stop active wanding when spells become affordable (only when Shadow Bolt is blocked, not for intentional raid or no-mana wands) or crowd control is needed.
 
 </details>
 
 ---
 
-## Turtle WoW custom spells
+## Custom abilities
 
-- **Dark Harvest:** Affliction finisher requiring 2 or more active own DoTs on the target, dealing rapid Shadow damage.
-- **Power Overwhelming:** Demonology pet burst increasing pet damage at the cost of demon health (refused while the demon is dying).
-- **Rain of Fire Safety:** Channels pause during [party threat back-off](overview.md#shared-bot-behaviors) if the warlock holds 50% or more tank threat.
+- **Rain of Fire:** channels pause during [party threat back-off](overview.md#shared-bot-behaviors) if the warlock holds 50% or more tank threat.
+- **Dark Pact:** Not on WoW Forever yet.
+- **Dark Harvest:** Not on WoW Forever yet.
+- **Power Overwhelming:** Not on WoW Forever yet.
 
 ---
 
@@ -73,29 +72,29 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
   - **Default Demon:** without an order the warlock summons the strongest demon it has learned — *Felhunter*, then *Succubus*, then *Voidwalker*, then *Imp* — so one below level 10 still brings out the *Imp* it learns at level 1. Every demon but the Imp needs a Soul Shard: without one a petless warlock falls back to the Imp and a live demon is never swapped. A manual `pet <demon>` strategy or a [`.bot choice`](../play/commands/bot-panel.md#bot-choice) order wins, and in PvE the [`AiPlayerbot.WarlockPetBySpec`](../server/settings/class-behaviour.md#aiplayerbotwarlockpetbyspec) pick owns the demon ahead of it.
   - **Demon Order:** [`.bot choice <bot> pet <imp|voidwalker|succubus|felhunter|auto>`](../play/commands/bot-panel.md#bot-choice) picks the demon per warlock. Out of combat the warlock summons it over the current one; the spec pick, the solo Voidwalker upgrade and the chat `pet <demon>` rows stand down. Every demon but the Imp needs a Soul Shard unless the bot has the item cheat; without one it keeps its demon and says so once. The dungeon run's Seduce needs a live Succubus.
 - **Pet Entry:** In a party the demon is held about 2 seconds for the tank to build a lead; a mob already on the warlock, an enemy player, a tankless party, and an explicit `pet attack` order send it in at once. Crowd-controlled and immune targets are never attacked.
-- **Healthstones & Soulstones:** Creates Healthstones out of combat and uses them in combat. Stores one Soulstone out of combat, prioritizing the party healer, then the tank, then the leader. Each warlock keeps one stone up at a time; a second warlock stones the next target. On every trade it conjures one fresh healthstone on the spot at the best rank the warlock knows that the trader's level can use (improved variant with the talent), unless the trader already carries one. Free and unlimited, whoever opened the window.
+- **Healthstones & Soulstones:** Creates Healthstones out of combat and uses them in combat. Stores one Soulstone out of combat, prioritizing the party healer, then the tank, then the leader. Each warlock keeps one stone up at a time; a second warlock stones the next target. You can order a Healthstone with `.bot service <Name> conjure healthstone` and trade it through the addon.
 - **Weapon Stones & Buffs:** Conjures and carries *Spellstones* (Affliction/Demonology) or *Firestones* (Destruction) in bags. Maintains *Demon Armor* (*Demon Skin* fallback) and *Unending Breath* on self and party while swimming.
-- **Curse Overrides:** Defaults to spec-appropriate curses (*Curse of Agony* or *Curse of the Elements*; second warlocks in raids cover *Recklessness* over Shadow). Players can manually override curse assignments using [`.bot strategy +curse <shadow|weakness|elements|agony|doom|tongues|exhaustion>`](../play/commands/party-actions.md#bot-strategy) or order one curse per warlock with [`.bot choice`](../play/commands/bot-panel.md#bot-choice). Exhaustion snares runners. Curse claims prevent duplicate picks on the main curse rows.
-- **Crowd Control:** Casts *Fear* on assigned CC marks (skipping undead, mechanical, or already controlled targets; off by default in dungeons, raids, and real-player groups unless `co +aoe fear`) and *Banish* on Demons and Elementals. Area spells avoid targets near CC marks.
+- **Curse Overrides:** Defaults to spec-appropriate curses (*Curse of Agony* or *Curse of the Elements*; second warlocks in raids cover *Recklessness* over Shadow). Players can order one curse per warlock with [`.bot choice <bot> curse <shadow|weakness|elements|agony|doom|tongues|exhaustion|recklessness|auto>`](../play/commands/bot-panel.md#bot-choice) (GameMasters can also use `.tb strategy`). Exhaustion snares runners. Curse claims prevent duplicate picks on the main curse rows.
+- **Crowd Control:** Casts *Fear* on assigned CC marks (skipping undead, mechanical, or already controlled targets; off in dungeons, raids, and real-player groups, and the `aoe fear` override is not registered on WoW Forever yet) and *Banish* on Demons and Elementals. Area spells avoid targets near CC marks.
 
 ---
 
 ## Talent builds
 
-Bots learn pre-set talent orders at 5-level checkpoints (levels 10–60):
+Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
-| Spec Name | Config ID | Role | 60 Allocation | Key Signatures & Synergies |
-| :--- | :--- | :--- | :--- | :--- |
-| **Affliction** | `9.0` | Ranged DPS | `40 / 0 / 11` | Dark Harvest, Shadow Mastery, Nightfall, Siphon Life, Bane -0.5s Shadow Bolt dip. |
-| **Demonology** | `9.1` | Ranged DPS / Tanky | `7 / 44 / 0` | Power Overwhelming, Soul Link, Master Demonologist, Instant Corruption dip. |
-| **Destruction** | `9.2` | Ranged DPS | `7 / 0 / 44` | Conflagrate, Ruin, Instant Corruption + Improved Life Tap dip. |
+| Spec Name | Role | 60 Points (Affliction / Demonology / Destruction) | Key Talents |
+| :--- | :--- | :--- | :--- |
+| **Affliction** | Ranged DPS | `41 / 0 / 10` | Siphon Life, Shadow Mastery, Nightfall, Wrack, Pandemic. |
+| **Demonology** | Ranged DPS / Tanky | `7 / 44 / 0` | Soul Link, Master Demonologist, Demonic Sacrifice, Demonic Knowledge, Demonic Pact. |
+| **Destruction** | Ranged DPS | `7 / 0 / 44` | Conflagrate, Ruin, Shadowburn, Incinerate, Shadow and Flame. |
 
 <details>
-<summary>Leveling milestones and progression rationale</summary>
+<summary>Leveling order</summary>
 
-- **Affliction (`9.0`):** Early levels build Corruption and drain sustain (*Improved Corruption*, *Improved Life Tap*, *Nightfall*, *Grim Reach*), reaching *Siphon Life* (35). Mid levels take *Shadow Mastery* (40) and *Dark Harvest* (40), then *Suppression*. Late levels dip 11 points into Destruction (*Cataclysm*, *Bane*, *Shadowburn*).
-- **Demonology (`9.1`):** Early levels build demon toughness (*Demonic Embrace*, *Fel Domination*, *Unholy Power*), reaching *Power Overwhelming* (30). Mid levels take *Master Demonologist* and *Soul Link* (40). Late levels dip 7 points into Affliction (*Improved Corruption*, *Improved Life Tap*).
-- **Destruction (`9.2`):** Early levels build nuke damage (*Cataclysm*, *Bane*, *Shadowburn* at 20, *Devastation*, *Ruin* at 30). Mid levels take *Improved Immolate* and *Conflagrate* (40). Late levels take *Emberstorm* before the 7-point Affliction dip (*Improved Corruption*, *Improved Life Tap*).
+- **Affliction:** Improved Corruption, Suppression, Improved Drains, Grim Reach, Improved Bane of Agony, Fel Concentration, Amplify Curse, Pandemic, Malevolence, Nightfall, Siphon Life, Soul Siphon, Shadow Mastery and Wrack; the last 10 points go to Destruction (Bane, Cataclysm, Destructive Reach).
+- **Demonology:** Improved Imp, Demonic Embrace, Fel Vitality, Demonic Aegis, Demonic Sacrifice, Master Summoner, Fel Domination, Demonic Brand, Decimation, Soul Link, Demonic Knowledge, Master Demonologist, Demonic Pact, Unholy Power, Improved Health Funnel, Improved Voidwalker and Demonic Energies; the last 7 points go to Affliction (Improved Life Tap, Improved Corruption).
+- **Destruction:** Improved Shadow Bolt, Bane, Cataclysm, Ruin, Shadowburn, Intensity, Conflagrate, Pyroclasm, Bane of Havoc, Fire and Brimstone, Shadow and Flame, Incinerate, Destructive Reach, Aftermath and Agonizing Flames; the last 7 points go to Affliction (Improved Life Tap, Improved Corruption).
 
 </details>
 

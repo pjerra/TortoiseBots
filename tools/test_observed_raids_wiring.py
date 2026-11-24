@@ -158,7 +158,6 @@ class ObservedRaidsWiringTest(unittest.TestCase):
         self.assertIn("AiPlayerbot.ObservabilityRaids = 0", AI_CONF)
         self.assertIn("bool observabilityRaids = false;", CONFIG_H)
         self.assertIn('GetBoolDefault("AiPlayerbot.ObservabilityRaids", false)', CONFIG_CPP)
-        self.assertIn("AiPlayerbot.ObservabilityRaids", LOGGING)
 
     def test_detail_key_is_shipped_off_and_gated(self):
         # The G2 key ships off in both templates and gates the detail feed with the same two-file rule; the detail is

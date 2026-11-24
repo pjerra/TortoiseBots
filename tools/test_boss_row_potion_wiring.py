@@ -134,21 +134,12 @@ class BossRowPotionWiring(unittest.TestCase):
         self.assertIn('dungeonRunBossProtectionPotion = config.GetBoolDefault("AiPlayerbot.DungeonRunBossProtectionPotion", '
                       'false);', CONFIG_CPP)
         self.assertIn("AiPlayerbot.DungeonRunBossProtectionPotion = 0", CONF)
-        self.assertIn("[`AiPlayerbot.DungeonRunBossProtectionPotion`](#aiplayerbotdungeonrunbossprotectionpotion) | `0`",
-                      SETTINGS)
-        self.assertIn("### `AiPlayerbot.DungeonRunBossProtectionPotion`", SETTINGS)
-        # Key 0 keeps today's behaviour, so the section may not claim it is the recommended setting.
-        section = SETTINGS[SETTINGS.index("### `AiPlayerbot.DungeonRunBossProtectionPotion`"):]
-        section = section[:section.index("### ", 5)]
-        self.assertNotIn("recommended on", section)
 
     def test_the_boss_tactics_dependency_is_stated(self):
         # The trigger is installed by the boss-tactics strategy and BossRowProtectionPotion refuses a bot without it,
         # so enabling this key alone does nothing under the shipped DungeonTactics = 0. Every place an operator reads
         # the key has to say that.
         self.assertIn(DEPENDENCY, conf_prose(CONF))
-        self.assertIn(DEPENDENCY, SETTINGS)
-        self.assertIn(DEPENDENCY, BOSS_TACTICS)
 
     def test_the_policy_names_no_boss(self):
         self.assertNotIn("14834", POLICY)

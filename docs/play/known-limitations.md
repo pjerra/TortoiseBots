@@ -2,8 +2,8 @@
 id: play-known-limitations
 title: Known Limitations & Quirks
 category: play
-summary: What bots cannot do yet, what is left out on purpose, and quirks you may notice while playing.
-tags: [limitations, non-goals, quirks, engine, roadmap]
+summary: What the WoW Forever build does not do yet, which Turtle WoW features are absent, and the behaviour you should expect from the switches and timers.
+tags: [limitations, non-goals, quirks, engine, port]
 relates_to:
   - play-getting-started
   - play-dungeons-and-raids
@@ -12,68 +12,50 @@ relates_to:
 
 # Known Limitations & Quirks
 
-TortoiseBots strives to make companion bots behave like human players. However, certain technical boundaries, design trade-offs, and behavioral quirks exist. This page provides an authoritative summary of what bots cannot do yet, deliberate non-goals, and edge cases you may notice while playing.
+TortoiseBots on **WoW Forever** is a port of the Turtle WoW module. The bot engine is large and most of it runs, but some services of the old build are not connected to ForeverCore yet. This page lists what is missing, what is deliberately different, and the timers you will notice.
 
-## Blocked & Incomplete Features
+## The two switches first
 
-- **Playing your own character as a bot:** Not possible. Bots are secondary characters on your account (headless logins) or hired mercenaries. You cannot turn the character you are playing into a bot.
-- **Looting herbs and ore:** For creature corpses, bots check loot rights before walking over. For herbs and veins there is no such upfront check: a bot may walk to a node and only find out at the node that there is nothing to loot.
+- **The module can be on with no bots.** `TortoiseBots.Enable = 0` is the shipped default: the module loads, its commands refuse, and nothing ticks. A server admin sets it to `1`.
+- **The bot engine is a build option.** With `TORTOISEBOTS_SLICE1=OFF` the module has the session, the pool and the `.tb` commands, but no bot brain: `.bot` is unknown to the core and every engine command answers that the engine is not built in.
+- **Players can lose `.bot`.** `TortoiseBots.Player.Commands = 0` leaves `.bot` to GameMasters only.
 
-<a id="opt-in-dungeon-clearing"></a>
-## Dungeon run leader (work in progress)
+## Features that are not on WoW Forever yet
 
-The run leader (`.bot run`) lets your party walk a stored dungeon route by itself: it pulls, fights, rests, loots and opens doors. It is switched on by default ([`AiPlayerbot.DungeonSelfClear`](../server/settings/dungeons-raids.md#aiplayerbotdungeonselfclear) = `1`), but it is still being built and is not officially supported yet. See [Dungeon Run Leader](dungeon-run-leader.md). What to expect:
+| Missing | What to do instead |
+| :--- | :--- |
+| Hired companions, recruiters, contracts and recruiter world buffs | Use your own characters (`.bot add`) or the free bots the pool logs in. |
+| Autonomous alt-bots (an alt that leaves your group keeps playing) | Log it out with `.bot logout`; it does not start playing on its own. |
+| Claiming a pool bot into your guild as your own companion | A free bot can accept a guild invite, but it keeps its own life and is not yours to order with `.bot`. |
+| Boss and raid tactics (per-boss interrupts, positioning, add rules, Fankriss/Patchwerk roles) | Fight the encounter with your own calls. `AiPlayerbot.RaidReactions` is off and the boss-tactic tables are not loaded. |
+| Turtle custom raids, dungeons, spells and races | None of that content exists on the Forever client. |
+| Travel destinations outside the reduced set (trainer, auction house, mailbox, boss, gathering node) | Bots travel for grind spots, towns, vendors, repairs and leaving an outgrown zone; walk or fly to the other NPCs yourself. |
+| Camp spots and Traveler's Tents | None. The camp tables are not loaded. |
+| The separate offline auction-house seller (`AiPlayerbot.AhBot.*`) | The organic bot market and its settings still exist. |
+| Pool lineages and adopting old bot accounts | The Forever pool creates its own characters and resets only its own rows. |
+| Alterac Valley, arenas and the random queue | Battleground fill covers Warsong Gulch and Arathi Basin only, and only when `TortoiseBots.Bg.Enable = 1`. |
+| Assigning a party crowd-control mark (`cc <mark>`) | `cc clear` works. A GameMaster can set one mark with `.tb cc`. |
+| Herbs and ore looted by the bot brain | The host gathers them when `TortoiseBots.World.Professions = 1` (off by default). |
+| Engines that use game objects through the old use packet, item casts without an owned item, and the old taxi/transport model | The host provides its own flight, ride, fishing, lockbox and profession errands where it needs them. |
 
-- **It needs a stored route.** The server ships 46 routes for dungeons and raids, but most are drafts that have never been walked. Uldaman and Zul'Farrak have been checked in a live run; Ragefire Chasm and Wailing Caverns are mapped but not live-checked. Expect the other routes to get stuck.
-- **It runs your own party.** You lead the party and stay in it.
-  - Bind with `.bot commander bind <LeadBot> inparty` (the lead bot becomes the party leader), then start with `.bot run start`.
-  - A bot-only party from outside needs [`AiPlayerbot.RemoteCommander`](../server/settings/performance.md#aiplayerbotremotecommander) = `1` (off by default).
-  - Walking in front while bots pull near you (`.bot run start ... player`) needs `AiPlayerbot.DungeonRunPlayerLed` = `1` (on by default) and has not been proven in a live run.
-- **You stay in control.** Any order you give the bound bots pauses a bot-led run; you can pause, skip, resume or stop it. Every wait has a time limit, and when it runs out the run pauses and tells you why.
-- **Some route steps are not supported yet:** `skip`, per-leg `rest`, `companions_loot`, and `area_trigger` steps. Gossip steps work (the run talks to the NPC for you).
-- **Hazard areas are not known to the run.** A fight, a knockback or a pull can still drag the party into a spot the route marks to avoid (for example the lava in Ragefire Chasm).
+The `not ported yet` list also covers internals with no player-visible switch: the 1.12 packet tables, random item properties, keyring/bank slot assumptions, creature/game-object loot as a public member, emotes, talent-spec tables, bot texts and help topics, chat filters, and the old pool, hire, claim and guild-order stores. A server admin can see which ones the engine actually reached with `.tb unported`; the first reach also writes one `TortoiseBots: not ported yet: ...` line to the server log.
 
-## Explicit Non-Goals
+## Timers and behaviour you will notice
 
-TortoiseBots deliberately excludes certain features to maintain immersion, stability, and vanilla fidelity:
-
-- **Expansion content:** No Death Knights, Outland/Northrend zones, or Arena ratings. Classes and mechanics stick to Vanilla 1.12 with Turtle WoW 1.18.1 additions.
-- **Bot chatter:** Bots do not chat on their own: no replies to what players say, no announcements of loot, quests, kills or level-ups, no suggestions in public channels and no language-model chat. They answer orders and questions from their own master and group, and a bot LFG group still advertises in LookingForGroup. Conversation between bots and players is left to a separate chat module.
-- **Multi-tab guild vaults:** Bot interactions with unsupported guild bank actions fail closed safely.
-
-## Tactical & Targeting Rules for Players
-
-When adventuring with bots, understanding their targeting rules helps avoid unexpected pulls (initiating combat):
-
-- **Pull level caps:** Pool bots on their own (no master), outside battlegrounds: below level 10 they only pull mobs up to 1 level above their own level. From level 10 upward, they can engage enemies up to 4 levels higher.
-- **Pull health and mana thresholds:** Pool bots on their own, outside battlegrounds, will not start a new pull while hurt (health, or mana for mana users, below [`AiPlayerbot.MediumHealth`](../server/settings/combat.md#aiplayerbotmediumhealth) / [`AiPlayerbot.MediumMana`](../server/settings/combat.md#aiplayerbotmediummana)). An attacker that already holds the bot as victim is always answered. Healers without off-DPS start no fights on their own.
-- **Runner finishing policy:** When an enemy of the party's fight flees below 30% health, bots finish the runner according to [shared runner rules](../classes/overview.md#shared-bot-behaviors). In a dungeon run, bots do not follow a runner down a cliff (more than 6 yards below, with a cliff or no complete path on the way); a runner let go there may come back with help.
-- **Auto-attack engagement:** Bots arm the melee auto-attack when ordered to attack (healers excepted), so they do not stand idle when out of mana or within melee distance.
-
-## Known Quirks and Workarounds
-
-For deep technical details on these behaviors, see [Bot Mechanics & Quirks](../developers/bot-mechanics.md).
-
-| Quirk / Situation | What Happens | What You Should Do |
+| Situation | What happens | What to do |
 | :--- | :--- | :--- |
-| **Stairs and line of sight** | On steep or multi-tiered stairs, pathfinding can hitch when line of sight is lost. | Use `.bot action come` or [`.bot summon <Name>`](commands/roster-and-hiring.md#bot-summon) to snap bots to your floor. |
-| **Warlock Life Tap** | Warlocks stop tapping at or below the low-health line (`AiPlayerbot.LowHealth`, 50%), but burst damage can still catch a low bot before heals land. | React sooner: [`.bot` low-health setting](../server/settings/combat.md#aiplayerbotlowhealth) = 65. |
-| **Shaman totems** | Moving to a new fight, Shamans may re-drop totems at the new spot, leaving old ones behind. | Normal behavior; mana recovers while drinking out of combat. |
-| **Buff mana floor** | Out of combat, bots skip upkeep buffs when the cast would leave them below the floor: pool bots 40% (70% for charged shields); bots with a master 20% (40% for charged shields). | Let bots drink to full; buffing resumes on its own ([Combat settings](../server/settings/combat.md)). |
-| **Starter graveyard rescue** | Bots below level 10 avoid the spirit healer and relocate when revived into an above-level area. Corpse runs stay the default unless the ghost stalls. | Normal safety behavior for starter bots. |
-| **Group buffs** | Group buffs go out only when at least 3 party members lack both versions. | Normal behavior; single-target buffs cover the rest. |
-| **Buff line of sight** | Bots prefer a visible member for buffs, cures, and resurrection. | Step into the open so bots can see you. |
-| **Double buffs** | Bots coordinate a short claim window so two bots do not cast the same buff. | Normal behavior; nothing to do. |
-| **Hidden GMs** | A hidden-GM party member is skipped by buffs, cures, and resurrection. | Run `.gm visible on` when testing on a GM character. |
-| **Loot timing** | Bots check combat before opening corpses, and inside dungeons skip corpses near unpulled packs (kept queued up to 3 minutes). | Clear the pack; bots loot once combat ends. |
-| **Evading enemies** | When an enemy evades and runs home, bots drop it at once. | Wait for it to reach its spawn and stop before re-engaging. |
-| **Ghost stalls** | If a masterless ghost makes no progress toward its corpse for about a minute, it takes the spirit healer. A companion ghost never auto-releases: revive it yourself or wait for it to take the healer. A dead bot cannot be summoned until it is alive again. | Revive a stuck companion ghost, or wait for the spirit healer. |
-| **Safe revive** | A masterless ghost does not revive at its body while a hostile mob there would attack it: it walks to a quiet point within revive range and revives there; with no such point it takes the spirit healer right away (never for a body inside a dungeon). A ghost that is still not safe after 2 minutes also takes the healer. | Normal safety behavior; companions revive as before. |
-| **Gathering** | Gathering needs standing still; follow-up and loot chains pause while the cast runs. | Stand by the node until the bot finishes. |
+| Your master character logs out | A bot waits `TortoiseBots.Slice.MasterGraceSeconds` (300 s) for you to come back, then logs out. `0` logs it out at once. | Log back in within the grace, or use `.bot logout`. |
+| A commanded bot dies in a dungeon | Its body waits `TortoiseBots.Slice.DeadBackstopSeconds` (180 s); if nothing raises it, it releases and returns at the entrance. | Revive it yourself if you can. |
+| You summon the same bot twice | The second summon waits out `AiPlayerbot.OwnedBotSummonCooldown` (300 s). A GameMaster is not held by the wait. | Wait, or walk to the bot. |
+| You summon a bot that is dead, in combat, or in another instance | The shared teleport refuses; the reason comes back as a code in the `.bot summon` reply. | Wait until it is alive and out of combat, or enter its instance. |
+| A bound (commanded) pool bot | The pool stops counting it and never logs it out; the account stays in use until the binding ends. | End the binding to return the bot to the pool. |
+| The pool is reset | Only at world startup, and only with `TortoiseBots.Pool.Reset`. `.reload config` never starts one and there is no live reset command. | Restart the world. |
+| A bot leaves your party | Nothing special: your own alt keeps following you, a free bot goes back to its own life. There is no alt-bot mode. | `.bot logout` an alt you no longer want. |
+| The engine is not built in | `.tb engine <bot> on` refuses with `the engine is not built in`; every engine command answers the same. | Rebuild with `TORTOISEBOTS_SLICE1=ON`. |
 
-<details>
-<summary>How companion travel and instance safety are isolated</summary>
+## What bots cannot do
 
-Companion bots under your command stand down travel and the automatic gathering sweep inside dungeons and raids. Outside instances nothing changes. Inside, they only gather a node they stand right next to, out of combat, and only an explicit loot order gathers while hostiles are near.
-
-</details>
+- Turn the character **you are playing** into a bot. Bots are separate sessions on your account or free bots the server runs.
+- Chat with players on their own. They answer orders and the questions the engine knows; there is no conversation model.
+- Hold a raid together without a player or a GameMaster: the run leader is a GameMaster command, and the boss rules it would need are not ported.
+- Play on the opposite faction's side of a battleground queue, or fill Alterac Valley.
