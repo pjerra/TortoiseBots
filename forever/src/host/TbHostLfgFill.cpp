@@ -369,6 +369,7 @@ void Update(std::uint32_t diff)
         facts.online = player != nullptr;
         facts.inWorld = player && player->IsInWorld();
         facts.inGroup = player && player->GetGroup() != nullptr;
+        facts.hasClaims = !entry.claims.empty();
         if (lfgfill::ShouldRelease(facts))
         {
             ReleaseClaims(entry, "player left");
