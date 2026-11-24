@@ -13,7 +13,7 @@ relates_to:
 
 These settings configure the bots a player logs in as their own characters (`.bot add`), how they follow, the party maintenance and autogear commands, and a few party conveniences. Settings go in `aiplayerbot.conf`; see [How configuration works](../configuration.md).
 
-The bot engine reads `aiplayerbot.conf` once, when it first starts a bot, so a change needs a server restart.
+The bot engine reads `aiplayerbot.conf` once, when it first starts a bot, so a change needs a server restart. One key on this page is the exception: `AiPlayerbot.OwnedBotSummonCooldown` is read from the module config (`worldserver.conf.d/tortoisebots.conf`), and `.reload config` applies it.
 
 > **Which bots these settings apply to.** They shape the bot engine. Every bot the pool logs in, and every character a player adds with `.bot add`, runs the engine. A bot a GameMaster logs in with `.tb login <character> <master>` runs it only with `TortoiseBots.Slice.EngineByDefault = 1` in `tortoisebots.conf`, or after `.tb engine <character> on`.
 
@@ -197,7 +197,9 @@ Characters on a challenge mode stay GM-only whatever this says. Bots are never g
 
 ### `AiPlayerbot.OwnedBotSummonCooldown`
 Seconds between two `.bot summon` uses for the same bot.
-**Default:** `300` · **Values:** seconds (`0` to `3600`; `0` no wait) · **Restart:** needed
+**Default:** `300` · **Values:** seconds (`0` to `3600`; `0` no wait) · **Restart:** not needed (`.reload config` applies it)
+
+On WoW Forever this key is read from `worldserver.conf` or `worldserver.conf.d/tortoisebots.conf`, not from `aiplayerbot.conf`.
 
 <details>
 <summary>How it works in detail</summary>

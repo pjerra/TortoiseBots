@@ -19,7 +19,7 @@ Two configuration files are involved:
 - `tortoisebots.conf` holds the server-side switches (the module's log category, the dashboard). A `.reload config` applies changes here.
 - `aiplayerbot.conf` holds the bot engine's settings. The engine reads it once, when it first starts a bot, so a change needs a server restart.
 
-The live dashboard in this build is described in [Dashboard](../dashboard.md). The separate observability daemon of the Turtle WoW version is not used, and its `AiPlayerbot.Observability*` keys change nothing.
+The live dashboard in this build uses the Go observability daemon (`tools/observability`; see [Dashboard](../dashboard.md)). The module feeds it with the `TortoiseBots.Dashboard.*` keys in `worldserver.conf.d/tortoisebots.conf`. The legacy `AiPlayerbot.Observability*` keys in `aiplayerbot.conf` change nothing: the engine-side emitter is switched off on this build.
 
 > **Which bots these settings apply to.** Most of the files below are written by the bot engine. Every bot the pool logs in, and every character a player adds with `.bot add`, runs the engine. A bot a GameMaster logs in with `.tb login <character> <master>` runs it only with `TortoiseBots.Slice.EngineByDefault = 1` in `tortoisebots.conf`, or after `.tb engine <character> on`.
 
