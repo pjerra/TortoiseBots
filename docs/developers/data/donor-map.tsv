@@ -1,44 +1,18 @@
-behavior	donor_sha	donor_file	donor_symbol	local_owner	keep/adapt/reject	incompatibility	tortoise_replacement
-Arcane Power boost	mod-playerbots@b949b50	Ai/Class/Mage/MageActions.h + MageTriggers.h	CastArcanePowerAction/ArcanePowerTrigger	MageActions.h/MageTriggers.h	adapt	Wrath version safe; Tortoise 12042 drains mana and kills <10%, CANT_CANCEL	70% mana gate trigger+action, prevention-only safety
-Life Tap sustain/pet/channel	TortoiseBots#92 (merged PRs #95/#96)	warlock strategies/actions/triggers	LifeTap/pet/AoE fixes	warlock/*	keep	—	preserve; extend with regression evidence
-Last Stand fallback	mod-playerbots@b949b50	Ai/Class/Warrior/WarriorActions.h + TankWarriorStrategy.cpp	last stand + intimidating shout	WarriorActions.h/ProtectionWarriorStrategy.cpp	adapt	skip enraged regeneration (later expansion)	critical-health emergency trigger kept
-Concussion Blow interrupt	mod-playerbots@b949b50	Ai/Class/Warrior/*	concussion blow interrupt	WarriorActions.h/WarriorTriggers.h/ProtectionWarriorStrategy.cpp	adapt	Tortoise threat x1.5 + stun	rotation HIGH+4 plus CC INTERRUPT
-Sweeping Strikes cleave	mod-playerbots@b949b50	Ai/Class/Warrior/Strategy/GenericWarriorStrategy.cpp	sweeping strikes aoe	ArmsWarriorStrategy.cpp	adapt	donor numeric priority meaningless locally	light-aoe trigger + 12292 multipliers
-Master Strike weapon nuke	none (Tortoise-custom)	tortoise-wow spell_warrior.cpp:354-392	spell_warrior_master_strike	WarriorActions.h/WarriorTriggers.h/AiObjectContext/Arms/Fury	adapt (new)	donor has no counterpart	weapon-gated action+trigger, 30s/20rage
-PW:S Weakened Soul guard	mod-playerbots@b949b50	Ai/Class/Priest/PriestActions.cpp:39-94	HasAnyAuraOf WS guard	PriestActions.h	adapt	donor has multiple tier actions; local has two	6788 refusal in shield self+party actions
-Chastise CC	shyalya@83a61bc	strategy/priest/PriestStrategy.cpp:892-894	chastise in CC	PriestStrategy.cpp	adapt	local trigger is SNARE-based; Shyalya fires as CC	INTERRUPT trigger in PriestCcStrategy
-Chastise friendly haste	tortoise-wow spell_priest.cpp:426-448	spell_priest_chastise OnCheckCast	friendly haste	none (manual cast)	adapt	no auto trigger to avoid mis-buffing	core raid/level/health guards, situational/manual
-Enlighten proc	tortoise-wow	spell_priest.cpp:308-355,640-700	passive proc	none (server-owned)	keep	—	no bot surface needed
-Arcane Blast stacks/Missile Barrage/Frostfire	mod-playerbots@b949b50 (WotLK)	various	—	none	reject	no local spell/template evidence	do not import by name
-Devastate/Shockwave/Spell Reflection/Heroic Throw/Rampage/Bladestorm	mod-playerbots@b949b50 (later)	various	—	none	reject	later-expansion names, no Tortoise rows	do not import
-Binding Heal/Circle of Healing/Penance/Power Word barrier	mod-playerbots@b949b50 (WotLK)	various	—	none	reject	no Tortoise acquisition	do not import
-CancelChannelAction resurrection	mod-playerbots@5397110 + shyalya@1f9497e	actions/CancelChannelAction.h/.cpp	none (class existed, zero creators)	ActionContext.h	adapt	class existed but unregistered; all cancel-channel NextActions were NULL	re-enabled #92 RoF fix + druid/hunter/mage trees
-Icicles channel pattern	TortoiseBots#92 (RainOfFireChannelCheckTrigger)	warlock/WarlockTriggers.cpp+WarlockTriggers.h	RainOfFireChannelCheckTrigger	MageTriggers.h/.cpp	adapt	single-target validity vs aoe-density	icicles/evocation channel checks
-Kill Command intent	mod-playerbots@b949b50	Ai/Class/Hunter/Strategy	kill command trigger pattern	HunterTriggers.h	adapt	donor buff-model wrong for Tortoise damage-spell	core-gated can-cast + live-pet, no DBC guessing
-Assassination generator	TortoiseBots local	backstab->sinister node (existing)	backstab node	AssassinationRogueStrategy.cpp	adapt (reuse)	trigger was missing, node existed	backstab trigger reuses node fallback
-Surprise Attack reactive	TortoiseBots local	RiposteCastTrigger	RiposteCastTrigger	RogueTriggers.cpp	adapt	same REACTIVE gate family, melee sanity mirrored	core OnCheckCast enforces dodge window
-Carve/Lacerate placement	Tortoise core	spell_hunter.cpp + SpellMgr exclusivity	area/single mechanics	HunterStrategies	adapt	Lacerate auto deferred (serpent churn)	Carve HIGH-1, Lacerate manual
-Chimera/Kill/Steady/Explosive/Black Arrow/Silencing/Misdirection/Dragonhawk/Viper-aspect	mod-playerbots (WotLK)	Ai/Class/Hunter	various	none	reject	no Tortoise DBC/script/SQL evidence	must not port by name
-Mutilate/Hunger for Blood/Fan of Knives/Killing Spree/Tricks/Cloak/Deadly Throw	mod-playerbots (WotLK)	Ai/Class/Rogue	various	none	reject	post-vanilla, no Tortoise rows	must not port by name
-Dark Harvest channel pattern	TortoiseBots#92 (RainOfFireChannelCheckTrigger)	warlock triggers	channel check	WarlockTriggers.h/.cpp	adapt	start needs 2+ DoTs (CD refund on death inverts cancel logic)	dying targets keep channeling
-Power Overwhelming pet targeting	tortoise-wow	spell_warlock.cpp:1722-1737	pet fallback	WarlockActions.h	adapt	core falls back to pet only when untargeted	action targets pet explicitly
-Holy Shock split	tortoise-wow	spell_paladin.cpp + shyalya mirror	dual heal/damage	existing split	keep	none	callers must pair trigger target with matching action
-Exorcism correctness	tortoise-wow	CheckCast (undead/demon-only)	mana-only gate	PaladinTriggers.cpp	adapt	vanilla-correct gating, conservative vs players	Art of War OR creature type
-Bear/Cat NEW stack	mod-playerbots@5397110 forward-port	NEW Bear/Cat/Resto files	none	none	reject (unwired)	editing NEW files is runtime no-op until context wiring lands	stay on OLD stack
-Eclipse IDs	tortoise-wow	spell_druid.cpp:860-907	51442/51443/51444	BalanceDruidStrategy	keep	donor solar/lunar IDs must not port	OLD triggers already correct
-Savage Bite	tortoise-wow spell_template + trainer rows	45736 / 47325	SavageBiteTrigger/CastSavageBiteAction	DruidTriggers/DruidActions	implemented: 45736, trained at 58 via 47325 (Tortoise DB)	Bear/Dire Bear stances 144, 30 rage, 6 s cooldown	high-threat rage dump at 58+
-Tree of Life form	tortoise-wow	spell_druid.cpp:570+	45705	none	defer	form-restriction audit first	unresolved
-Earthquake splash	tortoise-wow	spell_shaman.cpp:1495-1544	primary-safe splash	ElementalShamanStrategy	adapt	density triggers carry CC safety	medium-aoe HIGH+1
-Spirit Link tank pair	TortoiseBots local	earth-shield tank pair	BuffOnTank pair	ShamanActions/Triggers	adapt	group dupe guard mirrored	tank recipient
-Ancestral Swiftness pairing	tortoise-wow	DBC (no script)	next-spell instant	ShamanStrategies	adapt	aura persists until consumed	TwoTriggers consumer into HW
-Bloodlust local semantics	tortoise-wow	DBC (no script)	self frenzy + party proc	EnhancementShamanStrategy	adapt	not Wrath haste; was registered-never-wired	legacy boost HIGH
-Heroism/Totem of Wrath/Lava Burst/Maelstrom/Riptide/Wind Shear	mod-playerbots (Wrath)	various	none	none	reject	no Tortoise evidence	must not port by name
-Envenom upkeep	TortoiseBots local slice-and-dice trigger	NoBuff+CP trigger	SliceAndDiceTrigger	RogueTriggers.h	adapt	maintenance slot beside slice, CP-scaled duration	Assassination HIGH+1
-Shadow of Death slot	tortoise-wow spell_rogue.cpp:559-619	CP snapshot + banked detonate	ShadowOfDeathTrigger	RogueTriggers.cpp	adapt	5CP + durable-target gate	Subtlety HIGH+1
-Mark for Death opener	tortoise-wow spell_rogue.cpp:202-233	party AP buff	MarkForDeathTrigger	RogueTriggers.cpp	adapt	fresh-target gate	Subtlety HIGH
-Smoke Bomb defensive	tortoise-wow DBC (no script)	self miss-cloud	critical health (generic)	SubtletyRogueStrategy	adapt	DBC-only, spec-scoped defensive	Subtlety EMERGENCY
-Ascendance Holy capstone	Talent.dbc talent-200 link + template row	Holy capstone	AscendanceTrigger	PriestTriggers.h	adapt	no script needed, DBC-driven	Holy boost HIGH
-AHBot sell cycle and house targets	mod-ah-bot-plus@f6858329	src/AuctionHouseBot.cpp	AddNewAuctions	runtime/AhBotService.{h,cpp}, runtime/policy/ah/AhBotServicePolicy.h	adapt	WotLK house 2 vs 1.12 houses {1,6,7}; offline sellers never log in; blocking loop replaced by per-tick budget	AhBotService::EnqueueSellCycle / StepSellOne with TickBudgetUs + MaxListingsPerTick and offline item random-property writes
-AHBot buyer bid and buyout	mod-ah-bot-plus@f6858329	src/AuctionHouseBot.cpp	AddNewAuctionBuyerBotBid, PopulateVendorItemsPrices	runtime/AhBotService.cpp, runtime/policy/ah/AhBotServicePolicy.h	adapt	donor queried auctionhouse SQL and used AC 4-arg transactions; 1.12 includes npc_vendor_template	in-memory AuctionHouseObject scan, core SendAuctionSuccessfulMail/WonMail/OutbiddedMail refund path
-AHBot empty and early unbid expiry	mod-ah-bot-plus@f6858329	src/AuctionHouseBot.cpp	EmptyAuctionHouses, CleanupExpiredAuctionItems	runtime/AhBotService.cpp, runtime/AhBotSellerAccount	adapt	avoid expired-item mail spam and DB bloat on 1.12 MyISAM tables	early removal 60s before core expireTime; Empty() refunds bidders via core cancel path; PurgeSellerMail in small batches
-AHBot admin commands	mod-ah-bot-plus@f6858329	src/AuctionHouseBot.cpp, conf/mod_ahbot.conf.dist	.ahbot reload/empty/update	commands/Ah.cpp, commands/BotCommands.cpp	adapt	TortoiseBots uses .bot ah + .ahbot alias and adds status; replaces legacy ahbot_items commands	.bot ah status|reload|empty|update and .ahbot alias
+donor	donor_sha	donor_area	local_owner	keep/adapt/reject	forever_build	notes
+mod-playerbots	5397110cba48	strategy engine (Engine, Queue, Trigger, Action, Multiplier)	ai/playerbot/strategy/*	keep	yes (slice)	cycle and structure reused; only generator-listed keys are registered
+mod-playerbots	5397110cba48	per-class strategy contexts (warrior through warlock)	ai/playerbot/strategy/<class>/*	adapt	yes (slice)	keys land class by class with the slice lists
+mod-playerbots	5397110cba48	chat command grammar	ai/playerbot/strategy/actions/ChatShortcutActions.cpp; chat trigger keys	adapt	yes (slice)	only words with a registered trigger/action answer
+mod-playerbots	5397110cba48	pull strategies and triggers	ai/playerbot/strategy/generic/PullStrategy.cpp; PullActions/PullTriggers	adapt	yes (slice 3 keys)	tank pull, pull back, wait-for-attack rows
+mod-playerbots	5397110cba48	travel manager and node graph	ai/playerbot/TravelMgr.cpp, TravelNode.cpp	adapt	yes (slice)	graph generated from the server's own data
+mod-playerbots	5397110cba48	dungeon/raid play and battleground tactics	ai/playerbot/strategy/*; forever/src/host/TbTactics.cpp	adapt	yes (slice); raids use plan tables	behaviour understood and reimplemented; no donor files vendored
+mod-playerbots	b6696bdb	bot text seed (data)	data/sql/world/20260913090000_world.sql	keep as repository data	no	the text manager is not in the Forever slice, so no runtime text comes from it
+Shyalya/tortoise-wow	1f9497e	foundational PlayerBots tree	ai/playerbot tree	keep	yes (slice)	baseline lineage; retained notices still need a file-by-file map
+Shyalya/tortoise-wow	05ba90b2	spec weight scales (data)	data/sql/world/20260916090001_world.sql; forever/sql/world/2026_11_20_20_tortoisebots_weightscales.sql	adapt	yes (data)	29 scales, 223 weights in the Forever delivery
+T-imothy/tortoise-wow	0fb4d7c	fishing spots and AV named points (data)	data/sql/world/20261013150000_world.sql; data/sql/world/20261013100000_world.sql	keep	yes (data)	Forever reads the rows through ai_playerbot_named_location
+jrad7/mod-dungeon-clear	da0bdfbc	pull aggro-count estimate	ai/playerbot/PullAggroEstimatePolicy.h	adapt	no caller in the slice	rewritten with the vanilla wake-up rules; the Forever run controller does not call it
+jrad7/mod-dungeon-clear	da0bdfbc	resurrection-hold idea	runtime/RezHoldPolicy.h	adapt	yes (slice host TbRunFacts)	rewritten with 1.12 classes and spells; no block copied
+NathanHandley/mod-ah-bot-plus	f6858329	auction seller/buyer and pricing	forever/src/host/TbHostAhMarket*, TbHostAuction	adapt	yes (slice)	Forever has its own in-memory market path; no direct auction SQL writes
+VMaNGOS / ike3 (credited in the core NOTICE)	n/a	raid brain, speech lines, rpg, battleground paths, travel	ai/playerbot/*	adapt	yes (slice)	behaviour reimplemented; credit stays in the core notice
+TortoiseBots local	n/a	Life Tap, pet and AoE fixes	warlock strategy files	keep	yes (slice)	no donor counterpart
+TortoiseBots local	n/a	Turtle custom spells and classic talent trees (Master Strike, Savage Bite, class-quest rows, tree presets)	none on Forever	reject	no	Forever data and the trait-tree talent API do not carry Turtle custom content
+mod-playerbots (WotLK)	n/a	expansion-only classes and abilities (Death Knight, TBC/WotLK spells)	none	reject	no	out of scope for the 1.60 data set
