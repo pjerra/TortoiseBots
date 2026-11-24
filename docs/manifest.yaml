@@ -187,7 +187,7 @@ nodes:
   - id: server-settings-dungeons-raids
     path: server/settings/dungeons-raids.md
     category: server
-    summary: "Settings for the run leader and for bot behaviour in dungeons: pulls and rests, retreats, charmed allies, threat lines, creature auras, the combat monitor and reach."
+    summary: "Settings for the run leader and for bot behaviour in dungeons: pulls and rests, retreats, charmed allies, threat lines, crowd control, creature auras, bomb runout, raid reactions, the combat monitor and reach."
   - id: server-settings-combat
     path: server/settings/combat.md
     category: server
@@ -203,7 +203,7 @@ nodes:
   - id: server-settings-guild-orders
     path: server/settings/guild-orders.md
     category: server
-    summary: Configuration switches for guild bank access and the bot rank that guild orders use.
+    summary: Configuration switches for guild bank access, the bot rank that guild orders use, and keeping crafting tools.
   - id: server-settings-queues
     path: server/settings/queues.md
     category: server
