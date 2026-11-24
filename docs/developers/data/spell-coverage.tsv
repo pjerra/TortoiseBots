@@ -8,22 +8,22 @@ Warrior	Protection	Intervene	unverified	forever/data/waterys/forever-spell-ids.c
 Warrior	Arms/Fury	Master Strike	not on Forever	forever/tools/test_forever_spell_rows.py:12	ai/playerbot/strategy/warrior/ArmsWarriorStrategy.cpp:86	row compiled out for the Forever build
 Warrior	Protection	Defensive Tactics	not on Forever	forever/data/waterys/talent-trees-70959.csv	none	no such talent node on the Forever Protection tree
 Paladin	Retribution	Holy Strike	available	forever/data/waterys/class-review/paladin.md:28	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:95	Forever's paladin strike
-Paladin	Retribution	Judgement, Exorcism, Hammer of Wrath	available	forever/data/waterys/class-review/paladin.md:28-33	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:79-91	Retribution rotation
+Paladin	Retribution	Judgement, Exorcism, Hammer of Wrath	available	forever/data/waterys/class-review/paladin.md:29-35	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:79-91	Retribution rotation
 Paladin	Retribution	Seal of Command	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:87	Retribution seal
 Paladin	Protection	Holy Shield, Consecration	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp:64,209	Protection threat and mitigation
 Paladin	Holy	Holy Shock	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/paladin/HolyPaladinStrategy.cpp:27	heal at or below the low-health line
 Paladin	all	Blessing of Kings, Might, Wisdom, Light	available	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/paladin/PaladinActions.cpp:316-409	blessing picker
-Paladin	Retribution	Crusader Strike	unverified	forever/data/waterys/class-review/paladin.md:32	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:102	near-name spells exist; the exact action name needs a live check
+Paladin	Retribution	Crusader Strike	unverified	forever/data/waterys/class-review/paladin.md:30	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:102	near-name spells exist; the exact action name needs a live check
 Paladin	Protection	Bulwark of the Righteous	not on Forever	forever/data/waterys/class-review/paladin.md:40-42	ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp:67	no Forever spell by this name
-Paladin	Protection	Hand of Reckoning	unverified	forever/data/waterys/class-review/paladin.md:33	ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp:53	spell exists by name; the exact action name needs a live check
+Paladin	Protection	Hand of Reckoning	unverified	forever/data/waterys/class-review/paladin.md:34	ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp:53	spell exists by name; the exact action name needs a live check
 Paladin	Protection	Righteous Defense	not on Forever	forever/data/waterys/class-review/paladin.md:30-33	ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp:19	fallback taunt is not available
 Paladin	Holy	Hand of Freedom	not on Forever	forever/data/waterys/class-review/paladin.md:30-33	ai/playerbot/strategy/paladin/HolyPaladinStrategy.cpp:435	bot casts Blessing of Freedom instead
 Paladin	all	Crusader Aura	not on Forever	forever/data/waterys/class-review/paladin.md:40-42	ai/playerbot/strategy/paladin/PaladinActions.cpp:52	aura name absent
 Paladin	all	Blessing of Sanctuary, Blessing of Salvation	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/paladin/PaladinActions.cpp:280	SpellName has no such names on Forever
-Hunter	all	Aspect of the Viper	available	forever/data/waterys/class-notes/hunter.md:8	ai/playerbot/strategy/hunter/HunterStrategy.cpp:566	hunter trainer spell on the client
-Hunter	all	Serpent Sting, Viper Sting	available	forever/data/waterys/class-review/hunter.md:36-39	ai/playerbot/strategy/hunter/HunterStrategy.cpp:530-544	sting rows
-Hunter	all	Auto Shot, Aimed Shot, Arcane Shot, Multi-Shot, Volley	available	forever/data/waterys/class-review/hunter.md:36-39	ai/playerbot/strategy/hunter/HunterStrategy.cpp:123-296	shot kit
-Hunter	all	Feign Death, Disengage, traps, pet kit	available	forever/data/waterys/class-review/hunter.md:36-39	ai/playerbot/strategy/hunter/HunterStrategy.cpp	threat drops and pet upkeep
+Hunter	all	Aspect of the Viper	available	forever/data/waterys/class-notes/hunter.md:7	ai/playerbot/strategy/hunter/HunterStrategy.cpp:566	hunter trainer spell on the client
+Hunter	all	Serpent Sting, Viper Sting	available	forever/data/waterys/class-review/hunter.md:142	ai/playerbot/strategy/hunter/HunterStrategy.cpp:530-544	sting rows
+Hunter	all	Auto Shot, Aimed Shot, Arcane Shot, Multi-Shot, Volley	available	forever/data/waterys/class-review/hunter.md:142	ai/playerbot/strategy/hunter/HunterStrategy.cpp:123-296	shot kit
+Hunter	all	Feign Death, Disengage, traps, pet kit	available	forever/data/waterys/class-review/hunter.md:142	ai/playerbot/strategy/hunter/HunterStrategy.cpp	threat drops and pet upkeep
 Hunter	Survival	Carve	not in preset	forever/data/waterys/class-review/hunter.md:138	ai/playerbot/strategy/hunter/HunterAiObjectContext.cpp:313	spell exists, no preset point buys it
 Hunter	all	Lacerate	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/hunter/HunterAiObjectContext.cpp:313	no hunter spell by this name
 Hunter	all	Aspect of the Wolf	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/hunter/HunterActions.cpp:443	no such spell on the client
@@ -40,7 +40,7 @@ Priest	all	Power Word: Shield, Fade, Renew, Greater Heal, Flash Heal	available	f
 Priest	Shadow	Shadowform, Vampiric Embrace, Mind Flay, Silence	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/ShadowPriestStrategy.cpp	Shadow kit
 Priest	Discipline	Penance, Power Infusion, Prayer of Mending	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/DisciplinePriestStrategy.cpp	Forever talent abilities
 Priest	Holy	Chastise	available, not in preset	forever/data/waterys/talent-trees-70959.csv	ai/playerbot/strategy/priest/PriestActions.cpp	trainer spell; the bot casts it when learned
-Priest	Holy	Ascendance	not on Forever	forever/data/waterys/class-review/priest.md:136	ai/playerbot/strategy/priest/HolyPriestStrategy.cpp	no Forever spell by this name
+Priest	Holy	Ascendance	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/priest/HolyPriestStrategy.cpp	no Forever spell by this name
 Shaman	Enhancement	Stormstrike	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/shaman/EnhancementShamanStrategy.cpp:59	nature burst
 Shaman	Elemental	Water Shield	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/shaman/ElementalShamanStrategy.cpp:437	mana regeneration
 Shaman	Restoration	Chain Heal, Healing Wave	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp:73-101	heal kit
@@ -71,6 +71,6 @@ Druid	Restoration	Swiftmend, Nature's Swiftness, Tranquility	available	forever/d
 Druid	Balance	Moonkin Form, Hurricane, Insect Swarm	available	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/BalanceDruidStrategy.cpp:120-296	caster kit
 Druid	all	Innervate, Rebirth, Barkskin	available	forever/data/waterys/class-review/druid.md:25-36	ai/playerbot/strategy/druid/	utility kit
 Druid	Feral	Lacerate, Primal Bite	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp	Forever feral abilities
-Druid	Feral	Berserk	available, not in preset	forever/data/waterys/talent-trees-70959.csv	ai/playerbot/strategy/druid/DpsFeralDruidStrategy.cpp:386	feral tree ability; no preset point buys it
-Druid	Restoration	Tree of Life Form	not on Forever	forever/data/waterys/class-notes/druid.md:8	ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp:294	no druid ability by this name
+Druid	Feral	Berserk	unverified	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/druid/DpsFeralDruidStrategy.cpp:386	client has a druid Berserk (417141); the audit marks the Turtle id missing; no preset point buys it
+Druid	Restoration	Tree of Life Form	not on Forever	forever/data/waterys/class-notes/druid.md:7	ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp:294	no druid ability by this name
 Druid	Feral	Savage Bite, Mangle (Bear)	not on Forever	forever/data/waterys/class-notes/druid.md:12-14	ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp:70	rows stay but the spells do not resolve
