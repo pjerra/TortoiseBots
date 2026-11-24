@@ -19,7 +19,7 @@ In your own guild you can send a bot to fetch items for real: it crafts or gathe
 
 Before you start:
 
-- A bot of yours in the guild. Invite a pool bot like any player (`/ginvite <name>`); it accepts when it may (see [Guild bots](getting-started.md#guild-bots)). Hired companions always refuse.
+- A bot of yours in the guild. Invite a pool bot like any player (`/ginvite <name>`); it accepts when it may (see [Guild bots](getting-started.md#guild-bots)).
 - Your guild rank must be allowed to edit officer notes.
 - For bank delivery, an unlocked guild bank with a tab open to the bots' rank (see [Guild bank access](#guild-bank-access)). Without it, finished items go by mail.
 
@@ -92,4 +92,4 @@ You must be a real player in the bot's guild, and your guild rank must be allowe
 - A farm order works only nodes or water the bot can already see; move the bot near the herbs, ore or fishing spot first.
 - A bot standing somewhere with no route to a banker or mailbox gives up that step; move it somewhere it can travel from.
 - A shop or auction trip can still take the bot on a long walk.
-- A `bankdenied` reason can still appear when the tab access looks right.
+- If a bot reports `bankdenied` even though the tab looks open, check the bot rank shown in the order header and open the tab to that rank again (or let the bot mail the items instead).
