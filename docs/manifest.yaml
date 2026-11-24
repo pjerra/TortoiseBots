@@ -87,7 +87,7 @@ nodes:
   - id: play-commands
     path: play/commands/README.md
     category: play
-    summary: Master index of all player bot commands, permission tiers, and control channels.
+    summary: "The command channels on WoW Forever: the player .bot verbs, the addon channel, the GameMaster .tb host commands and their permission tiers."
   - id: play-commands-party-actions
     path: play/commands/party-actions.md
     category: play
@@ -107,11 +107,11 @@ nodes:
   - id: play-commands-whispers
     path: play/commands/whispers.md
     category: play
-    summary: Direct bot delegation and command reference via chat whispers and the CLI proxy.
+    summary: "The words a bot obeys when you whisper it or speak in its party, the permission tiers behind them, and what Forever does not answer yet."
   - id: play-commands-addon
     path: play/commands/addon.md
     category: play
-    summary: Installation, GUI features, and player transport protocol for the TortoiseBotsManager addon.
+    summary: Installing the TortoiseBotsForeverManager addon, what its tabs do, and the TBM messages the server answers.
   - id: play-guild-orders
     path: play/guild-orders.md
     category: play
@@ -127,7 +127,7 @@ nodes:
   - id: play-dungeon-run-leader
     path: play/dungeon-run-leader.md
     category: play
-    summary: The run leader (.bot run, AiPlayerbot.DungeonSelfClear, on by default, work in progress) that lets a bound party clear a dungeon plan by itself, its safety rules, supported steps and the keys its doors need, and the plan tables turtle-agent's exporter fills.
+    summary: "The run leader (.tb run, AiPlayerbot.DungeonSelfClear, on by default, work in progress) that lets a bound bot party clear a stored dungeon plan by itself, its safety rules, supported steps and the keys its doors need, and the plan tables the exporter fills."
   - id: play-boss-tactics
     path: play/boss-tactics.md
     category: play
@@ -135,7 +135,7 @@ nodes:
   - id: play-refusal-rows
     path: play/refusal-rows.md
     category: play
-    summary: The inventory of log rows and run notes that record a decision not to act, the reason field each carries and the fixed word set behind it.
+    summary: "The rule that a decision not to act says why, the run notes and log rows that follow it on WoW Forever, and where the Turtle-only row inventory went."
   - id: play-known-limitations
     path: play/known-limitations.md
     category: play
