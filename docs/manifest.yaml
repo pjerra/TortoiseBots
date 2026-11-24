@@ -115,7 +115,7 @@ nodes:
   - id: play-guild-orders
     path: play/guild-orders.md
     category: play
-    summary: How to send guild bots to farm, buy or craft items for the guild bank, and what each order state means.
+    summary: How to send guild bots to farm or craft items for the guild bank, and what each order state means.
   - id: play-dungeons-and-raids
     path: play/dungeons-and-raids.md
     category: play
@@ -167,7 +167,7 @@ nodes:
   - id: server-configuration
     path: server/configuration.md
     category: server
-    summary: Configuration files, templates, restart rules, recommended presets, settings index, and removed dead keys.
+    summary: Configuration files, restart rules, a starting preset, the settings index, and keys the Forever build does not read.
   - id: server-config-keys
     path: server/config-keys.md
     category: server
@@ -203,7 +203,7 @@ nodes:
   - id: server-settings-guild-orders
     path: server/settings/guild-orders.md
     category: server
-    summary: Configuration switches for guild bank supplies, guild bank gold and sub-orders between guild bots.
+    summary: Configuration switches for guild bank access and the bot rank that guild orders use.
   - id: server-settings-queues
     path: server/settings/queues.md
     category: server
@@ -249,7 +249,7 @@ nodes:
   - id: developers-guild-supply
     path: developers/guild-supply.md
     category: developers
-    summary: Supply ladder, persisted order progress, bank withdrawals, needitems recovery, and sub-orders between guild bots.
+    summary: "How the Forever host runs guild orders: store, step policy, providers, delivery, permissions and the addon transport."
   - id: developers-strategy-engine
     path: developers/strategy-engine.md
     category: developers
@@ -273,7 +273,7 @@ nodes:
   - id: developers-guild-supply
     path: developers/guild-supply.md
     category: developers
-    summary: How guild orders use the guild bank as the crafting store, including the bot rank and bank access rule.
+    summary: "How the Forever host runs guild orders: store, step policy, providers, delivery, permissions and the addon transport."
   - id: developers-data
     path: developers/data/README.md
     category: developers
