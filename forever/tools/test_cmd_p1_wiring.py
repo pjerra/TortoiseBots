@@ -78,7 +78,7 @@ class Wiring(unittest.TestCase):
 
     def test_hooks_stand_where_the_answer_is_known(self):
         master = function_body(self.orders, r"bool HandleMaster\(ChatHandler\* handler, Trinity::ChatCommands::Tail tail\)\s*\{")
-        self.assertLess(master.index("SetCommander(guid, commander->GetGUID())"), master.index("cmd::NoteMaster(who.bots, who.leader, commander)"))
+        self.assertLess(master.index("SetCommander(guid, commander->GetGUID())"), master.index("cmd::NoteMaster(boundBots, boundKinds, who.leader, commander,"))
         self.assertLess(master.index("cmd::NoteMaster("), master.index('Rec end("master")'))
         order = function_body(self.orders, r"bool HandleOrder\(ChatHandler\* handler, Trinity::ChatCommands::Tail tail\)\s*\{")
         self.assertIn("cmd::NoteOrder(outcomes, verb, rest)", order)
@@ -109,7 +109,7 @@ class Wiring(unittest.TestCase):
         self.assertIn("CardKeyOfBot(bot->GetGUID())", note)
         key_of_bot = function_body(self.cpp, r"ObjectGuid CardKeyOfBot\(ObjectGuid bot\)\s*\{")
         self.assertIn("run::Find(bot)", key_of_bot)                           # a system run's leader is its own card key
-        master = function_body(self.cpp, r"void NoteMaster\(std::vector<Player\*> const& bots, Player\* leader, Player\* commander\)\s*\{")
+        master = function_body(self.cpp, r"void NoteMaster\(std::vector<Player\*> const& bots, std::vector<L::Kind> const& kinds, Player\* leader, Player\* commander, uint32 bgInstance\)\s*\{")
         self.assertEqual(master.count("PruneToStanding(s)"), 1)               # the bind path; P2's release erases the record at once
         release = function_body(self.cpp, r"void ReleaseCommander\(ObjectGuid commander, L::End end(?:, Group\* partyGroup = nullptr, bool partyKnown = false)?\)\s*\{")
         self.assertIn("s.metas.erase(it)", release)

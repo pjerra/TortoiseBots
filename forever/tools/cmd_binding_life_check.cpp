@@ -239,6 +239,230 @@ void TestReleaseReasons()
     CHECK(std::string(L::EndCode(L::End::CommanderAway)) == "commander-away");
 }
 
+void TestBgBind()
+{
+    // A battleground bind (BG2 live row 5): `.tb master <bot> <human>` made inside one match instance. It is its own kind - never stored, and the
+    // normal release reasons do not apply - and it has exactly one end, the match it was made in. The live failure this replaces: the 1 Hz tick
+    // read the battleground raid as the binding's group and released it within a second (group-raid, and usually leader-changed first).
+    L::Stored const party = Party();
+    // A bg bind is no member of the record, so the normal verdicts never reach it: it is judged by CheckBg on its own facts only. Whatever the
+    // battleground raid looks like (the bot does not lead it, a real player is in it, it is a raid of ten), the bind stands while both are inside.
+    {
+        L::BgBook book;
+        L::BindResult r;
+        r.bot = Dps;
+        r.bound = true;
+        r.kind = L::Kind::Bg;
+        CHECK(L::ApplyBind(book, Cmd, { r }, 41));
+        L::BgLive live;
+        live.bot = Dps;
+        live.botOnline = true;
+        live.botInstance = 41;
+        live.botCommander = Cmd;
+        live.commanderOnline = true;
+        live.commanderInstance = 41;
+        CHECK(L::CheckBg(book, { live }, true).empty());
+        L::BgLive dead = live;   // a dead bot in a match is still in it (a revive wave): only the instance and the login count
+        CHECK(L::CheckBg(book, { dead }, true).empty());
+        live.botInstance = 0;
+        CHECK(std::string(L::EndCode(L::CheckBg(book, { live }, true).at(0).end)) == "bg-bot-left");
+        CHECK(std::string(L::EndText(L::End::BgBotLeft)).find("bot left") != std::string::npos);
+        live.botInstance = 41;
+        live.commanderInstance = 0;
+        CHECK(std::string(L::EndCode(L::CheckBg(book, { live }, true).at(0).end)) == "bg-commander-left");
+        live.botInstance = 0;
+        CHECK(std::string(L::EndCode(L::CheckBg(book, { live }, true).at(0).end)) == "bg-match-ended");
+        live.botInstance = 41;
+        live.commanderInstance = 41;
+        live.botOnline = false;
+        live.commanderOnline = false;
+        CHECK(L::CheckBg(book, { live }, true).at(0).end == L::End::BgBotLeft);      // the bot's own departure first
+    }
+    // The direct rule, without a stored row: the bind survives only while both are inside the very instance it was made in.
+    {
+        L::BgFacts facts;
+        CHECK(L::BgBindEnd(facts) == L::BgEnd::MatchEnded);
+        facts.instance = 41;
+        facts.botInstance = 41;
+        facts.commanderInstance = 41;
+        CHECK(L::BgBindEnd(facts) == L::BgEnd::None);
+        facts.commanderInstance = 42;
+        CHECK(L::BgBindEnd(facts) == L::BgEnd::CommanderLeft);
+        facts.commanderInstance = 41;
+        facts.botInstance = 42;
+        CHECK(L::BgBindEnd(facts) == L::BgEnd::BotLeft);
+        facts.botInstance = 42;
+        facts.commanderInstance = 42;
+        CHECK(L::BgBindEnd(facts) == L::BgEnd::MatchEnded);       // both somewhere else: this match is gone
+    }
+    // Outside the kind nothing changes: a normal binding in a battleground group is released as before (the live row's failure, kept as a test).
+    {
+        L::Facts facts = Healthy();
+        facts.groupIsRaidOrBg = true;
+        facts.groupIsBg = true;
+        CHECK(L::Decide(party, facts) == L::End::GroupRaid);
+        facts.groupIsRaidOrBg = false;
+        facts.groupIsBg = false;
+        facts.leadIsLeader = false;
+        CHECK(L::Decide(party, facts) == L::End::LeaderChanged);
+    }
+    // The battleground end texts exist and never read as a normal release; the codes are distinct.
+    CHECK(std::string(L::EndText(L::End::BgCommanderLeft)).find("commander left the battleground") != std::string::npos);
+    CHECK(std::string(L::EndText(L::End::BgMatchEnded)).find("has ended") != std::string::npos);
+    CHECK(std::string(L::EndCode(L::End::BgBotLeft)) != std::string(L::EndCode(L::End::BgCommanderLeft)));
+    CHECK(std::string(L::EndCode(L::End::BgMatchEnded)) != std::string(L::EndCode(L::End::BgCommanderLeft)));
+}
+
+// ---- the kind is per bound bot (BG2 review F2/F3) ----
+
+L::BindResult Bound(uint64_t bot, L::Kind kind) { L::BindResult r; r.bot = bot; r.bound = true; r.kind = kind; return r; }
+L::BindResult Refused(uint64_t bot, L::Kind kind) { L::BindResult r; r.bot = bot; r.bound = false; r.kind = kind; return r; }
+L::BgLive Live(uint64_t bot, uint32_t botInstance, uint32_t commanderInstance, uint64_t botCommander = Cmd)
+{
+    L::BgLive live;
+    live.bot = bot;
+    live.botOnline = true;
+    live.botInstance = botInstance;
+    live.botCommander = botCommander;
+    live.commanderOnline = true;
+    live.commanderInstance = commanderInstance;
+    return live;
+}
+constexpr uint64_t BgBot = 0x30ull, BgBot2 = 0x31ull, WorldBot = 0x32ull;
+
+bool Same(std::vector<uint64_t> const& a, std::vector<uint64_t> const& b) { return a == b; }
+
+void TestKindPerBot()
+{
+    // (a) A commander with a standing world binding (Party: Tank/Heal/Dps outside any match) binds a pool bot inside a battleground. The new bot is
+    // bg; the world binding keeps its members (so its stored row), its kind and its normal rules; the bg bind survives the 1 Hz check.
+    {
+        L::Stored const party = Party();
+        L::BgBook book;
+        std::vector<L::BindResult> const results = { Bound(BgBot, L::Kind::Bg) };
+        CHECK(L::ApplyBind(book, Cmd, results, 41));
+        CHECK(L::NormalRecordUpdate(results, party.members) == L::NormalUpdate::Keep);
+        CHECK(Same(L::NormalMembers(book, Cmd, { Tank, Heal, Dps, BgBot }), party.members));
+        CHECK(Same(L::BgMembersOf(book, Cmd), { BgBot }));
+        // The instance is the handler's (the commander's match), never a bot of the commander's whole list.
+        CHECK(L::FindBg(book, BgBot) && L::FindBg(book, BgBot)->instance == 41 && L::FindBg(book, BgBot)->commander == Cmd);
+        CHECK(!L::FindBg(book, Tank));
+        CHECK(L::Valid(party));
+        CHECK(L::Decide(party, Healthy()) == L::End::None);
+        CHECK(L::CheckBg(book, { Live(BgBot, 41, 41) }, true).empty());
+        // The world binding's normal rules are untouched by the bg bind: a world lead leaving still ends it.
+        L::Facts gone = Healthy();
+        gone.leadInWorld = false;
+        CHECK(L::Decide(party, gone) == L::End::LeadLeft);
+    }
+    // (b) A standing bg bind, then a normal bind of a world bot: the bg bind stays bg (not in the normal record, never stored).
+    {
+        L::BgBook book;
+        CHECK(L::ApplyBind(book, Cmd, { Bound(BgBot, L::Kind::Bg) }, 41));
+        std::vector<L::BindResult> const later = { Bound(WorldBot, L::Kind::Normal) };
+        CHECK(L::ApplyBind(book, Cmd, later, 41));     // the commander's instance does not make a normal bot bg
+        CHECK(L::FindBg(book, BgBot) && L::FindBg(book, BgBot)->instance == 41);
+        CHECK(!L::FindBg(book, WorldBot));
+        CHECK(L::NormalRecordUpdate(later, {}) == L::NormalUpdate::Rebind);
+        CHECK(Same(L::NormalMembers(book, Cmd, { BgBot, WorldBot }), { WorldBot }));
+        CHECK(L::CheckBg(book, { Live(BgBot, 41, 41) }, true).empty());
+    }
+    // (c) A bind command in which every bot was refused changes nothing: not the book, not the normal record.
+    {
+        L::BgBook book;
+        CHECK(L::ApplyBind(book, Cmd, { Bound(BgBot, L::Kind::Bg) }, 41));
+        L::BgBook const before = book;
+        std::vector<L::BindResult> const refused = { Refused(BgBot, L::Kind::Normal), Refused(WorldBot, L::Kind::Bg), Refused(Tank, L::Kind::Normal) };
+        CHECK(!L::ApplyBind(book, Cmd, refused, 0));
+        CHECK(book.size() == before.size() && book[0].bot == BgBot && book[0].instance == 41 && book[0].commander == Cmd);
+        CHECK(L::NormalRecordUpdate(refused, Party().members) == L::NormalUpdate::Keep);
+        CHECK(L::NormalRecordUpdate({}, Party().members) == L::NormalUpdate::Keep);
+    }
+    // (d) Two bg-bound bots; one leaves the match (or logs out): only that one is released.
+    {
+        L::BgBook book;
+        CHECK(L::ApplyBind(book, Cmd, { Bound(BgBot, L::Kind::Bg), Bound(BgBot2, L::Kind::Bg) }, 41));
+        auto const left = L::CheckBg(book, { Live(BgBot, 41, 41), Live(BgBot2, 0, 41) }, true);
+        CHECK(left.size() == 1 && left[0].bot == BgBot2 && left[0].commander == Cmd && left[0].release && left[0].end == L::End::BgBotLeft);
+        L::BgLive out = Live(BgBot2, 41, 41);
+        out.botOnline = false;
+        auto const logout = L::CheckBg(book, { Live(BgBot, 41, 41), out }, true);
+        CHECK(logout.size() == 1 && logout[0].bot == BgBot2 && logout[0].end == L::End::BgBotLeft);
+        // A member with no live row is gone too (never kept on a missing fact).
+        auto const missing = L::CheckBg(book, { Live(BgBot, 41, 41) }, true);
+        CHECK(missing.size() == 1 && missing[0].bot == BgBot2 && missing[0].end == L::End::BgBotLeft);
+        // After its release only the other stays.
+        L::DropBg(book, BgBot2);
+        CHECK(Same(L::BgMembersOf(book, Cmd), { BgBot }));
+    }
+    // (e) The commander leaves the match (or logs out): all his bg members are released, his normal members are untouched.
+    {
+        L::BgBook book;
+        CHECK(L::ApplyBind(book, Cmd, { Bound(BgBot, L::Kind::Bg), Bound(BgBot2, L::Kind::Bg) }, 41));
+        auto const left = L::CheckBg(book, { Live(BgBot, 41, 0), Live(BgBot2, 41, 0) }, true);
+        CHECK(left.size() == 2 && left[0].end == L::End::BgCommanderLeft && left[1].end == L::End::BgCommanderLeft && left[0].release && left[1].release);
+        L::BgLive a = Live(BgBot, 41, 41), b = Live(BgBot2, 41, 41);
+        a.commanderOnline = b.commanderOnline = false;
+        auto const logout = L::CheckBg(book, { a, b }, true);
+        CHECK(logout.size() == 2 && logout[0].end == L::End::BgCommanderLeft && logout[1].end == L::End::BgCommanderLeft);
+        CHECK(Same(L::NormalMembers(book, Cmd, { Tank, Heal, Dps, BgBot, BgBot2 }), Party().members));
+        CHECK(L::Decide(Party(), Healthy()) == L::End::None);
+        // Another commander's bg member in the same book is not his.
+        L::BgBook mixed = book;
+        CHECK(L::ApplyBind(mixed, LeadOther, { Bound(WorldBot, L::Kind::Bg) }, 41));
+        auto const mine = L::CheckBg(mixed, { Live(BgBot, 41, 0), Live(BgBot2, 41, 0), Live(WorldBot, 41, 41, LeadOther) }, true);
+        CHECK(mine.size() == 2 && mine[0].bot != WorldBot && mine[1].bot != WorldBot);
+    }
+    // (f) The release paths never touch the raid leader: a bg release reaches no party at all; a normal one only through its own in-party rule.
+    {
+        CHECK(!L::ReleaseReachesParty(L::Kind::Bg, L::FlagInParty | L::FlagPlayerLed | L::FlagRaid));
+        CHECK(!L::ReleaseReachesParty(L::Kind::Bg, 0));
+        CHECK(L::ReleaseReachesParty(L::Kind::Normal, L::FlagInParty));
+        CHECK(!L::ReleaseReachesParty(L::Kind::Normal, 0));
+    }
+    // A bot moved between the kinds: a normal member rebound in the match becomes bg and leaves the normal record (the record shrinks, or is dropped
+    // when it was the last); a bg member rebound normally leaves the book.
+    {
+        L::BgBook book;
+        std::vector<L::BindResult> const moved = { Bound(Dps, L::Kind::Bg) };
+        CHECK(L::ApplyBind(book, Cmd, moved, 41));
+        CHECK(L::NormalRecordUpdate(moved, Party().members) == L::NormalUpdate::Shrink);
+        CHECK(Same(L::NormalMembers(book, Cmd, { Tank, Heal, Dps }), { Tank, Heal }));
+        CHECK(L::NormalRecordUpdate(moved, { Dps }) == L::NormalUpdate::Drop);
+        CHECK(L::NormalRecordUpdate(moved, {}) == L::NormalUpdate::Keep);
+        std::vector<L::BindResult> const back = { Bound(Dps, L::Kind::Normal) };
+        CHECK(L::ApplyBind(book, Cmd, back, 0));
+        CHECK(!L::FindBg(book, Dps));
+        CHECK(L::NormalRecordUpdate(back, { Tank, Heal }) == L::NormalUpdate::Rebind);
+        // A rebind to another commander moves the bot's entry (one entry per bot).
+        CHECK(L::ApplyBind(book, Cmd, { Bound(BgBot, L::Kind::Bg) }, 41));
+        CHECK(L::ApplyBind(book, LeadOther, { Bound(BgBot, L::Kind::Bg) }, 42));
+        CHECK(book.size() == 1 && book[0].commander == LeadOther && book[0].instance == 42);
+    }
+    // A member h3 now gives to another commander (or to none) is dropped from the book, never released (the release would undo the other's bind).
+    {
+        L::BgBook book;
+        CHECK(L::ApplyBind(book, Cmd, { Bound(BgBot, L::Kind::Bg) }, 41));
+        auto const handed = L::CheckBg(book, { Live(BgBot, 41, 41, LeadOther) }, true);
+        CHECK(handed.size() == 1 && !handed[0].release && handed[0].end == L::End::None);
+        auto const none = L::CheckBg(book, { Live(BgBot, 41, 41, 0) }, true);
+        CHECK(none.size() == 1 && !none[0].release);
+    }
+    // The module switched off ends every bg member too; a match that ended for both reads as bg-match-ended.
+    {
+        L::BgBook book;
+        CHECK(L::ApplyBind(book, Cmd, { Bound(BgBot, L::Kind::Bg) }, 41));
+        auto const off = L::CheckBg(book, { Live(BgBot, 41, 41) }, false);
+        CHECK(off.size() == 1 && off[0].release && off[0].end == L::End::Disabled);
+        auto const ended = L::CheckBg(book, { Live(BgBot, 0, 0) }, true);
+        CHECK(ended.size() == 1 && ended[0].end == L::End::BgMatchEnded);
+        L::BgBook zero;
+        CHECK(L::ApplyBind(zero, Cmd, { Bound(BgBot, L::Kind::Bg) }, 0));
+        auto const noMatch = L::CheckBg(zero, { Live(BgBot, 41, 41) }, true);
+        CHECK(noMatch.size() == 1 && noMatch[0].end == L::End::BgMatchEnded);
+    }
+}
+
 void TestDeferredRelease()
 {
     // A group hook records its event; the tick releases only while the binding and the very group the hook saw still stand.
@@ -419,6 +643,8 @@ int main()
 {
     TestRow();
     TestReleaseReasons();
+    TestBgBind();
+    TestKindPerBot();
     TestDeferredRelease();
     TestMayCommand();
     TestPickLead();

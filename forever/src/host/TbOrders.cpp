@@ -22,6 +22,7 @@
 #include "host/TbTactics.h"
 #include "host/TbTacticsPure.h"
 #include "host/cmd/TbCmdBinding.h"
+#include "host/cmd/TbMasterBindPure.h"
 #include "host/cmd/TbPlace.h"
 #include "host/cmd/TbTestTargetPure.h"
 #include "host/run/TbRunLiquid.h"
@@ -46,6 +47,7 @@
 #include "Group.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
+#include "Pet.h"
 #include "Player.h"
 #include "Unit.h"
 
@@ -95,6 +97,8 @@ struct Order
     uint32 instance = 0;        // move-direct: the Map instance the point was made in (Codex review fix)
     uint32 queuedAt = 0;
     bool fromRun = false;       // O6: the run leader's order (QueueOrder): owner is the bot itself, a pull hold anchors on the tank's own spot
+    bool disengage = false;     // come: the fall back (stop the attack/cast/pet and hold passive on the way)
+    bool placed = false;        // come: the placement's own order (only it keeps the combat-time behaviour)
 };
 
 struct BotRec
@@ -103,6 +107,8 @@ struct BotRec
     uint32 seq = 0;             // the last order that finished or is queued
     std::string verb = "none";
     std::string result = "none";   // ok | fail:<code> | queued
+    uint32 placePassiveSeq = 0;    // F1: the fall back `come` whose `passive` this is (0: none of a fall back's); only its exit drops it
+    uint32 lastPassiveSeq = 0;     // F1: the last order that sets `passive` itself (`hold`, `flee`, `co/nc +passive`, a fall back's `come`)
 };
 
 std::map<ObjectGuid, BotRec>& Recs()
@@ -379,12 +385,45 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     {
         // The stay position is the spot (PullActions.cpp:128-133 writes it the same way); the stay strategy's own trigger
         // ("return to stay position", StayStrategy.cpp:25-30) walks the bot there. An explicit order is a fresh walk (StayWalkOrdered).
-        ai->Reset();
+        //
+        // Only a placement changes the combat-time behaviour (PlanCome): it keeps its target in a fight, and `stay` is kept out of the
+        // combat state so reach/LOS micro-movement still works. Every other `come` (a run's walk, a rally, a plain order) resets first,
+        // exactly as it always has: a run's pull depends on "return to stay position" answering. A fall back additionally disengages: the
+        // swing, the cast and the pet's attack stop, and the bot is held passive on the way, so it leaves instead of re-engaging.
+        place::ComePlan const come = place::PlanCome(o.placed, o.disengage, bot->IsInCombat());
+        if (come.stopFight)
+        {
+            bot->AttackStop();
+            bot->InterruptNonMeleeSpells(false);
+            if (Pet* pet = bot->GetPet())
+                pet->AttackStop();
+        }
+        if (come.reset)
+            ai->Reset();
         ai::PositionMap& positions = ai->GetAiObjectContext()->GetValue<ai::PositionMap&>("position")->Get();
         ai::PositionEntry stay = positions["stay"];
         stay.Set(o.x, o.y, o.z, o.map);
         positions["stay"] = stay;
         ai->SetMovementStrategy("stay");
+        if (come.passive)
+        {
+            // F1: the row owns the passive it adds, so its exit never strips one an owner order set (`hold`, `flee`, `.bot co +passive`).
+            // A bot that was already passive keeps that passive; the same row's walk-back `come` carries its record on under the new number.
+            bool const alreadyPassive = ai->HasStrategy("passive", BotState::BOT_STATE_REACTION) ||
+                ai->HasStrategy("passive", BotState::BOT_STATE_NON_COMBAT) ||
+                ai->HasStrategy("passive", BotState::BOT_STATE_COMBAT);
+            BotRec* rec = nullptr;
+            if (auto found = Recs().find(bot->GetGUID()); found != Recs().end())
+                rec = &found->second;
+            bool const carried = rec && rec->placePassiveSeq != 0;
+            ai->ChangeStrategy("+passive", BotState::BOT_STATE_REACTION);
+            ai->ChangeStrategy("+passive", BotState::BOT_STATE_NON_COMBAT);
+            ai->ChangeStrategy("+passive", BotState::BOT_STATE_COMBAT);
+            if (rec && place::PlaceClaimsPassive(alreadyPassive, carried))
+                rec->placePassiveSeq = o.seq;
+        }
+        if (come.keepCombatStayOut)
+            ai->ChangeStrategy("-stay", BotState::BOT_STATE_COMBAT);
         TortoiseBots::StayWalkOrdered(ai->GetAiObjectContext()->GetValue<ai::LastMovement&>("last movement")->Get().stayWalk);
         return ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) ? "ok" : "fail:strategy-not-registered:stay";
     }
@@ -839,6 +878,18 @@ Player* ResurrectOffererOf(Player* bot)
     return nullptr;
 }
 
+// F1: an order that just ran, for the fall back's passive record. An order that sets `passive` itself becomes the bot's last one, and a
+// newer one than the fall back's `come` takes the row's record over (the row's exit then drops nothing). A plain come/attack/follow leaves
+// the record alone, so the row still releases its own passive on every exit path. Failures are no record: a `flee` that could not run set nothing.
+void NoteRanOrderPassive(BotRec& rec, Order const& order)
+{
+    if (!place::OrderSetsPassive(order.verb, order.arg, order.disengage))
+        return;
+    rec.lastPassiveSeq = order.seq;
+    if (order.verb != "come")
+        rec.placePassiveSeq = 0;
+}
+
 void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
 {
     if (!bot || !ai)
@@ -957,6 +1008,8 @@ void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
         if (order.verb != "ride")
             tbhost::ride::CancelOrderErrand(bot);
         std::string result = now - order.queuedAt > OrderMaxAgeMs ? "fail:expired" : Run(bot, ai, order);
+        if (result == "ok" || result.compare(0, 7, "pending") == 0)
+            NoteRanOrderPassive(rec->second, order);
         if (rec->second.seq == order.seq)       // a later order of the same bot keeps the later one's name and seq
             rec->second.result = result;
         if (result != "ok" && result.compare(0, 7, "pending") != 0)
@@ -999,6 +1052,66 @@ bool ReleasePlaceStay(Player* bot, uint32 seq)
         return false;
     ai->Reset();
     ai->SetMovementStrategy("follow");
+    return true;
+}
+
+bool ReleasePlacePassive(Player* bot, uint32 seq)
+{
+    if (!bot)
+        return false;
+    PlayerbotAI* ai = AiOf(bot);
+    if (!ai || !ai->GetAiObjectContext())
+        return false;
+    auto rec = Recs().find(bot->GetGUID());
+    if (rec == Recs().end() || rec->second.placePassiveSeq != seq)
+        return true;      // not a fall back's passive (an owner's, a `hold`'s, a `flee`'s, or another row's): never the row's to drop
+    // F1: only a newer order that sets `passive` itself keeps it (its record is the newer one); any other newer order, and the row's own
+    // `come` (a walk-back keeps the row's number), leave the release to the row. The record is done either way.
+    bool const releasable = place::PlacePassiveReleasable(true, seq, rec->second.lastPassiveSeq);
+    rec->second.placePassiveSeq = 0;
+    if (!releasable)
+        return true;
+    ai->ChangeStrategy("-passive", BotState::BOT_STATE_REACTION);
+    ai->ChangeStrategy("-passive", BotState::BOT_STATE_NON_COMBAT);
+    ai->ChangeStrategy("-passive", BotState::BOT_STATE_COMBAT);
+    return true;
+}
+
+bool ReleasePlaceDisengage(Player* bot, uint32 seq)
+{
+    if (!bot)
+        return false;
+    OrderStatus const last = LastOrder(bot->GetGUID());
+    if (last.seq != seq || last.verb != "come")
+        return false;      // the fall-back order is not the bot's own any more
+    if (!ReleasePlacePassive(bot, seq))
+        return false;
+    PlayerbotAI* ai = AiOf(bot);
+    if (!ai || !ai->GetAiObjectContext())
+        return false;
+    // The bot fights what follows it now; the non-combat stay still brings it back to the spot after the fight.
+    ai->ChangeStrategy("-stay", BotState::BOT_STATE_COMBAT);
+    return true;
+}
+
+bool ReleasePlaceHold(Player* bot, float x, float y, float z)
+{
+    PlayerbotAI* ai = AiOf(bot);
+    if (!ai || !ai->GetAiObjectContext())
+        return false;
+    ai::PositionMap& positions = ai->GetAiObjectContext()->GetValue<ai::PositionMap&>("position")->Get();
+    ai::PositionEntry const& stay = positions["stay"];
+    if (!stay.valueSet)
+        return false;
+    float const dx = stay.x - x, dy = stay.y - y, dz = stay.z - z;
+    if (dx * dx + dy * dy > 1.0f || std::fabs(dz) > 2.0f)
+        return false;      // a movement order wrote its own stay: leave it alone
+    ai->ChangeStrategy("-stay", BotState::BOT_STATE_REACTION);
+    ai->ChangeStrategy("-stay", BotState::BOT_STATE_NON_COMBAT);
+    ai->ChangeStrategy("-stay", BotState::BOT_STATE_COMBAT);
+    ai->ChangeStrategy("-passive", BotState::BOT_STATE_REACTION);
+    ai->ChangeStrategy("-passive", BotState::BOT_STATE_NON_COMBAT);
+    ai->ChangeStrategy("-passive", BotState::BOT_STATE_COMBAT);
     return true;
 }
 
@@ -1185,6 +1298,8 @@ bool QueueOrder(Player* bot, OrderSpec const& spec, std::string& code, std::stri
     order.map = spec.map;
     order.instance = spec.instance;
     order.fromRun = spec.fromRun;
+    order.disengage = spec.disengage;
+    order.placed = spec.placed;
     Player* commander = CommanderOf(bot);
     order.owner = (commander && !spec.fromRun) ? commander->GetGUID() : bot->GetGUID();
     return Enqueue(bot, std::move(order), code, detail, seq);
@@ -1827,8 +1942,29 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Player* commander = release ? nullptr : FindOnline(name);
     if (!release && !commander)
         return Fail(handler, args, "master", "no-such-player", name + " is not in the world");
+    std::map<ObjectGuid, cmd::master_bind::Verdict> verdicts;   // per bot, when the plain rule refuses the commander (BG2 row 5)
     if (!release && !MayLeadBots(handler, commander->GetGUID()))   // N5
-        return Fail(handler, args, "master", "not-allowed", name + " is neither a host bot nor your own character: it cannot be made the commander of bots");
+    {
+        // BG2 live row 5 (host/cmd/TbMasterBindPure.h): where the plain rule refuses the commander, one battleground instance and one
+        // team still let an operator bind a pool bot to the human he watches. Every other refusal stays, and a command whose every
+        // bot is refused refuses the way it always did (nothing is changed).
+        bool bindable = false;
+        for (Player* bot : who.bots)
+        {
+            cmd::master_bind::Facts facts;
+            facts.botInstance = bot->GetBattlegroundId();
+            facts.commanderInstance = commander->GetBattlegroundId();
+            facts.sameTeam = bot->GetBGTeam() == commander->GetBGTeam();
+            verdicts[bot->GetGUID()] = cmd::master_bind::Judge(facts);
+            bindable = bindable || verdicts[bot->GetGUID()] == cmd::master_bind::Verdict::Allowed;
+        }
+        if (!bindable)
+        {
+            auto const itr = verdicts.find(who.bots.front()->GetGUID());
+            cmd::master_bind::Verdict const verdict = itr == verdicts.end() ? cmd::master_bind::Verdict::NotAllowed : itr->second;
+            return Fail(handler, args, "master", cmd::master_bind::CodeOf(verdict), cmd::master_bind::DetailOf(verdict, name));
+        }
+    }
     if (!release && IsHostBot(commander))
     {
         std::string code, detail;
@@ -1840,6 +1976,12 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             return Fail(handler, args, "master", "self-master", "a bot cannot command itself");
 
     uint32 done = 0, queued = 0, refused = 0;
+    std::vector<Player*> boundBots;   // what really bound or released: h3's table, after the host's answer
+    // BG2 live row 5 (review F2): the KIND is per bot. A bot bound while it and the commander stand in one battleground instance on one team is a bg
+    // member (never stored; it ends only with that match, host/cmd/TbCmdBindingLifePure.h BgBook/CheckBg); any other bot is normal. Each kind is
+    // read from the core's own instance and team facts for that bot and handed to the binding check beside it; the instance is the commander's.
+    std::vector<cmd::life::Kind> boundKinds;   // one per boundBots entry
+    uint32 const commanderInstance = (!release && commander) ? commander->GetBattlegroundId() : 0;
     Reply reply(handler, args, "master");
     reply.Begin();
     auto const emit = [&](Rec const& rec) { reply.Line(rec); };
@@ -1848,6 +1990,7 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         ObjectGuid const guid = bot->GetGUID();
         Rec rec("master");
         rec.S("bot", bot->GetName());
+        cmd::life::Kind kind = cmd::life::Kind::Normal;
         if (release)
         {
             // N4b: the host's answer is checked; on a failure nothing changes (the binding table is written only after the host accepted it).
@@ -1863,6 +2006,19 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         }
         else
         {
+            if (!verdicts.empty())
+            {
+                // BG2 row 5: the commander is another real player; only a bot inside the same match instance and on the same team binds.
+                auto const itr = verdicts.find(guid);
+                cmd::master_bind::Verdict const verdict = itr == verdicts.end() ? cmd::master_bind::Verdict::NotAllowed : itr->second;
+                if (verdict != cmd::master_bind::Verdict::Allowed)
+                {
+                    ++refused;
+                    rec.S("status", "refused").S("code", cmd::master_bind::CodeOf(verdict)).S("msg", cmd::master_bind::DetailOf(verdict, name));
+                    emit(rec);
+                    continue;
+                }
+            }
             // What the engine's own hire flow does with a master (BotManager::BindBotMaster: the host's master guid and the engine's pointer), and the
             // binding `IsInCommandedGroup` answers from. The party is not touched: the commander stays outside it (spec D2).
             if (!TortoiseBots::BotManager::Instance().BindBotMaster(guid, commander->GetGUID()))
@@ -1873,10 +2029,18 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
                 continue;
             }
             SetCommander(guid, commander->GetGUID());
+            // The kind THIS bot gets, decided where the binding check will read it: both in one match instance and on one team.
+            cmd::master_bind::Facts bgFacts;
+            bgFacts.botInstance = bot->GetBattlegroundId();
+            bgFacts.commanderInstance = commanderInstance;
+            bgFacts.sameTeam = bot->GetBGTeam() == commander->GetBGTeam();
+            kind = cmd::master_bind::IsBgBind(bgFacts) ? cmd::life::Kind::Bg : cmd::life::Kind::Normal;
             Group* group = bot->GetGroup();
             rec.S("commander", commander->GetName()).B("commander_in_party", group && group->IsMember(commander->GetGUID()));
         }
         ++done;
+        boundBots.push_back(bot);
+        boundKinds.push_back(kind);
         // The kit depends on the binding (the commanded threat back-off, AiFactory.cpp:633-642): a running engine rebuilds it at its next tick.
         if (PlayerbotAI* ai = AiOf(bot))
         {
@@ -1897,7 +2061,7 @@ bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             rec.S("status", "bound");
         emit(rec);
     }
-    cmd::NoteMaster(who.bots, who.leader, commander);   // P1: the commander record (lead, boundAt) beside h3's table
+    cmd::NoteMaster(boundBots, boundKinds, who.leader, commander, commanderInstance);   // P1: the commander record (lead, boundAt) beside h3's table — only what really bound (or was released), each with its own kind
     Rec end("master");
     end.P("target", LabelParts(who.label)).S("commander", release ? std::string() : std::string(commander->GetName())).N("bots", who.bots.size()).N("bound", done).N("queued", queued).N("refused", refused);
     reply.End(end);

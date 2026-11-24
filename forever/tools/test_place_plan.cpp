@@ -31,7 +31,8 @@ P::Probe FlatWorld()
 {
     P::Probe probe;
     probe.ground = [](P::Vec2 const&, float& z) { z = 0.0f; return true; };
-    probe.reachable = [](size_t, P::Vec2 const&, float) { return true; };
+    probe.liquid = [](P::Vec2 const&, float) { return false; };
+    probe.reachable = [](size_t, P::Vec2 const&, float) { return P::PathVerdict::Ok; };
     return probe;
 }
 
@@ -84,7 +85,7 @@ static void TestCommandWords()
     c = P::ParseCommand({ "fall", "sideways" });
     CHECK(c.kind == P::CommandKind::Fallback && c.code == "bad-argument");
     c = P::ParseCommand({ "fall", "back", "now" });
-    CHECK(c.code == "unexpected-argument");
+    CHECK(c.code == "bad-argument");
     c = P::ParseCommand({ "fallback" });
     CHECK(c.kind == P::CommandKind::Fallback && c.code.empty());
     c = P::ParseCommand({ "back" });
@@ -97,7 +98,7 @@ static void TestCommandWords()
     c = P::ParseCommand({ "rally", "there" });
     CHECK(c.code == "bad-argument");
     c = P::ParseCommand({ "rally" });
-    CHECK(c.code == "missing-argument");
+    CHECK(c.kind == P::CommandKind::RallyShow && c.code.empty());
     c = P::ParseCommand({ "rally", "here", "now" });
     CHECK(c.code == "unexpected-argument");
     c = P::ParseCommand({ "resume" });
@@ -144,7 +145,7 @@ static void TestPlaceRefusalsArePerBot()
     bots[2].alive = false;                                               // Mmage dead
     bots[3].sameMap = false;                                             // Mpriest elsewhere
     P::Probe probe = FlatWorld();
-    probe.reachable = [](size_t bot, P::Vec2 const&, float) { return bot != 1; };   // Mrogue cannot walk anywhere
+    probe.reachable = [](size_t bot, P::Vec2 const&, float) { return bot != 1 ? P::PathVerdict::Ok : P::PathVerdict::NoPath; };   // Mrogue cannot walk anywhere
     P::PlanResult const plan = P::PlanPlace(P::Shape::Circle, P::Gap::Normal, TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f),
         bots, {}, probe);
     CHECK(plan.ok);
@@ -230,13 +231,16 @@ static void TestFallbackFront()
     P::PlanResult const onPoint = P::PlanFallback(P::Gap::Normal, { 0.0f, 0.0f }, { 0.0f, 0.0f }, { 0.0f, 1.0f }, true, Party(), FlatWorld());
     CHECK(onPoint.ok && onPoint.frame.front.y > 0.99f);
 
-    // A fall-back slot on the commander's spot is dropped, and nobody stands on it.
+    // A fall-back slot on the commander's spot is dropped, and nobody stands on it; the refused bot still disengages to the centre.
     P::PlanResult const underCommander = P::PlanFallback(P::Gap::Normal, { 0.0f, 0.0f }, { 0.0f, 2.0f }, { 0.0f, 1.0f }, true, Party(), FlatWorld());
-    CHECK(underCommander.ok && underCommander.placed == 3);
-    CHECK(!underCommander.steps[0].placed && underCommander.steps[0].code == "no-slot");   // the tank's front row is the commander's own spot
+    CHECK(underCommander.ok && underCommander.placed == 4 && underCommander.refused == 0);
+    // The tank's front row is the commander's own spot: a fall back nudges it off the spot instead of walking the bot onto the commander.
+    CHECK(underCommander.steps[0].placed && underCommander.steps[0].slot == 0 && underCommander.steps[0].to.empty());
+    CHECK(underCommander.steps[0].nudged > 1.0f);
+    CHECK(Dist(underCommander.steps[0].pos, { 0.0f, 2.0f }) >= P::kCommanderClearYd - 1e-3f);
     CHECK(underCommander.steps[1].placed && std::fabs(underCommander.steps[1].pos.y + 2.0f) < 1e-3f);
     for (P::Step const& step : underCommander.steps)
-        if (step.placed)
+        if (step.placed && step.to.empty())
             CHECK(Dist(step.pos, { 0.0f, 2.0f }) >= P::kCommanderClearYd - 1e-3f);
 }
 
@@ -337,6 +341,502 @@ static void TestDroppedFollowYieldsToNewerOrder()
     CHECK(!P::NewerOrderOwns(0u, 0u));
 }
 
+static void TestLedgeSlotIsRefused()
+{
+    P::PlanResult const base = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), Party(), {}, FlatWorld());
+    CHECK(base.ok && base.placed == 4);
+    P::Vec2 const slot2 = base.steps[2].pos;
+    P::Probe probe = FlatWorld();
+    // A floor 20 yd down under slot 2 and every nudge towards the centre.
+    probe.ground = [slot2](P::Vec2 const& point, float& z)
+    {
+        z = Dist(point, slot2) <= 3.5f ? -20.0f : 0.0f;
+        return true;
+    };
+    P::PlanResult const plan = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), Party(), {}, probe);
+    CHECK(plan.ok);
+    P::Step const* mage = StepOfBot(plan, 2);
+    CHECK(mage && !mage->placed && mage->code == "ledge");
+    CHECK(plan.placed == 3 && plan.refused == 1);
+    for (P::Step const& step : plan.steps)
+        if (step.bot != 2)
+            CHECK(step.placed);
+}
+
+static void TestLiquidSlotIsNudged()
+{
+    P::PlanResult const base = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), Party(), {}, FlatWorld());
+    P::Vec2 const slot1 = base.steps[1].pos;
+    P::Probe probe = FlatWorld();
+    probe.liquid = [slot1](P::Vec2 const& point, float) { return Dist(point, slot1) <= 0.6f; };
+    P::PlanResult const plan = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), Party(), {}, probe);
+    P::Step const* rogue = StepOfBot(plan, 1);
+    CHECK(rogue && rogue->placed && std::fabs(rogue->nudged - 1.0f) < 1e-3f);
+    CHECK(Dist(rogue->pos, slot1) > 0.5f);                    // moved off the wet point
+    CHECK(Dist(rogue->pos, base.frame.centre) < Dist(slot1, base.frame.centre));   // inward
+
+    P::Probe wet = FlatWorld();
+    wet.liquid = [](P::Vec2 const&, float) { return true; };
+    P::PlanResult const allWet = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), Party(), {}, wet);
+    P::Step const* refused = StepOfBot(allWet, 1);
+    CHECK(refused && !refused->placed && refused->code == "liquid");
+}
+
+static void TestNudgeGoesInward()
+{
+    P::PlanResult const base = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), Party(), {}, FlatWorld());
+    P::Vec2 const slot1 = base.steps[1].pos;
+    std::vector<P::Vec2> asked;
+    P::Probe probe = FlatWorld();
+    probe.liquid = [&asked, slot1](P::Vec2 const& point, float)
+    {
+        if (Dist(point, slot1) <= 4.0f)
+            asked.push_back(point);
+        return false;
+    };
+    probe.reachable = [slot1](size_t bot, P::Vec2 const& point, float)
+    {
+        // The bot cannot walk to the slot or its 1 yd nudge; the 2 yd nudge is reachable.
+        if (bot == 1 && Dist(point, slot1) <= 1.5f)
+            return P::PathVerdict::NoPath;
+        return P::PathVerdict::Ok;
+    };
+    P::PlanResult const plan = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), Party(), {}, probe);
+    P::Step const* rogue = StepOfBot(plan, 1);
+    CHECK(rogue && rogue->placed && std::fabs(rogue->nudged - 2.0f) < 1e-3f);
+    // The candidates are asked in order, each one step nearer the frame centre.
+    CHECK(asked.size() >= 3);
+    if (asked.size() >= 3)
+    {
+        float const d0 = Dist(asked[0], base.frame.centre);
+        float const d1 = Dist(asked[1], base.frame.centre);
+        float const d2 = Dist(asked[2], base.frame.centre);
+        CHECK(d1 < d0 && d2 < d1);
+    }
+}
+
+static void TestPathVerdicts()
+{
+    CHECK(!P::IsDetour(34.9f, 10.0f));
+    CHECK(P::IsDetour(35.1f, 10.0f));
+    P::PlanResult const base = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), Party(), {}, FlatWorld());
+    P::Vec2 const slot1 = base.steps[1].pos;
+    struct Case { P::PathVerdict verdict; char const* code; };
+    for (Case const& c : { Case{ P::PathVerdict::NoPath, "unreachable" },
+                           Case{ P::PathVerdict::LiquidPath, "liquid-path" },
+                           Case{ P::PathVerdict::Detour, "detour" } })
+    {
+        P::Probe probe = FlatWorld();
+        probe.reachable = [slot1, c](size_t bot, P::Vec2 const& point, float)
+        {
+            return bot == 1 && Dist(point, slot1) <= 4.0f ? c.verdict : P::PathVerdict::Ok;
+        };
+        P::PlanResult const plan = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+            TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), Party(), {}, probe);
+        P::Step const* rogue = StepOfBot(plan, 1);
+        CHECK(rogue && !rogue->placed && rogue->code == c.code);
+    }
+}
+
+static void TestTankExcluded()
+{
+    // The plan itself removes the anchor tank from a party that includes it: tanks-only leaves nobody, so the command is no-bots.
+    std::vector<P::BotFacts> const party = Party();
+    P::WhoToken tanks;
+    P::ParseWho("tanks", tanks);
+    P::PlanResult const empty = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), party, { tanks }, FlatWorld(), "Mtank");
+    CHECK(!empty.ok && empty.code == "no-bots");
+
+    // Naming the tank alone is the same: the tank is a bot the words may name (never bad-target), but it takes no slot.
+    P::WhoToken byName;
+    P::ParseWho("Mtank", byName);
+    P::PlanResult const named = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), party, { byName }, FlatWorld(), "Mtank");
+    CHECK(!named.ok && named.code == "no-bots");
+
+    // `all` leaves the three other bots; there is no step for the tank.
+    P::WhoToken all;
+    P::ParseWho("all", all);
+    P::PlanResult const rest = P::PlanPlace(P::Shape::Circle, P::Gap::Normal,
+        TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 2.0f), party, { all }, FlatWorld(), "Mtank");
+    CHECK(rest.ok && rest.selected == 3 && rest.steps.size() == 3 && rest.placed == 3);
+    for (P::Step const& step : rest.steps)
+        CHECK(step.bot != 0);
+}
+
+static void TestFallbackRefusedStillDisengages()
+{
+    P::PlanResult const base = P::PlanFallback(P::Gap::Normal, { 0.0f, 0.0f }, { 0.0f, 20.0f }, { 0.0f, 1.0f }, true,
+        Party(), FlatWorld());
+    P::Vec2 const slot2 = StepOfBot(base, 2)->pos;   // a ranged slot on the arc: the centre is more than a nudge away
+    P::Probe blocked = FlatWorld();
+    blocked.reachable = [slot2](size_t bot, P::Vec2 const& point, float)
+    {
+        return bot == 2 && Dist(point, slot2) <= 3.5f ? P::PathVerdict::NoPath : P::PathVerdict::Ok;
+    };
+    P::PlanResult const plan = P::PlanFallback(P::Gap::Normal, { 0.0f, 0.0f }, { 0.0f, 20.0f }, { 0.0f, 1.0f }, true,
+        Party(), blocked);
+    CHECK(plan.ok && plan.placed == 4 && plan.refused == 0);
+    P::Step const* mage = StepOfBot(plan, 2);
+    CHECK(mage && mage->placed && mage->slot == -1 && mage->to == "centre" && mage->code == "unreachable");
+    CHECK(Dist(mage->pos, { 0.0f, 0.0f }) < 1e-3f);
+
+    // The centre itself is refused: the bot goes to the commander's own position.
+    P::Probe wetCentre = blocked;
+    wetCentre.liquid = [](P::Vec2 const& point, float) { return Dist(point, { 0.0f, 0.0f }) < 1.0f; };
+    P::PlanResult const toCommander = P::PlanFallback(P::Gap::Normal, { 0.0f, 0.0f }, { 0.0f, 20.0f }, { 0.0f, 1.0f }, true,
+        Party(), wetCentre);
+    P::Step const* hero = StepOfBot(toCommander, 2);
+    CHECK(hero && hero->placed && hero->to == "commander" && hero->slot == -1);
+    CHECK(std::fabs(hero->pos.y - 20.0f) < 1e-3f);
+
+    // A dead bot is not queued at all.
+    std::vector<P::BotFacts> bots = Party();
+    bots[1].alive = false;
+    P::PlanResult const withDead = P::PlanFallback(P::Gap::Normal, { 0.0f, 0.0f }, { 0.0f, 20.0f }, { 0.0f, 1.0f }, true,
+        bots, FlatWorld());
+    P::Step const* dead = StepOfBot(withDead, 1);
+    CHECK(dead && !dead->placed && dead->code == "dead");
+}
+
+static void TestRallyAndFallbackWords()
+{
+    P::Command c = P::ParseCommand({ "rally", "clear" });
+    CHECK(c.kind == P::CommandKind::RallyClear && c.rallyWord == P::RallyWord::Clear && c.code.empty());
+    c = P::ParseCommand({ "rally", "at:10,20" });
+    CHECK(c.kind == P::CommandKind::RallyAt && c.rallyWord == P::RallyWord::At && c.anchor == P::Anchor::Here);
+    CHECK(std::fabs(c.point.x - 10.0f) < 1e-4f && std::fabs(c.point.y - 20.0f) < 1e-4f && !c.pointHasZ);
+    c = P::ParseCommand({ "rally", "at:1,2,3" });
+    CHECK(c.kind == P::CommandKind::RallyAt && c.pointHasZ && std::fabs(c.pointZ - 3.0f) < 1e-4f);
+    c = P::ParseCommand({ "rally", "here", "there" });
+    CHECK(c.code == "unexpected-argument");
+    c = P::ParseCommand({ "rally", "nowhere" });
+    CHECK(c.code == "bad-argument");
+    CHECK(P::ParseCommand({ "rally", "at:10" }).code == "bad-argument");
+
+    c = P::ParseCommand({ "fallback", "last" });
+    CHECK(c.kind == P::CommandKind::Fallback && c.fallbackTo == P::FallbackTo::Rally);
+    c = P::ParseCommand({ "fallback", "rally" });
+    CHECK(c.fallbackTo == P::FallbackTo::Rally);
+    c = P::ParseCommand({ "fall", "back", "here" });
+    CHECK(c.fallbackTo == P::FallbackTo::Here);
+    c = P::ParseCommand({ "fallback", "at:5,6" });
+    CHECK(c.fallbackTo == P::FallbackTo::At && std::fabs(c.point.y - 6.0f) < 1e-4f);
+    c = P::ParseCommand({ "back", "here" });
+    CHECK(c.code == "unexpected-argument");                    // back takes no option
+    c = P::ParseCommand({ "fallback", "last", "now" });
+    CHECK(c.code == "unexpected-argument");
+
+    // Round-1 words still parse identically.
+    c = P::ParseCommand({ "place", "circle" });
+    CHECK(c.kind == P::CommandKind::Place && c.shape == P::Shape::Circle && c.anchor == P::Anchor::Here
+        && c.gap == P::Gap::Normal && c.code.empty());
+    c = P::ParseCommand({ "place", "follow", "Mtank" });
+    CHECK(c.kind == P::CommandKind::PlaceFollow && c.who.size() == 1);
+    c = P::ParseCommand({ "fall", "back" });
+    CHECK(c.kind == P::CommandKind::Fallback && c.code.empty());
+    c = P::ParseCommand({ "back" });
+    CHECK(c.kind == P::CommandKind::Fallback && c.code.empty());
+    c = P::ParseCommand({ "rally", "here" });
+    CHECK(c.kind == P::CommandKind::RallyHere);
+    c = P::ParseCommand({ "resume" });
+    CHECK(c.kind == P::CommandKind::Resume);
+
+    // Where the fall back forms: `last` never falls through to the commander's position.
+    P::Vec2 const storedPos{ 5.0f, 6.0f };
+    P::Vec2 const commander{ 0.0f, 20.0f };
+    P::FallbackChoice const none = P::ChooseFallback(P::FallbackTo::Rally, false, storedPos, 1.0f, commander, 2.0f, { 7.0f, 8.0f }, 3.0f);
+    CHECK(!none.ok && none.code == "no-rally");
+    P::FallbackChoice const memory = P::ChooseFallback(P::FallbackTo::Rally, true, storedPos, 1.0f, commander, 2.0f, { 7.0f, 8.0f }, 3.0f);
+    CHECK(memory.ok && memory.from == "memory" && Dist(memory.centre, storedPos) < 1e-4f && memory.frontStored);
+    P::FallbackChoice const fallback = P::ChooseFallback(P::FallbackTo::Default, false, storedPos, 1.0f, commander, 2.0f, {}, 0.0f);
+    CHECK(fallback.ok && fallback.from == "commander" && Dist(fallback.centre, commander) < 1e-4f);
+    P::FallbackChoice const here = P::ChooseFallback(P::FallbackTo::Here, true, storedPos, 1.0f, commander, 2.0f, {}, 0.0f);
+    CHECK(here.ok && here.from == "commander" && !here.frontStored);
+    P::FallbackChoice const at = P::ChooseFallback(P::FallbackTo::At, false, storedPos, 1.0f, commander, 2.0f, { 7.0f, 8.0f }, 3.0f);
+    CHECK(at.ok && at.from == "point" && std::fabs(at.z - 3.0f) < 1e-4f);
+
+    CHECK(P::ChatWordsAreCommand({ "rally" }));
+    CHECK(P::ChatWordsAreCommand({ "rally", "clear" }));
+    CHECK(!P::ChatWordsAreCommand({ "rally", "at:1,2" }));
+    CHECK(!P::ChatWordsAreCommand({ "fallback", "here" }));
+}
+
+// Both fall-back destinations are judged before a bot is sent there: an unstandable centre AND an unstandable commander
+// leave the bot refused instead of ordering it somewhere the feature promised to avoid.
+static void TestFallbackCommanderValidated()
+{
+    P::Probe probe = FlatWorld();
+    // Everything within 30 yd of the centre is wet (the centre, every slot and every nudge).
+    probe.liquid = [](P::Vec2 const& point, float) { return Dist(point, { 0.0f, 0.0f }) < 30.0f; };
+    // The commander's own spot has no floor.
+    probe.ground = [](P::Vec2 const& point, float& z)
+    {
+        if (Dist(point, { 0.0f, 20.0f }) < 1.0f)
+            return false;
+        z = 0.0f;
+        return true;
+    };
+    P::PlanResult const plan = P::PlanFallback(P::Gap::Normal, { 0.0f, 0.0f }, { 0.0f, 20.0f }, { 0.0f, 1.0f }, true,
+        Party(), probe);
+    CHECK(plan.ok);
+    CHECK(plan.placed == 0 && plan.refused == 4);
+    for (P::Step const& step : plan.steps)
+    {
+        CHECK(!step.placed && step.to.empty());
+        CHECK(step.code == "liquid" || step.code == "no-ground");
+    }
+}
+
+// A ring nudge towards the target may not walk a bot inside the target's own combat reach.
+static void TestTargetNudgeGuard()
+{
+    P::AnchorFacts anchor = TargetAnchor({ 0.0f, 10.0f }, { 0.0f, 0.0f }, 1.0f);
+    std::vector<P::BotFacts> const one{ { "Mtank", "warrior", 1, P::Rank::Tank } };
+    P::GapSpec gap;
+    gap.preset = P::Gap::Normal;
+    gap.yd = 1.5f;
+    gap.custom = true;
+    P::PlanResult const base = P::PlanPlace(P::Shape::Circle, gap, anchor, one, {}, FlatWorld());
+    CHECK(base.ok && base.placed == 1);
+    P::Vec2 const slot = base.steps[0].pos;
+    CHECK(Dist(slot, { 0.0f, 0.0f }) >= 1.0f);
+    P::Probe probe = FlatWorld();
+    // The slot and its 1 yd nudge are wet; the 2 yd nudge is dry but would be inside the target (0.5 yd from its centre).
+    probe.liquid = [slot](P::Vec2 const& point, float) { return Dist(point, slot) < 1.2f; };
+    P::PlanResult const plan = P::PlanPlace(P::Shape::Circle, gap, anchor, one, {}, probe);
+    P::Step const* tank = StepOfBot(plan, 0);
+    CHECK(tank && !tank->placed && tank->code == "liquid");
+}
+
+// `rally at:` decides the point before any state changes: a refused point stores nothing and never relabels an older one.
+static void TestRallyDecision()
+{
+    P::State state;
+    P::RallyState old;
+    old.set = true;
+    old.x = 5.0f; old.y = 6.0f; old.z = 7.0f;
+    old.map = 1; old.instance = 2;
+    state.rallies[9] = old;
+
+    bool asked = false;
+    auto refusedAt = [&asked](P::Vec2&, float&, std::string& code, std::string& detail)
+    {
+        asked = true;
+        code = "liquid";
+        detail = "the point is in water or lava";
+        return false;
+    };
+    P::RallyDecision const refused = P::DecideRally(P::RallyWord::At, { 1.0f, 2.0f }, 3.0f, 8, 9, { 10.0f, 20.0f }, refusedAt);
+    CHECK(asked && !refused.ok && refused.code == "liquid" && !refused.value.set);
+    CHECK(state.rallies[9].x == 5.0f && state.rallies[9].map == 1);      // the decision touched nothing
+
+    auto goodAt = [](P::Vec2& point, float& z, std::string&, std::string&)
+    {
+        point.x = 30.0f;
+        point.y = 40.0f;
+        z = 50.0f;
+        return true;
+    };
+    P::RallyDecision const at = P::DecideRally(P::RallyWord::At, { 1.0f, 2.0f }, 3.0f, 8, 9, { 10.0f, 20.0f }, goodAt);
+    CHECK(at.ok && at.value.set && at.value.x == 30.0f && at.value.y == 40.0f && std::fabs(at.value.z - 50.0f) < 1e-4f);
+    CHECK(at.value.map == 8 && at.value.instance == 9);
+
+    P::RallyDecision const here = P::DecideRally(P::RallyWord::Here, { 1.0f, 2.0f }, 3.0f, 8, 9, {}, nullptr);
+    CHECK(here.ok && here.value.x == 1.0f && here.value.y == 2.0f && std::fabs(here.value.z - 3.0f) < 1e-4f);
+}
+
+// A stored rally point only applies on its own map and instance; another map is no point at all.
+static void TestStoredRallyFilter()
+{
+    P::State state;
+    P::RallyState rally;
+    rally.set = true;
+    rally.x = 1.0f; rally.y = 2.0f; rally.z = 3.0f;
+    rally.map = 1; rally.instance = 2;
+    state.rallies[9] = rally;
+    CHECK(P::StoredRallyFor(state, 9, 1, 2) != nullptr);
+    CHECK(P::StoredRallyFor(state, 9, 1, 3) == nullptr);      // same map, another instance
+    CHECK(P::StoredRallyFor(state, 9, 0, 2) == nullptr);      // another map
+    CHECK(P::StoredRallyFor(state, 10, 1, 2) == nullptr);     // another commander
+    state.rallies[9].set = false;
+    CHECK(P::StoredRallyFor(state, 9, 1, 2) == nullptr);
+}
+
+static void TestCardHoldKeys()
+{
+    P::HoldView view;
+    view.any = true;
+    view.fallback = false;
+    view.slots.push_back({ { 0, 11 }, { 1.0f, 2.0f, 3.0f } });
+    view.slots.push_back({ { 0, 12 }, { 4.0f, 5.0f, 6.0f } });
+    P::CardKeys const keys = P::CardHoldKeys(view);
+    CHECK(keys.hold == "place");
+    CHECK(keys.slots.size() == 2);
+    P::Vec3f slot;
+    CHECK(keys.SlotOf({ 0, 12 }, slot) && std::fabs(slot.z - 6.0f) < 1e-4f);
+    CHECK(!keys.SlotOf({ 0, 13 }, slot));
+    CHECK(!keys.hasRally);
+
+    P::HoldView empty;
+    P::CardKeys const none = P::CardHoldKeys(empty);
+    CHECK(none.hold.empty() && none.slots.empty() && !none.hasRally);
+
+    P::HoldView fallback;
+    fallback.any = true;
+    fallback.fallback = true;
+    fallback.slots.push_back({ { 0, 11 }, { 0.0f, 0.0f, 0.0f } });
+    fallback.rallySet = true;
+    fallback.x = 10.0f; fallback.y = 20.0f; fallback.z = 30.0f;
+    fallback.map = 1; fallback.inst = 2;
+    P::CardKeys const held = P::CardHoldKeys(fallback);
+    CHECK(held.hold == "fallback");
+    CHECK(held.hasRally && std::fabs(held.rally.y - 20.0f) < 1e-4f && held.rmap == 1 && held.rinst == 2);
+}
+
+static void TestComePolicy()
+{
+    // A run's walk, a rally and a plain `come` are unchanged: the engine's per-fight state is reset, nothing holds the bot passive, and the
+    // combat state keeps its `stay`, so the stay strategy's "return to stay position" still answers a pull.
+    P::ComePlan const runWalk = P::PlanCome(false, false, true);
+    CHECK(runWalk.reset && !runWalk.stopFight && !runWalk.passive && !runWalk.keepCombatStayOut);
+    P::ComePlan const plain = P::PlanCome(false, false, false);
+    CHECK(plain.reset && !plain.keepCombatStayOut);
+
+    // A placement in a fight keeps its target (no reset) and keeps `stay` out of the combat state; out of combat it resets as usual.
+    P::ComePlan const placedFight = P::PlanCome(true, false, true);
+    CHECK(!placedFight.reset && placedFight.keepCombatStayOut && !placedFight.stopFight);
+    P::ComePlan const placedIdle = P::PlanCome(true, false, false);
+    CHECK(placedIdle.reset && placedIdle.keepCombatStayOut);
+
+    // A fall back stops the fight and holds the bot passive; it is not a placement.
+    P::ComePlan const fallback = P::PlanCome(false, true, true);
+    CHECK(fallback.reset && fallback.stopFight && fallback.passive && !fallback.keepCombatStayOut);
+}
+
+static void TestDisengageEnds()
+{
+    // Arrival always ends the hold.
+    CHECK(P::DisengageEnds(P::kSlotToleranceYd - 0.1f, false, false, 0));
+    // A bot that stops short in a fight ends it after the grace; one still walking does not.
+    CHECK(P::DisengageEnds(10.0f, true, true, P::kDisengageStoppedShortMs));
+    CHECK(!P::DisengageEnds(10.0f, true, false, P::kDisengageStoppedShortMs));
+    CHECK(!P::DisengageEnds(10.0f, true, true, P::kDisengageStoppedShortMs - 1));
+    // The cap ends it even for a bot that never stops walking, and out of combat too.
+    CHECK(P::DisengageEnds(10.0f, true, false, P::kDisengageMaxMs));
+    CHECK(P::DisengageEnds(10.0f, false, true, P::kDisengageMaxMs));
+    CHECK(!P::DisengageEnds(10.0f, true, false, P::kDisengageMaxMs - 1));
+}
+
+// F1b (live 11-24, #259): a plain fall back out of combat whose bot stands still off its slot (it does not walk there, or it is blocked)
+// must still end at the cap. place::Update asks once a second; the walk back re-queues the row's `come` every kWalkBackEveryMs while the
+// bot is idle off its slot. The cap counts from the fall back's start: a walk back (or a failed path check) does not restart it, or the
+// passive would never end (the live row: still passive at 17 s and 40 s, `hold=fallback` on every row, only `resume` cleared it).
+static void TestFallbackCapSurvivesWalkBacks()
+{
+    P::HoldRow row;
+    row.seq = 7u;
+    row.disengage = true;
+    uint32_t const start = 50000u;
+    P::StartRowClock(row, start);
+    uint32_t seq = row.seq, endedAt = 0;
+    for (uint32_t now = start; now <= start + 40000u && !endedAt; now += 1000u)
+    {
+        // Out of combat, 8 yd off the slot, not moving (Update's `idle`).
+        if (P::RowDisengageEnds(row, 8.0f, false, true, now))
+        {
+            endedAt = now;
+            row.disengage = false;
+        }
+        if (now - row.walkMs >= P::kWalkBackEveryMs)
+            P::AfterWalkBack(row, ++seq, now);
+    }
+    CHECK(endedAt != 0u);
+    CHECK(endedAt - start == P::kDisengageMaxMs);
+    // The walk backs still ran on their own clock (they serve the slot after the fall back's passive ends).
+    CHECK(seq > 7u);
+
+    // A failed path check rests the walk back (Update writes row.walkMs = now): the cap is still the fall back's own.
+    P::HoldRow blocked;
+    blocked.disengage = true;
+    P::StartRowClock(blocked, 1000u);
+    blocked.walkMs = 9000u;
+    CHECK(P::RowDisengageEnds(blocked, 8.0f, false, true, 1000u + P::kDisengageMaxMs));
+    CHECK(!P::RowDisengageEnds(blocked, 8.0f, false, true, 1000u + P::kDisengageMaxMs - 1u));
+    // The stopped-short grace in a fight counts from the start too, and a row that is not a fall back never "ends" a disengage.
+    CHECK(P::RowDisengageEnds(blocked, 8.0f, true, true, 1000u + P::kDisengageStoppedShortMs));
+    blocked.disengage = false;
+    CHECK(!P::RowDisengageEnds(blocked, 1.0f, false, true, 1000u + P::kDisengageMaxMs));
+    // Arrival ends it at once.
+    P::HoldRow there;
+    there.disengage = true;
+    P::StartRowClock(there, 1000u);
+    CHECK(P::RowDisengageEnds(there, P::kSlotToleranceYd - 0.1f, false, true, 1000u));
+}
+
+static void TestFallbackPassiveOwnership()
+{
+    // F1 (cold review): a fall back's `come` owns the passive only when it added it. A bot the owner already held passive keeps that
+    // passive when the fall back ends; the row's own walk-back `come` carries the record on.
+    CHECK(P::PlaceClaimsPassive(false, false));     // a fall back on a bot that was not passive: the row owns what it adds
+    CHECK(!P::PlaceClaimsPassive(true, false));     // an owner's `+passive` (or a hold/flee) was already on: nothing to own
+    CHECK(P::PlaceClaimsPassive(true, true));       // the row's walk-back: the record it already has carries over
+    CHECK(P::PlaceClaimsPassive(false, true));
+
+    // The orders that set `passive` themselves: `hold`, `flee` (its chat shortcut sets it in both states), an owner's `co/nc +passive`, and
+    // a fall back's own `come` (the disengage one). A plain `come`, a `co -passive` or a `co +follow` does not.
+    CHECK(P::OrderSetsPassive("hold", "", false));
+    CHECK(P::OrderSetsPassive("flee", "", false));
+    CHECK(P::OrderSetsPassive("co", "+passive", false));
+    CHECK(P::OrderSetsPassive("nc", "+passive", false));
+    CHECK(!P::OrderSetsPassive("co", "-passive", false));
+    CHECK(!P::OrderSetsPassive("co", "+follow", false));
+    CHECK(P::OrderSetsPassive("come", "", true));
+    CHECK(!P::OrderSetsPassive("come", "", false));
+    CHECK(!P::OrderSetsPassive("attack", "", false));
+    CHECK(!P::OrderSetsPassive("follow", "", false));
+
+    // The number the order record keeps for a ran order: its seq when it sets passive itself, else none (0).
+    auto const lastPassive = [](char const* verb, char const* arg, bool disengage, uint32_t seq) -> uint32_t
+    {
+        return P::OrderSetsPassive(verb, arg, disengage) ? seq : 0u;
+    };
+
+    // Fall back then flee: at the cap (the bot is still walking) the hold ends, but the passive is the flee's own and stays.
+    CHECK(P::DisengageEnds(10.0f, false, false, P::kDisengageMaxMs));
+    CHECK(!P::PlacePassiveReleasable(true, 7, lastPassive("flee", "", false, 9)));
+    // Fall back then hold: same.
+    CHECK(P::DisengageEnds(1.0f, true, true, P::kDisengageStoppedShortMs));
+    CHECK(!P::PlacePassiveReleasable(true, 7, lastPassive("hold", "", false, 9)));
+    // `.tb order <bot> co +passive` after the fall back: same; a `co -passive` of the same shape never blocks the row's own release.
+    CHECK(!P::PlacePassiveReleasable(true, 7, lastPassive("co", "+passive", false, 9)));
+    CHECK(P::PlacePassiveReleasable(true, 7, lastPassive("co", "-passive", false, 9)));
+
+    // The owner's passive before the fall back is never the row's, whatever order ran last.
+    CHECK(!P::PlacePassiveReleasable(false, 7, 7));
+    CHECK(!P::PlacePassiveReleasable(false, 7, 9));
+
+    // A fall back alone releases its own passive on every exit path: the row's `come` is its last order (the walk-back keeps the row's
+    // number), and an older passive-setting order (a hold before the fall back) does not block it.
+    CHECK(P::PlacePassiveReleasable(true, 7, lastPassive("come", "", true, 7)));
+    CHECK(P::PlacePassiveReleasable(true, 7, lastPassive("hold", "", false, 4)));
+    CHECK(P::PlacePassiveReleasable(true, 9, lastPassive("come", "", true, 9)));   // after a walk-back (a new seq)
+    CHECK(P::PlacePassiveReleasable(true, 7, 0));                                   // no passive-setting order ran at all
+    // A newer order that does NOT set passive leaves the release to the row (attack, follow, free, a plain come).
+    for (char const* verb : { "attack", "follow", "free", "stay", "stop" })
+        CHECK(P::PlacePassiveReleasable(true, 7, lastPassive(verb, "", false, 9)));
+    CHECK(P::PlacePassiveReleasable(true, 7, lastPassive("come", "", false, 9)));
+}
+
 int main()
 {
     TestCommandWords();
@@ -344,10 +844,26 @@ int main()
     TestPlaceRefusalsArePerBot();
     TestCommanderSpot();
     TestFallbackFront();
+    TestComePolicy();
+    TestDisengageEnds();
+    TestFallbackCapSurvivesWalkBacks();
+    TestFallbackPassiveOwnership();
     TestHoldBookkeeping();
     TestClock();
     TestWalkBackKeepsTheRowsOrder();
     TestDroppedFollowYieldsToNewerOrder();
+    TestLedgeSlotIsRefused();
+    TestLiquidSlotIsNudged();
+    TestNudgeGoesInward();
+    TestPathVerdicts();
+    TestTankExcluded();
+    TestFallbackRefusedStillDisengages();
+    TestRallyAndFallbackWords();
+    TestTargetNudgeGuard();
+    TestFallbackCommanderValidated();
+    TestRallyDecision();
+    TestStoredRallyFilter();
+    TestCardHoldKeys();
     if (g_fail)
     {
         std::printf("%d of %d checks FAILED\n", g_fail, g_checks);

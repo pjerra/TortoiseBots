@@ -22,5 +22,11 @@ inline constexpr float kSpiritHealerSearchYd = 40.0f;      // the grid radius th
 inline constexpr float kMoveSampleYd = 0.5f;               // one-second movement sample below this is standing still
 inline constexpr std::uint32_t kSpiritHealerWalkRetryMs = 3000;
 
+// BG2 (BgTargetPolicy.h, spec D9): how far a bot takes a fight in a battleground.
+inline constexpr float kBgFlagCarrierYd = 40.0f;           // the enemy flag carrier is worth a chase this far, and a bound bot assists its human this far
+inline constexpr float kBgDefendYd = 40.0f;                // an enemy hitting our carrier or a healer is taken this far
+inline constexpr float kBgNearYd = 30.0f;                  // an enemy healer and the weakest enemy are taken only inside this range
+inline constexpr float kBgLeashYd = 40.0f;                 // a chase is dropped beyond this distance from the bot's objective (the carrier excepted)
+
 } // namespace bg
 } // namespace TortoiseBots

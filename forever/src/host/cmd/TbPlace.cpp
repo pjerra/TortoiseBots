@@ -26,6 +26,7 @@
 #include "host/TbOrdersApi.h"
 #include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbRun.h"
+#include "host/run/TbRunLiquid.h"
 #include "host/cmd/TbPlacePlan.h"
 #include "host/cmd/TbPlacePure.h"
 
@@ -54,13 +55,49 @@ using h3::Rec;      // the reply record builder (TbH3.h): every line here is a `
 
 // How often a bot that lost its slot outside combat is walked back, at the most. The engine's own stay walk handles the small drift; this is the net
 // under the cases it gives up in (`return to stay position` drops a stay point past reactDistance; a knockback lands a bot on another ledge).
-constexpr uint32 kWalkBackEveryMs = 5000u;
+// kWalkBackEveryMs (5 s) is in TbPlacePlan.h: the fall back's cap must not be measured on its clock (F1b).
 // The floor search under a slot: wide enough for a ledge or a stair, narrow enough never to find another floor of the map.
 constexpr float kGroundSearchYd = 25.0f;
-// A path that ends farther than this from the slot did not reach it.
-constexpr float kPathReachYd = 3.0f;
 // `fall back` forms in the normal gap.
 constexpr Gap kFallbackGap = Gap::Normal;
+
+// The floor under the stand point: the core's own vmap read over a bounded band around `baseZ`, starting high enough
+// to find a slot up to kMaxSlotStepYd uphill. Never the compat helper's 10,000 yd retry: a typed point over a chasm
+// must read no ground, not a floor tens of yards below.
+bool GroundUnder(Map* map, float x, float y, float baseZ, float& z)
+{
+    if (!map || !Trinity::IsValidMapCoord(x, y))
+        return false;
+    float const start = baseZ + 2.0f + kMaxSlotStepYd;
+    z = map->GetHeight(PhasingHandler::GetEmptyPhaseShift(), x, y, start, true, kGroundSearchYd + 2.0f + kMaxSlotStepYd);
+    return z > INVALID_HEIGHT;
+}
+
+// A placement's path verdict: the same PathFinder the move judge reads, then the run's ONE move rule over the whole path
+// (a bot that stands in water may walk out; a path that enters it after dry ground, or ends wet, is refused) and the detour
+// rule. The length is the path's own sum, the straight line the bot's run to the slot.
+PathVerdict VerdictFor(Player* bot, Vec2 const& point, float z)
+{
+    float const dx = bot->GetPositionX() - point.x, dy = bot->GetPositionY() - point.y, dz = bot->GetPositionZ() - z;
+    if (dx * dx + dy * dy < 1.0f && std::fabs(dz) < 2.0f)
+        return PathVerdict::Ok;
+    Map* map = bot->FindMap();
+    if (!map)
+        return PathVerdict::NoPath;
+    PathFinder path(bot);
+    PathCalculateCompat(path, G3D::Vector3(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()), G3D::Vector3(point.x, point.y, z), false);
+    PathWalk walk;
+    walk.noPath = (PathTypeCompat(path) & PATHFIND_NOPATH) != 0;
+    for (G3D::Vector3 const& p : PathPointsCompat(path))
+        walk.points.push_back({ p.x, p.y, p.z });
+    G3D::Vector3 const end = PathActualEndCompat(path);
+    walk.end = { end.x, end.y, end.z };
+    return WalkVerdict(walk, point, z, { bot->GetPositionX(), bot->GetPositionY() },
+        [map](float x, float y, float z)
+        {
+            return run::liquid::PointRefusedOnMap(map, x, y, z);
+        });
+}
 
 // The commander's memory: holds, rally points and pending cursor requests (TbPlacePlan.h decides their rules).
 State& Memory()
@@ -131,24 +168,6 @@ BotInfo InfoOf(Player* bot)
     return info;
 }
 
-// The bot can walk to the point: the same PathGenerator the move judge reads, a path of at least two points that reaches the slot.
-bool Reachable(Player* bot, float x, float y, float z)
-{
-    float const dx = bot->GetPositionX() - x, dy = bot->GetPositionY() - y, dz = bot->GetPositionZ() - z;
-    if (dx * dx + dy * dy < 1.0f && std::fabs(dz) < 2.0f)
-        return true;
-    PathFinder path(bot);
-    PathCalculateCompat(path, G3D::Vector3(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()), G3D::Vector3(x, y, z), false);
-    uint32 const type = PathTypeCompat(path);
-    if (type & PATHFIND_NOPATH)
-        return false;
-    if (PathPointsCompat(path).size() < 2)
-        return false;
-    G3D::Vector3 const end = PathActualEndCompat(path);
-    float const ex = end.x - x, ey = end.y - y, ez = end.z - z;
-    return std::sqrt(ex * ex + ey * ey + ez * ez) <= kPathReachYd;
-}
-
 // A bot a dungeon run drives: the run's leader or one of the members it bound. `.tb run` owns their movement, so a place hold never walks them (its `come`
 // would read as an outside order and pause the run).
 bool InRun(Player* bot)
@@ -181,8 +200,101 @@ bool ReadBinding(ObjectGuid commander, Binding& binding)
     return true;
 }
 
-// Reads the anchor of a shape from the commander's world: the four points the pure FrameFor needs, plus the map, the instance and the floor to search from.
-bool ResolveAnchor(Player* commander, Anchor kind, bool haveCursor, Vec2 cursor, AnchorFacts& facts, std::string& code, std::string& detail)
+// The same control check `.tb cmd` makes (foreign bot, another player's party): the chat form and the deferred
+// minimap-ping completion run it too, so a whispered `place` cannot do what `.tb cmd place` would refuse. Only the binding's lead refuses the
+// whole command; a member owned by another commander or led by another player is refused on its own row (PickBots), as round 1 specified.
+bool CheckAccess(ChatHandler* handler, Binding const& binding, std::string& code, std::string& detail)
+{
+    return h3::CheckBotAccess(handler, binding.lead, code, detail);
+}
+
+// A point snapped to the floor within the search under `baseZ` (false when there is none, or the point is off the map).
+bool SnapFloor(Player* commander, Vec2 const& point, float baseZ, float& z)
+{
+    return GroundUnder(commander->FindMap(), point.x, point.y, baseZ, z);
+}
+
+// `rally at:` and `fallback at:`: the typed point judged by the stand-point rules 2 and 4, the 100 yd reach (in every axis),
+// the floor search and the commander's own path to it. A point over a chasm, off the map or inside geometry is refused; it
+// never reaches a slot plan or the stored rally.
+bool JudgeTypedPoint(Player* commander, Command const& command, Vec2& point, float& z, std::string& code, std::string& detail)
+{
+    point = command.point;
+    z = command.pointHasZ ? command.pointZ : 0.0f;
+    if (!std::isfinite(point.x) || !std::isfinite(point.y) || (command.pointHasZ && !std::isfinite(command.pointZ)))
+    {
+        code = "bad-argument";
+        detail = "the point is not a finite coordinate";
+        return false;
+    }
+    if (!Trinity::IsValidMapCoord(point.x, point.y)
+        || (command.pointHasZ && !Trinity::IsValidMapCoord(point.x, point.y, command.pointZ)))
+    {
+        code = "bad-argument";
+        detail = "the point is not on the map";
+        return false;
+    }
+    float const commanderZ = commander->GetPositionZ();
+    if (command.pointHasZ && std::fabs(command.pointZ - commanderZ) > kPointReachYd)
+    {
+        code = "too-far";
+        detail = "the point is more than 100 yd from you";
+        return false;
+    }
+    float const base = command.pointHasZ ? command.pointZ : commanderZ;
+    if (!GroundUnder(commander->FindMap(), point.x, point.y, base, z))
+    {
+        code = "no-ground";
+        detail = "no floor under the point";
+        return false;
+    }
+    float const dx = point.x - commander->GetPositionX(), dy = point.y - commander->GetPositionY();
+    if (std::sqrt(dx * dx + dy * dy) > kPointReachYd || std::fabs(z - commanderZ) > kPointReachYd)
+    {
+        code = "too-far";
+        detail = "the point is more than 100 yd from you";
+        return false;
+    }
+    if (run::liquid::PointRefusedOnMap(commander->FindMap(), point.x, point.y, z))
+    {
+        code = "liquid";
+        detail = "the point is in water or lava";
+        return false;
+    }
+    PathVerdict const verdict = VerdictFor(commander, point, z);
+    if (verdict != PathVerdict::Ok)
+    {
+        code = PathVerdictWord(verdict);
+        detail = std::string("no safe walk to the point (") + PathVerdictWord(verdict) + ")";
+        return false;
+    }
+    return true;
+}
+
+// The anchor tank: the first tank in rank order among every bound bot that is alive, in the world, on the commander's map and instance and still
+// answers to it. Not only the selected bots: `place circle tank tanks` still rings the commander's tank.
+Player* FindAnchorTank(Player* commander, Binding const& binding, uint32 map, uint32 instance)
+{
+    Player* best = nullptr;
+    for (ObjectGuid guid : binding.bots)
+    {
+        Player* bot = ObjectAccessor::FindPlayer(guid);
+        if (!bot || !bot->IsInWorld() || !bot->IsAlive())
+            continue;
+        if (bot->GetMapId() != map || bot->GetInstanceId() != instance)
+            continue;
+        if (!cmd::IsCommandedBy(commander, bot) || RankOf(bot) != Rank::Tank)
+            continue;
+        if (!best || RankBefore(Rank::Tank, bot->GetName(), Rank::Tank, best->GetName()))
+            best = bot;
+    }
+    return best;
+}
+
+// Reads the anchor of a shape from the commander's world: the points the pure FrameFor needs, plus the map, the instance, the anchor z and (for
+// `tank`) the anchor bot. A cursor point and an `at:` point are floor-snapped here; the slots judge their own floors against `anchorZ`.
+bool ResolveAnchor(Player* commander, Binding const& binding, Command const& command, bool haveCursor, Vec2 cursor, AnchorFacts& facts,
+    ObjectGuid& anchorBot, std::string& code, std::string& detail)
 {
     if (!commander->IsInWorld() || commander->IsBeingTeleported() || !commander->FindMap())
     {
@@ -190,18 +302,25 @@ bool ResolveAnchor(Player* commander, Anchor kind, bool haveCursor, Vec2 cursor,
         detail = "the commander is between maps";
         return false;
     }
-    facts.kind = kind;
+    facts.kind = command.anchor;
     facts.map = commander->GetMapId();
     facts.instance = commander->GetInstanceId();
     facts.player = { commander->GetPositionX(), commander->GetPositionY() };
     facts.z = commander->GetPositionZ();
     float const ori = commander->GetOrientation();
-    facts.playerFront = { std::sin(ori), std::cos(ori) };      // the core's own facing: 0 = north, forward = (sin, cos)
-    switch (kind)
+    facts.playerFront = FrontFromOrientation(ori);      // the core's own facing: x += cos(o), y += sin(o)
+    if (command.hasFace)
+    {
+        facts.hasFace = true;
+        facts.faceFront = FaceFront(command.faceDeg);
+    }
+    switch (command.anchor)
     {
         case Anchor::Here:
+            facts.anchorZ = facts.z;
             return true;
         case Anchor::Cursor:
+        {
             if (!haveCursor)
             {
                 code = "bad-argument";
@@ -209,7 +328,11 @@ bool ResolveAnchor(Player* commander, Anchor kind, bool haveCursor, Vec2 cursor,
                 return false;
             }
             facts.cursor = cursor;
+            float snapped = 0.0f;
+            facts.z = SnapFloor(commander, cursor, facts.z, snapped) ? snapped : commander->GetPositionZ();
+            facts.anchorZ = facts.z;
             return true;
+        }
         case Anchor::Target:
         {
             ObjectGuid const guid = commander->GetTarget();
@@ -241,13 +364,43 @@ bool ResolveAnchor(Player* commander, Anchor kind, bool haveCursor, Vec2 cursor,
             facts.target = { unit->GetPositionX(), unit->GetPositionY() };
             facts.targetHalf = std::max(0.0f, unit->GetCombatReach());
             facts.z = unit->GetPositionZ();
+            facts.anchorZ = facts.z;
+            return true;
+        }
+        case Anchor::Tank:
+        {
+            Player* tank = FindAnchorTank(commander, binding, facts.map, facts.instance);
+            if (!tank)
+            {
+                code = "no-tank";
+                detail = "you command no living tank on this map";
+                return false;
+            }
+            anchorBot = tank->GetGUID();
+            facts.tankPos = { tank->GetPositionX(), tank->GetPositionY() };
+            float const tankOri = tank->GetOrientation();
+            facts.tankFacing = FrontFromOrientation(tankOri);
+            facts.tankReach = std::max(0.0f, tank->GetCombatReach());
+            facts.z = tank->GetPositionZ();
+            facts.anchorZ = facts.z;
+            return true;
+        }
+        case Anchor::Point:
+        {
+            Vec2 point;
+            float z = 0.0f;
+            if (!JudgeTypedPoint(commander, command, point, z, code, detail))
+                return false;
+            facts.point = point;
+            facts.z = z;
+            facts.anchorZ = z;
             return true;
         }
     }
     return false;
 }
 
-bool QueueCome(Player* bot, float x, float y, float z, uint32& seq, std::string& code, std::string& detail)
+bool QueueCome(Player* bot, float x, float y, float z, bool placed, bool disengage, uint32& seq, std::string& code, std::string& detail)
 {
     h3::OrderSpec spec;
     spec.verb = "come";
@@ -255,6 +408,8 @@ bool QueueCome(Player* bot, float x, float y, float z, uint32& seq, std::string&
     spec.y = y;
     spec.z = z;
     spec.map = bot->GetMapId();
+    spec.placed = placed;
+    spec.disengage = disengage;
     return h3::QueueOrder(bot, spec, code, detail, seq);
 }
 
@@ -279,6 +434,7 @@ bool PickBots(Player* commander, Binding const& binding, std::vector<WhoToken> c
     std::string& code, std::string& detail)
 {
     std::vector<std::pair<Player*, BotInfo>> candidates;
+    std::vector<std::string> refusedNames;      // a named bot that was refused for its own reason, not a typo
     for (ObjectGuid guid : binding.bots)
     {
         Player* bot = ObjectAccessor::FindPlayer(guid);
@@ -290,11 +446,22 @@ bool PickBots(Player* commander, Binding const& binding, std::vector<WhoToken> c
             picked.refused.push_back(std::move(rec));
             continue;
         }
+        std::string accessCode, accessDetail;
+        if (!h3::CheckBotAccess(commander, bot->GetGUID(), accessCode, accessDetail))
+        {
+            Rec rec("cmd");
+            rec.S("bot", bot->GetName()).S("verb", verb).S("status", "refused")
+                .S("code", accessCode).T("msg", accessDetail);
+            refusedNames.push_back(Lower(bot->GetName()));
+            picked.refused.push_back(std::move(rec));
+            continue;
+        }
         if (!cmd::IsCommandedBy(commander, bot))
         {
             Rec rec("cmd");
             rec.S("bot", bot->GetName()).S("verb", verb).S("status", "refused")
                 .S("code", "not-in-group").T("msg", "the bot does not answer to this commander any more (.tb master)");
+            refusedNames.push_back(Lower(bot->GetName()));
             picked.refused.push_back(std::move(rec));
             continue;
         }
@@ -304,7 +471,7 @@ bool PickBots(Player* commander, Binding const& binding, std::vector<WhoToken> c
     {
         if (token.kind != WhoKind::Name)
             continue;
-        bool found = false;
+        bool found = std::find(refusedNames.begin(), refusedNames.end(), Lower(token.word)) != refusedNames.end();
         for (auto const& [bot, info] : candidates)
             if (Lower(bot->GetName()) == Lower(token.word))
             {
@@ -348,14 +515,15 @@ Probe WorldProbe(Player* commander, std::vector<Player*> const& bots, float base
     Map* map = commander->FindMap();
     probe.ground = [map, baseZ](Vec2 const& point, float& z)
     {
-        if (!Trinity::IsValidMapCoord(point.x, point.y))
-            return false;
-        z = GetHeightCompat(map, point.x, point.y, baseZ, true, kGroundSearchYd);
-        return z > INVALID_HEIGHT;
+        return GroundUnder(map, point.x, point.y, baseZ, z);
+    };
+    probe.liquid = [map](Vec2 const& point, float z)
+    {
+        return !map || run::liquid::PointRefusedOnMap(map, point.x, point.y, z);
     };
     probe.reachable = [&bots](size_t bot, Vec2 const& point, float z)
     {
-        return bot < bots.size() && Reachable(bots[bot], point.x, point.y, z);
+        return bot < bots.size() ? VerdictFor(bots[bot], point, z) : PathVerdict::NoPath;
     };
     return probe;
 }
@@ -363,8 +531,10 @@ Probe WorldProbe(Player* commander, std::vector<Player*> const& bots, float base
 constexpr uint32 kUpdateMs = 1000;
 
 // Queues one `come` per planned bot and fills the hold rows; returns how many were queued. A planned refusal is already in the plan's count.
+// `placed` marks a placement's own order (only its `come` keeps the combat-time behaviour); `disengage` is a fall back: the order stops the bot's
+// swing, its cast and its pet's attack, and holds it passive until it reaches the spot.
 uint32 ApplyPlan(h3::Reply& reply, std::string const& verb, PlanResult const& plan, Picked const& picked,
-    AnchorFacts const& anchor, std::vector<HoldRow>& rows, std::vector<GuidKey>& addressed, uint32& failed)
+    AnchorFacts const& anchor, bool placed, bool disengage, std::vector<HoldRow>& rows, std::vector<GuidKey>& addressed, uint32& failed)
 {
     uint32 const now = NowMs();
     for (Step const& step : plan.steps)
@@ -381,14 +551,19 @@ uint32 ApplyPlan(h3::Reply& reply, std::string const& verb, PlanResult const& pl
         }
         uint32 seq = 0;
         std::string code, detail;
-        if (!QueueCome(bot, step.pos.x, step.pos.y, step.z, seq, code, detail))
+        if (!QueueCome(bot, step.pos.x, step.pos.y, step.z, placed, disengage, seq, code, detail))
         {
             rec.S("status", "refused").S("code", code.empty() ? std::string("failed") : code).T("msg", detail);
             reply.Line(rec);
             ++failed;
             continue;
         }
-        rec.S("status", "queued").Coord("pos", step.pos.x, step.pos.y, step.z).N("seq", int64(seq));
+        rec.S("status", "queued");
+        if (!step.to.empty())
+            rec.S("to", step.to).S("code", step.code);
+        else if (step.nudged > 0.0f)
+            rec.F("nudged", double(step.nudged), 1);
+        rec.Coord("pos", step.pos.x, step.pos.y, step.z).N("seq", int64(seq));
         reply.Line(rec);
         HoldRow row;
         row.bot = KeyOf(bot->GetGUID());
@@ -400,7 +575,9 @@ uint32 ApplyPlan(h3::Reply& reply, std::string const& verb, PlanResult const& pl
         row.slot = step.slot;
         row.seq = seq;
         row.rank = picked.info[step.bot].rank;
-        row.walkMs = now;
+        StartRowClock(row, now);
+        row.placed = placed;
+        row.disengage = disengage;
         rows.push_back(row);
     }
     return uint32(rows.size());
@@ -422,15 +599,19 @@ void ReleaseRow(HoldRow const& row, Release how)
         return;      // nothing to release
     if (how == Release::Follow)
     {
-        // A newer order (a higher number than the row's `come`) owns the bot now: its order decides, so this release sends nothing.
-        if (NewerOrderOwns(h3::LastOrder(bot->GetGUID()).seq, row.seq))
-            return;
-        uint32 seq = 0;
-        std::string code, detail;
-        QueueFollow(bot, seq, code, detail);
+        // A newer order (a higher number than the row's `come`) owns the bot now: its order decides, so this release sends nothing
+        // (the emergency passive below is still dropped: it never outlives the row).
+        if (!NewerOrderOwns(h3::LastOrder(bot->GetGUID()).seq, row.seq))
+        {
+            uint32 seq = 0;
+            std::string code, detail;
+            QueueFollow(bot, seq, code, detail);
+        }
     }
     else
         h3::ReleasePlaceStay(bot, row.seq);
+    if (row.disengage)
+        h3::ReleasePlacePassive(bot, row.seq);      // the emergency hold never outlives its row (cancel, death, logout, unbind), and never strips another's
 }
 
 // Every dropped row is released. `commander` may be null (the commander left): then only the placement's own stay is cleared.
@@ -463,25 +644,41 @@ std::vector<BotFacts> FactsOf(Picked const& picked, AnchorFacts const& anchor)
     return facts;
 }
 
-// The reply of one shape placement. `anchorName` is the word the caller typed (`here`, `target`, `cursor`).
+// The reply of one shape placement. `anchorName` is the word the caller typed (`here`, `target`, `cursor`, `tank`, `at`).
 bool RunPlace(ChatHandler* handler, h3::Words const& args, Player* commander, Binding const& binding, Command const& command,
-    AnchorFacts const& anchor, std::string const& anchorName)
+    AnchorFacts const& anchor, std::string const& anchorName, ObjectGuid anchorBot = ObjectGuid())
 {
     Picked picked;
     std::string code, detail;
     if (!PickBots(commander, binding, command.who, "place", picked, code, detail))
         return h3::Fail(handler, args, "cmd", code, detail);
+    // The anchor tank is never in the shape: it holds its own mob and its own hold row (if any) is untouched. The plan excludes it,
+    // so a name that matches the tank is satisfied by the tank and never a `bad-target`.
+    std::string tankName;
+    if (!anchorBot.IsEmpty())
+        if (Player* tank = ObjectAccessor::FindPlayer(anchorBot))
+            tankName = tank->GetName();
 
     std::vector<BotFacts> const facts = FactsOf(picked, anchor);
-    PlanResult const plan = PlanPlace(command.shape, command.gap, anchor, facts, command.who, WorldProbe(commander, picked.bots, anchor.z));
+    PlanResult const plan = PlanPlace(command.shape, command.gapSpec, anchor, facts, command.who,
+        WorldProbe(commander, picked.bots, anchor.z), tankName);
     if (!plan.ok)
         return h3::Fail(handler, args, "cmd", plan.code, plan.detail);
 
     h3::Reply reply(handler, args, "cmd");
     reply.Begin();
     Rec head("cmd");
-    head.S("verb", "place").S("status", "accepted").N("bots", int64(picked.bots.size()))
-        .S("shape", ShapeWord(command.shape)).S("gap", GapWord(command.gap)).S("anchor", anchorName);
+    head.S("verb", "place").S("status", "accepted").N("bots", int64(plan.selected))
+        .S("shape", ShapeWord(command.shape)).S("gap", GapText(command.gapSpec)).S("anchor", anchorName);
+    if (command.hasFace)
+        head.N("face", command.faceDeg);
+    if (command.anchor == Anchor::Point)
+        head.Coord("at", anchor.point.x, anchor.point.y, anchor.anchorZ);
+    if (!anchorBot.IsEmpty())
+    {
+        Player* tank = ObjectAccessor::FindPlayer(anchorBot);
+        head.S("anchor_bot", tank ? tank->GetName() : h3::GuidText(anchorBot));
+    }
     if (IsRing(command.shape))
         head.F("radius", plan.layout.radius, 1);
     head.N("slots", int64(plan.layout.slots.size()));
@@ -492,17 +689,17 @@ bool RunPlace(ChatHandler* handler, h3::Words const& args, Player* commander, Bi
         reply.Line(rec);
     std::vector<HoldRow> rows;
     std::vector<GuidKey> addressed;
-    uint32 const placed = ApplyPlan(reply, "place", plan, picked, anchor, rows, addressed, failed);
+    uint32 const placed = ApplyPlan(reply, "place", plan, picked, anchor, true, false, rows, addressed, failed);
     refused += failed;
     std::vector<HoldRow> const dropped = StorePlace(Memory(), commander->GetGUID().GetCounter(), rows, addressed, placed > 0);
     ReleaseDropped(commander->GetGUID(), dropped);
-    NoteOrder(binding, "place " + std::string(ShapeWord(command.shape)) + " " + GapWord(command.gap) + " " + anchorName,
+    NoteOrder(binding, "place " + std::string(ShapeWord(command.shape)) + " " + GapText(command.gapSpec) + " " + anchorName,
         "placed " + std::to_string(placed));
 
     Player* lead = ObjectAccessor::FindPlayer(binding.lead);
     Rec end("cmd");
     end.S("verb", "place").S("lead", lead ? lead->GetName() : h3::GuidText(binding.lead))
-        .N("bots", int64(picked.bots.size())).N("placed", int64(placed)).N("refused", int64(refused));
+        .N("bots", int64(plan.selected)).N("placed", int64(placed)).N("refused", int64(refused));
     reply.End(end);
     return true;
 }
@@ -542,10 +739,13 @@ bool RunPlaceFollow(ChatHandler* handler, h3::Words const& args, Player* command
         freed.push_back(KeyOf(bot->GetGUID()));
         ++released;
     }
-    DropRows(Memory(), commander->GetGUID().GetCounter(), [&](HoldRow const& row)
+    for (HoldRow const& row : DropRows(Memory(), commander->GetGUID().GetCounter(), [&](HoldRow const& row)
     {
         return std::any_of(freed.begin(), freed.end(), [&](GuidKey const& key) { return key == row.bot; });
-    });
+    }))
+        if (row.disengage)
+            if (Player* bot = ObjectAccessor::FindPlayer(BotOf(row.bot)))
+                h3::ReleasePlacePassive(bot, row.seq);
     NoteOrder(binding, "place follow", "released " + std::to_string(released));
 
     Player* lead = ObjectAccessor::FindPlayer(binding.lead);
@@ -568,7 +768,9 @@ bool HandlePlace(ChatHandler* handler, h3::Words const& args, Player* commander,
         pending.commander = commander->GetGUID().GetCounter();
         pending.deadline = NowMs() + uint32(kCursorWaitSeconds) * 1000u;
         pending.shape = command.shape;
-        pending.gap = command.gap;
+        pending.gap = command.gapSpec;
+        pending.hasFace = command.hasFace;
+        pending.faceDeg = command.faceDeg;
         pending.who = command.who;
         pending.words = args.w;
         pending.token = args.token;
@@ -579,7 +781,10 @@ bool HandlePlace(ChatHandler* handler, h3::Words const& args, Player* commander,
         reply.Begin();
         Rec head("cmd");
         head.S("verb", "place").S("status", "waiting").S("anchor", "cursor")
-            .S("shape", ShapeWord(command.shape)).S("gap", GapWord(command.gap)).N("wait", int64(kCursorWaitSeconds));
+            .S("shape", ShapeWord(command.shape)).S("gap", GapText(command.gapSpec));
+        if (command.hasFace)
+            head.N("face", command.faceDeg);
+        head.N("wait", int64(kCursorWaitSeconds));
         reply.Line(head);
         Player* lead = ObjectAccessor::FindPlayer(binding.lead);
         Rec end("cmd");
@@ -589,51 +794,59 @@ bool HandlePlace(ChatHandler* handler, h3::Words const& args, Player* commander,
     }
 
     AnchorFacts facts;
+    ObjectGuid anchorBot;
     std::string code, detail;
-    if (!ResolveAnchor(commander, command.anchor, false, {}, facts, code, detail))
+    if (!ResolveAnchor(commander, binding, command, false, {}, facts, anchorBot, code, detail))
         return h3::Fail(handler, args, "cmd", code, detail);
-    return RunPlace(handler, args, commander, binding, command, facts, AnchorWord(command.anchor));
+    return RunPlace(handler, args, commander, binding, command, facts, AnchorWord(command.anchor), anchorBot);
 }
 
-// `fallback` / `fall back` / `back`: every bot drops its target, runs to the rally point (or the commander) and forms up there.
-bool HandleFallback(ChatHandler* handler, h3::Words const& args, Player* commander, Binding const& binding)
+// `fallback` / `fall back` / `back`: every bot drops its target, runs to the chosen point (stored rally, the commander, or a typed point) and forms
+// up there. A bot whose own slot fails still disengages (PlanFallback).
+bool HandleFallback(ChatHandler* handler, h3::Words const& args, Player* commander, Binding const& binding, Command const& command)
 {
     AnchorFacts facts;
+    ObjectGuid anchorBot;
     std::string code, detail;
-    if (!ResolveAnchor(commander, Anchor::Here, false, {}, facts, code, detail))
+    if (!ResolveAnchor(commander, binding, command, false, {}, facts, anchorBot, code, detail))
         return h3::Fail(handler, args, "cmd", code, detail);
 
-    // The rally point the commander named, while it is on the same map and instance; else where the commander stands now.
-    Vec2 centre{ facts.player.x, facts.player.y };
-    float z = facts.z;
-    bool stored = false;
-    if (auto it = Memory().rallies.find(commander->GetGUID().GetCounter()); it != Memory().rallies.end())
-    {
-        RallyState const& rally = it->second;
-        if (rally.set && rally.map == facts.map && rally.instance == facts.instance)
-        {
-            centre = { rally.x, rally.y };
-            z = rally.z;
-            stored = true;
-        }
-    }
+    RallyState const* storedRally = StoredRallyFor(Memory(), commander->GetGUID().GetCounter(), facts.map, facts.instance);
+
+    Vec2 point{ facts.player.x, facts.player.y };
+    float pointZ = facts.z;
+    if (command.fallbackTo == FallbackTo::At && !JudgeTypedPoint(commander, command, point, pointZ, code, detail))
+        return h3::Fail(handler, args, "cmd", code, detail);
+    Vec2 const storedPoint = storedRally ? Vec2{ storedRally->x, storedRally->y } : Vec2{ facts.player.x, facts.player.y };
+    float const storedZ = storedRally ? storedRally->z : facts.z;
+    FallbackChoice const choice = ChooseFallback(command.fallbackTo, storedRally != nullptr, storedPoint, storedZ,
+        facts.player, facts.z, point, pointZ);
+    if (!choice.ok)
+        return h3::Fail(handler, args, "cmd", choice.code, choice.detail);
+    Vec2 const centre = choice.centre;
+    float const z = choice.z;
+    bool const frontStored = choice.frontStored;
+    std::string const& from = choice.from;
     facts.z = z;
 
     Picked picked;
     if (!PickBots(commander, binding, {}, "fallback", picked, code, detail))
         return h3::Fail(handler, args, "cmd", code, detail);
 
+    GapSpec gap;
+    gap.preset = kFallbackGap;
+    gap.yd = GapYd(kFallbackGap);
     std::vector<BotFacts> const factsOfBots = FactsOf(picked, facts);
-    PlanResult const plan = PlanFallback(kFallbackGap, centre, facts.player, facts.playerFront, stored, factsOfBots,
-        WorldProbe(commander, picked.bots, z));
+    PlanResult const plan = PlanFallback(gap, centre, facts.player, facts.playerFront, frontStored, z, commander->GetPositionZ(),
+        factsOfBots, WorldProbe(commander, picked.bots, z));
     if (!plan.ok)
         return h3::Fail(handler, args, "cmd", plan.code, plan.detail);
 
     h3::Reply reply(handler, args, "cmd");
     reply.Begin();
     Rec head("cmd");
-    head.S("verb", "fallback").S("status", "accepted").N("bots", int64(picked.bots.size()))
-        .S("gap", GapWord(kFallbackGap)).S("from", stored ? "memory" : "commander")
+    head.S("verb", "fallback").S("status", "accepted").N("bots", int64(plan.selected))
+        .S("gap", GapText(gap)).S("from", from)
         .Coord("rally", centre.x, centre.y, z).N("slots", int64(plan.layout.slots.size()));
     reply.Line(head);
     uint32 failed = 0, refused = uint32(picked.refused.size() + plan.refused);
@@ -641,35 +854,76 @@ bool HandleFallback(ChatHandler* handler, h3::Words const& args, Player* command
         reply.Line(rec);
     std::vector<HoldRow> rows;
     std::vector<GuidKey> addressed;
-    uint32 const placed = ApplyPlan(reply, "fallback", plan, picked, facts, rows, addressed, failed);
+    uint32 const placed = ApplyPlan(reply, "fallback", plan, picked, facts, false, true, rows, addressed, failed);
     refused += failed;
     std::vector<HoldRow> const dropped = StoreFallback(Memory(), commander->GetGUID().GetCounter(), rows);
     ReleaseDropped(commander->GetGUID(), dropped);
-    NoteOrder(binding, "fallback", "formed " + std::to_string(placed) + " of " + std::to_string(picked.bots.size()));
+    NoteOrder(binding, "fallback", "formed " + std::to_string(placed) + " of " + std::to_string(plan.selected));
 
     Player* lead = ObjectAccessor::FindPlayer(binding.lead);
     Rec end("cmd");
     end.S("verb", "fallback").S("lead", lead ? lead->GetName() : h3::GuidText(binding.lead))
-        .N("bots", int64(picked.bots.size())).N("placed", int64(placed)).N("refused", int64(refused));
+        .N("bots", int64(plan.selected)).N("placed", int64(placed)).N("refused", int64(refused));
     reply.End(end);
     return true;
 }
 
-// `rally here`: the fall-back point is where the commander stands. Memory only; nothing moves.
-bool HandleRally(ChatHandler* handler, h3::Words const& args, Player* commander, Binding const& binding)
+// `rally` (read-back), `rally here`, `rally clear` and `rally at:<x>,<y>[,<z>]`: the fall-back point is memory only; nothing moves.
+bool HandleRally(ChatHandler* handler, h3::Words const& args, Player* commander, Binding const& binding, Command const& command)
 {
     AnchorFacts facts;
+    ObjectGuid anchorBot;
     std::string code, detail;
-    if (!ResolveAnchor(commander, Anchor::Here, false, {}, facts, code, detail))
+    if (!ResolveAnchor(commander, binding, command, false, {}, facts, anchorBot, code, detail))
         return h3::Fail(handler, args, "cmd", code, detail);
-    RallyState& rally = Memory().rallies[commander->GetGUID().GetCounter()];
-    rally.set = true;
-    rally.x = facts.player.x;
-    rally.y = facts.player.y;
-    rally.z = facts.z;
-    rally.map = facts.map;
-    rally.instance = facts.instance;
-    NoteOrder(binding, "rally here", "rally point set");
+    uint32 const key = commander->GetGUID().GetCounter();
+    auto it = Memory().rallies.find(key);
+    bool const stored = it != Memory().rallies.end() && it->second.set;
+
+    if (command.rallyWord == RallyWord::Show)
+    {
+        h3::Reply reply(handler, args, "cmd");
+        reply.Begin();
+        Rec rec("cmd");
+        rec.S("verb", "rally").S("status", "shown");
+        if (stored)
+            rec.B("set", true).Coord("pos", it->second.x, it->second.y, it->second.z)
+                .N("map", int64(it->second.map)).N("inst", int64(it->second.instance));
+        else
+            rec.B("set", false);
+        reply.Line(rec);
+        Rec end("cmd");
+        end.S("verb", "rally").N("set", int64(stored ? 1 : 0));
+        reply.End(end);
+        return true;
+    }
+    if (command.rallyWord == RallyWord::Clear)
+    {
+        if (it != Memory().rallies.end())
+            Memory().rallies.erase(it);
+        h3::Reply reply(handler, args, "cmd");
+        reply.Begin();
+        Rec rec("cmd");
+        rec.S("verb", "rally").S("status", "accepted").B("cleared", stored);
+        reply.Line(rec);
+        Rec end("cmd");
+        end.S("verb", "rally").B("cleared", stored);
+        reply.End(end);
+        return true;
+    }
+
+    // The point is decided first and the memory is written only after the decision: a refused `rally at:` leaves the stored point
+    // (absent, or an older one on its own map) exactly as it was.
+    RallyDecision const decision = DecideRally(command.rallyWord, facts.player, facts.z, facts.map, facts.instance, command.point,
+        [commander, &command](Vec2& point, float& z, std::string& atCode, std::string& atDetail)
+        {
+            return JudgeTypedPoint(commander, command, point, z, atCode, atDetail);
+        });
+    if (!decision.ok)
+        return h3::Fail(handler, args, "cmd", decision.code, decision.detail);
+    Memory().rallies[key] = decision.value;
+    RallyState const& rally = decision.value;
+    NoteOrder(binding, command.rallyWord == RallyWord::At ? "rally at" : "rally here", "rally point set");
 
     h3::Reply reply(handler, args, "cmd");
     reply.Begin();
@@ -729,10 +983,13 @@ bool HandleResume(ChatHandler* handler, h3::Words const& args, Player* commander
         ++released;
     }
     // A released row is done; a stale one is dropped and only its placement stay is cleared.
-    DropRows(Memory(), key, [&](HoldRow const& row)
+    for (HoldRow const& row : DropRows(Memory(), key, [&](HoldRow const& row)
     {
         return std::any_of(freed.begin(), freed.end(), [&](GuidKey const& guid) { return guid == row.bot; });
-    });
+    }))
+        if (row.disengage)
+            if (Player* bot = ObjectAccessor::FindPlayer(BotOf(row.bot)))
+                h3::ReleasePlacePassive(bot, row.seq);
     std::vector<HoldRow> const dropped = DropRows(Memory(), key, [&](HoldRow const& row)
     {
         return std::any_of(stale.begin(), stale.end(), [&](GuidKey const& guid) { return guid == row.bot; });
@@ -755,9 +1012,8 @@ void CompleteCursor(ChatHandler* handler, Player* commander, PendingRequest cons
         h3::Fail(handler, args, "cmd", "not-bound", "the binding ended while the command waited for the ping: no bot was moved");
         return;
     }
-    AnchorFacts facts;
     std::string code, detail;
-    if (!ResolveAnchor(commander, Anchor::Cursor, true, cursor, facts, code, detail))
+    if (!CheckAccess(handler, binding, code, detail))
     {
         h3::Fail(handler, args, "cmd", code, detail);
         return;
@@ -765,9 +1021,18 @@ void CompleteCursor(ChatHandler* handler, Player* commander, PendingRequest cons
     Command command;
     command.kind = CommandKind::Place;
     command.shape = pending.shape;
-    command.gap = pending.gap;
+    command.gapSpec = pending.gap;
     command.anchor = Anchor::Cursor;
+    command.hasFace = pending.hasFace;
+    command.faceDeg = pending.faceDeg;
     command.who = pending.who;
+    AnchorFacts facts;
+    ObjectGuid anchorBot;
+    if (!ResolveAnchor(commander, binding, command, true, cursor, facts, anchorBot, code, detail))
+    {
+        h3::Fail(handler, args, "cmd", code, detail);
+        return;
+    }
     RunPlace(handler, args, commander, binding, command, facts, "cursor");
 }
 
@@ -802,16 +1067,24 @@ bool Handle(ChatHandler* handler, h3::Words const& args)
     Binding binding;
     if (!ReadBinding(commander->GetGUID(), binding))
         return h3::Fail(handler, args, "cmd", "not-bound", "you have no bound bots (`.tb master <bot|party> <commander>`)");
+    {
+        std::string accessCode, accessDetail;
+        if (!CheckAccess(handler, binding, accessCode, accessDetail))
+            return h3::Fail(handler, args, "cmd", accessCode, accessDetail);
+    }
 
     switch (command.kind)
     {
         case CommandKind::Place:
         case CommandKind::PlaceFollow:
             return HandlePlace(handler, args, commander, binding, command);
+        case CommandKind::RallyShow:
         case CommandKind::RallyHere:
-            return HandleRally(handler, args, commander, binding);
+        case CommandKind::RallyClear:
+        case CommandKind::RallyAt:
+            return HandleRally(handler, args, commander, binding, command);
         case CommandKind::Fallback:
-            return HandleFallback(handler, args, commander, binding);
+            return HandleFallback(handler, args, commander, binding, command);
         case CommandKind::Resume:
             return HandleResume(handler, args, commander, binding);
         case CommandKind::None:
@@ -835,7 +1108,14 @@ void NoteLogout(Player* player)
 {
     if (!player)
         return;
-    Forget(Memory(), player->GetGUID().GetCounter());
+    uint32 const key = player->GetGUID().GetCounter();
+    auto const hold = Memory().holds.find(key);
+    if (hold != Memory().holds.end())
+        for (HoldRow const& row : hold->second.rows)
+            if (row.disengage)
+                if (Player* bot = ObjectAccessor::FindPlayer(BotOf(row.bot)))
+                    h3::ReleasePlacePassive(bot, row.seq);
+    Forget(Memory(), key);
 }
 
 bool IsPlaceText(std::string const& text)
@@ -844,7 +1124,7 @@ bool IsPlaceText(std::string const& text)
     return ChatWordsAreCommand(args.w);
 }
 
-bool HandleChat(Player* sender, std::string const& text)
+bool HandleChat(Player* sender, std::string const& text, Group* group)
 {
     if (!sender || !sender->GetSession() || !IsPlaceText(text))
         return false;
@@ -853,6 +1133,16 @@ bool HandleChat(Player* sender, std::string const& text)
     std::vector<ObjectGuid> members;
     if (!cmd::ResolveBinding(sender->GetGUID(), lead, members) || lead.IsEmpty())
         return false;
+    // Party/raid chat only counts when the channel holds the bots it would order: a commander typing "back" in a group of
+    // strangers must not move bots standing elsewhere. (A whisper already checked its one receiver.)
+    if (group)
+    {
+        bool holdsBot = group->IsMember(lead);
+        for (size_t i = 0; i < members.size() && !holdsBot; ++i)
+            holdsBot = group->IsMember(members[i]);
+        if (!holdsBot)
+            return false;
+    }
     h3::Words const args = h3::Split(text);
     ChatHandler handler(sender->GetSession());
     return Handle(&handler, args);
@@ -885,11 +1175,28 @@ void NoteOrdered(ObjectGuid commander, std::string const& verb)
     auto it = Memory().holds.find(commander.GetCounter());
     if (it == Memory().holds.end())
         return;
-    // `follow` releases every hold; the orders that end a fall back end only that one (a place hold survives an attack).
+    // `follow` releases every hold (its own SetMovementStrategy("follow") drops the stay; the emergency passive is released here, so a
+    // fall back cannot leave a bot passive behind the new order); the orders that end a fall back must clear the emergency movement
+    // first, or the bots stay anchored on `stay`/`passive` while the new order expects them to move.
     if (verb == "follow")
+    {
+        for (HoldRow const& row : it->second.rows)
+            if (row.disengage)
+                if (Player* bot = ObjectAccessor::FindPlayer(BotOf(row.bot)))
+                    h3::ReleasePlacePassive(bot, row.seq);
         Memory().holds.erase(it);
+    }
     else if (it->second.fallback && (verb == "attack" || verb == "pull" || verb == "pullback" || verb == "resume"))
+    {
+        for (HoldRow const& row : it->second.rows)
+            if (Player* bot = ObjectAccessor::FindPlayer(BotOf(row.bot)))
+            {
+                h3::ReleasePlaceHold(bot, row.x, row.y, row.z);
+                if (row.disengage)
+                    h3::ReleasePlacePassive(bot, row.seq);
+            }
         Memory().holds.erase(it);
+    }
 }
 
 void Update()
@@ -961,17 +1268,28 @@ void Update()
             }
             float const dx = bot->GetPositionX() - row.x, dy = bot->GetPositionY() - row.y;
             float const distance = std::sqrt(dx * dx + dy * dy);
+            if (RowDisengageEnds(row, distance, bot->IsInCombat(), bot->movespline->Finalized(), now))
+            {
+                // The fall back has landed, or the bot stopped short in a fight (a blocked spot), or the walk outlived its cap: the
+                // emergency passivity ends, the bot fights what follows it (and still returns to the spot after the fight). A newer order
+                // may own the bot by now (its number no longer matches): only the row's OWN passive is released (F1), so a `flee` or `hold`
+                // ordered on the way keeps its own; only the matching `come` still owns the combat-state stay.
+                if (h3::ReleasePlaceDisengage(bot, row.seq) || h3::ReleasePlacePassive(bot, row.seq))
+                    row.disengage = false;
+            }
             bool const idle = !bot->IsInCombat() && !bot->IsNonMeleeSpellCast(true, false, true) && bot->movespline->Finalized();
             if (distance > kSlotToleranceYd && idle && Due(now, row.walkMs + kWalkBackEveryMs))
             {
-                // The slot may have become unreachable (a knock to another floor): re-check before ordering a walk, and give up after a few.
-                if (!Reachable(bot, row.x, row.y, row.z))
+                // The slot may have become unreachable (a knock to another floor, water where it was dry): the same move rule the
+                // placement used judges the walk back, and a few failed checks give the row up.
+                PathVerdict const verdict = VerdictFor(bot, { row.x, row.y }, row.z);
+                if (verdict != PathVerdict::Ok)
                 {
                     ++row.walkFails;
                     if (WalkGiveUp(row.walkFails))
                     {
-                        sLog.outString("TortoiseBots place: giving up %s's slot after %u failed walk-backs (the slot cannot be reached)",
-                            bot->GetName(), row.walkFails);
+                        sLog.outString("TortoiseBots place: giving up %s's slot after %u failed walk-backs (%s)",
+                            bot->GetName(), row.walkFails, PathVerdictWord(verdict));
                         ended.emplace_back(row, RowEnd::Unreachable);
                         continue;
                     }
@@ -981,7 +1299,7 @@ void Update()
                 {
                     uint32 seq = 0;
                     std::string code, detail;
-                    if (QueueCome(bot, row.x, row.y, row.z, seq, code, detail))
+                    if (QueueCome(bot, row.x, row.y, row.z, row.placed, row.disengage, seq, code, detail))
                         AfterWalkBack(row, seq, now);
                 }
             }
@@ -1011,6 +1329,31 @@ void Update()
         it = Memory().holds.upper_bound(key);   // the hold may be gone; continue with the next commander either way
     }
 }
+
+HoldView ViewFor(ObjectGuid commander)
+{
+    HoldView view;
+    uint32 const key = commander.GetCounter();
+    auto const hold = Memory().holds.find(key);
+    if (hold != Memory().holds.end() && !hold->second.rows.empty())
+    {
+        view.any = true;
+        view.fallback = hold->second.fallback;
+        for (HoldRow const& row : hold->second.rows)
+            view.slots.push_back({ row.bot, { row.x, row.y, row.z } });
+    }
+    auto const rally = Memory().rallies.find(key);
+    if (rally != Memory().rallies.end() && rally->second.set)
+    {
+        view.rallySet = true;
+        view.x = rally->second.x;
+        view.y = rally->second.y;
+        view.z = rally->second.z;
+        view.map = rally->second.map;
+        view.inst = rally->second.instance;
+    }
+    return view;
+}
 }
 }
 
@@ -1021,13 +1364,14 @@ namespace TortoiseBots
 namespace place
 {
 bool Handle(ChatHandler*, h3::Words const&) { return false; }
-bool HandleChat(Player*, std::string const&) { return false; }
+bool HandleChat(Player*, std::string const&, Group*) { return false; }
 bool IsPlaceText(std::string const&) { return false; }
 void CancelPending(ObjectGuid, ChatHandler*) {}
 void NoteLogout(Player*) {}
 void OnPacket(WorldSession*, WorldPacket&) {}
 void NoteOrdered(ObjectGuid, std::string const&) {}
 void Update() {}
+HoldView ViewFor(ObjectGuid) { return {}; }
 }
 }
 

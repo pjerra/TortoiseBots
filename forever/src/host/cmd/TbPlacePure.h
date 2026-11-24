@@ -9,7 +9,9 @@
 // ANCHORS (FrameFor). `here`: the whole shape stands along the player's facing, its nearest slot kHereClearYd from the player and never on the player's
 // own spot. `target`: a ring is centred on the target and never smaller than the target's size plus one gap; the row shapes start one gap clear of the
 // target's size on the player's side and grow away from it, so no slot is inside the target. `cursor`: the shape is centred on the minimap ping and
-// faces away from the player.
+// faces away from the player. `tank`: centred on the anchor tank and facing behind it (slot 0 away from what the tank faces), the ring never narrower
+// than the tank's reach plus one gap. `at:`: centred on a typed point and facing away from the player. `face:<deg>` replaces the front for `here`,
+// `cursor`, `tank` and `at:`.
 //
 // CEILINGS. kMaxRadiusYd is the "never over ~35 yd" rule: a ring that cannot stay inside it (a huge target, or more bots than the circumference holds)
 // is refused (`tooFar`), never silently shrunk onto the target. Row shapes only ever use a few gaps for a real party; the command drops a slot past the
@@ -20,10 +22,14 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include "../run/TbRunLiquid.h"   // the ONE liquid rule (pure: no core header)
 
 namespace TortoiseBots
 {
@@ -45,10 +51,93 @@ constexpr float kSlotToleranceYd = 3.0f;
 constexpr int kCursorWaitSeconds = 30;
 // No slot ever stands this close to the commander, whatever the anchor: the commander's own spot is never a bot's.
 constexpr float kCommanderClearYd = 1.5f;
+// A slot on another floor of the map (a ledge, a balcony) is refused: the floor search alone reaches 25 yd down and a long path can still get there.
+constexpr float kMaxSlotStepYd = 5.0f;
+// A refused slot is nudged this far towards the frame centre, in this order, before the bot is refused.
+constexpr float kNudgeStepsYd[] = { 1.0f, 2.0f, 3.0f };
+// A path more than this factor of the straight distance (plus the slack) is a detour the group cannot hold.
+constexpr float kDetourFactor = 2.5f;
+constexpr float kDetourSlackYd = 10.0f;
+// `at:` / `rally at:`: how far from the commander a typed point may be, in every axis (a floor tens of yards above or
+// below the commander is not the point the player meant).
+constexpr float kPointReachYd = 100.0f;
+// A path that ends farther than this from the slot did not reach it.
+constexpr float kPathReachYd = 3.0f;
+
+// A world point on the horizontal plane.
+struct Vec2
+{
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+// The move rule's own verdict, so a plan only names the refusal.
+enum class PathVerdict { Ok, NoPath, LiquidPath, Detour };
+
+inline char const* PathVerdictWord(PathVerdict verdict)
+{
+    switch (verdict)
+    {
+        case PathVerdict::Ok: return "ok";
+        case PathVerdict::NoPath: return "unreachable";
+        case PathVerdict::LiquidPath: return "liquid-path";
+        case PathVerdict::Detour: return "detour";
+    }
+    return "";
+}
+
+// The detour rule: a path this much longer than the straight line is a walk the group cannot hold.
+inline bool IsDetour(float pathLen, float straight)
+{
+    return pathLen > kDetourFactor * straight + kDetourSlackYd;
+}
+
+struct PathPoint
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+
+// One PathFinder answer as the pure verdict reads it: the type, the points in order and the actual end.
+struct PathWalk
+{
+    bool noPath = false;
+    std::vector<PathPoint> points;
+    PathPoint end;
+};
+
+// One path's verdict: no path, an end that does not reach the slot, liquid, or a detour. The liquid rule is the run's
+// ONE move rule over the WHOLE path (a bot that stands in water may walk out of it: a wet prefix followed by dry ground
+// is accepted; a wet sample after dry ground, or a wet end, is refused). Asking it per leg would refuse a wet start
+// whose own leg ends wet even when the path walks out.
+template <class LiquidRefused>
+inline PathVerdict WalkVerdict(PathWalk const& walk, Vec2 point, float z, Vec2 start, LiquidRefused&& refused)
+{
+    if (walk.noPath || walk.points.size() < 2)
+        return PathVerdict::NoPath;
+    float const ex = walk.end.x - point.x, ey = walk.end.y - point.y, ez = walk.end.z - z;
+    if (std::sqrt(ex * ex + ey * ey + ez * ez) > kPathReachYd)
+        return PathVerdict::NoPath;
+    if (run::liquid::PathPrefixRefused(walk.points.data(), walk.points.size(), refused))
+        return PathVerdict::LiquidPath;
+    float length = 0.0f;
+    for (size_t i = 1; i < walk.points.size(); ++i)
+    {
+        float const lx = walk.points[i].x - walk.points[i - 1].x;
+        float const ly = walk.points[i].y - walk.points[i - 1].y;
+        float const lz = walk.points[i].z - walk.points[i - 1].z;
+        length += std::sqrt(lx * lx + ly * ly + lz * lz);
+    }
+    float const sx = point.x - start.x, sy = point.y - start.y;
+    if (IsDetour(length, std::sqrt(sx * sx + sy * sy)))
+        return PathVerdict::Detour;
+    return PathVerdict::Ok;
+}
 
 enum class Shape { Close, Circle, Arc, Spread, Line, Column, Spear, Arrow };
 enum class Gap { Tight, Normal, Wide };
-enum class Anchor { Here, Target, Cursor };
+enum class Anchor { Here, Target, Cursor, Tank, Point };
 // The slot order: tanks front, then melee, ranged, healers at the back.
 enum class Rank { Tank = 0, Melee = 1, Ranged = 2, Healer = 3 };
 
@@ -86,6 +175,8 @@ inline char const* AnchorWord(Anchor anchor)
         case Anchor::Here: return "here";
         case Anchor::Target: return "target";
         case Anchor::Cursor: return "cursor";
+        case Anchor::Tank: return "tank";
+        case Anchor::Point: return "at";
     }
     return "";
 }
@@ -150,7 +241,7 @@ inline bool ParseGap(std::string_view word, Gap& out)
 inline bool ParseAnchor(std::string_view word, Anchor& out)
 {
     std::string const w = Lower(word);
-    for (Anchor anchor : { Anchor::Here, Anchor::Target, Anchor::Cursor })
+    for (Anchor anchor : { Anchor::Here, Anchor::Target, Anchor::Cursor, Anchor::Tank })
         if (w == AnchorWord(anchor))
         {
             out = anchor;
@@ -158,6 +249,134 @@ inline bool ParseAnchor(std::string_view word, Anchor& out)
         }
     return false;
 }
+
+// The gap as typed: a preset word or a number of yards (1.5..12.0, at most one fraction digit).
+struct GapSpec
+{
+    Gap preset = Gap::Normal;
+    float yd = kNormalYd;
+    bool custom = false;
+};
+
+// A strict decimal: digits, one optional '.', and at most one digit after it; no sign, exponent, nan or inf.
+inline bool ParseGapNumber(std::string_view word, float& yd)
+{
+    if (word.empty() || word.size() > 24)
+        return false;
+    size_t i = 0;
+    while (i < word.size() && word[i] >= '0' && word[i] <= '9')
+        ++i;
+    if (i == 0)
+        return false;
+    if (i < word.size() && word[i] == '.')
+    {
+        ++i;
+        size_t fraction = 0;
+        while (i < word.size() && word[i] >= '0' && word[i] <= '9')
+        {
+            ++i;
+            if (++fraction > 1)
+                return false;
+        }
+        if (fraction == 0)      // `5.` is not a gap: one fraction digit is required after the point
+            return false;
+    }
+    if (i != word.size())
+        return false;
+    std::string const text(word);
+    char* end = nullptr;
+    yd = std::strtof(text.c_str(), &end);
+    return end && *end == '\0' && std::isfinite(yd);
+}
+
+// The parser asks this to tell "a gap word I do not know" (a who name) from "a number I must refuse": a word that
+// starts like a number is a bad gap, never a bot name. A bare `nan`/`inf` is NOT numeric-looking: `Nan` and `Inf`
+// are legal character names, and the gap parser already refuses those words as gaps.
+inline bool LooksNumeric(std::string_view word)
+{
+    if (word.empty())
+        return false;
+    char const c = word[0];
+    return (c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.';
+}
+
+inline bool ParseGapWord(std::string_view word, GapSpec& out)
+{
+    Gap gap = Gap::Normal;
+    if (ParseGap(word, gap))
+    {
+        out.preset = gap;
+        out.yd = GapYd(gap);
+        out.custom = false;
+        return true;
+    }
+    float yd = 0.0f;
+    if (!ParseGapNumber(word, yd) || yd < 1.5f || yd > 12.0f)
+        return false;
+    out.preset = Gap::Normal;
+    out.yd = yd;
+    out.custom = true;
+    return true;
+}
+
+inline std::string GapText(GapSpec const& gap)
+{
+    if (!gap.custom)
+        return GapWord(gap.preset);
+    char text[16];
+    std::snprintf(text, sizeof text, "%.1f", double(gap.yd));
+    return text;
+}
+
+// `face:<deg>`: digits only, 0..359. The game's own orientation in degrees (0 = +X, 90 = +Y).
+inline bool ParseFace(std::string_view word, int& deg)
+{
+    if (word.empty() || word.size() > 3)
+        return false;
+    int value = 0;
+    for (char c : word)
+    {
+        if (c < '0' || c > '9')
+            return false;
+        value = value * 10 + (c - '0');
+    }
+    if (value > 359)
+        return false;
+    deg = value;
+    return true;
+}
+
+// One signed strict decimal of a point: an optional '-', digits, an optional '.' and digits. No exponent, nan or inf.
+inline bool ParsePointNumber(std::string_view word, float& out)
+{
+    if (word.empty() || word.size() > 24)
+        return false;
+    size_t i = 0;
+    if (word[i] == '-')
+        ++i;
+    size_t const digits = i;
+    while (i < word.size() && word[i] >= '0' && word[i] <= '9')
+        ++i;
+    if (i == digits)
+        return false;
+    if (i < word.size() && word[i] == '.')
+    {
+        ++i;
+        size_t const fraction = i;
+        while (i < word.size() && word[i] >= '0' && word[i] <= '9')
+            ++i;
+        if (i == fraction)
+            return false;
+    }
+    if (i != word.size())
+        return false;
+    std::string const text(word);
+    char* end = nullptr;
+    out = std::strtof(text.c_str(), &end);
+    return end && *end == '\0' && std::isfinite(out);
+}
+
+
 
 struct Slot
 {
@@ -174,12 +393,12 @@ struct Layout
 };
 
 // The slots of one shape, centred on the local origin. `targetHalfYd` is the target's size (its combat reach) for the ring minimum; 0 for `here`/`cursor`.
-inline Layout LayoutShape(Shape shape, Gap gap, int count, float targetHalfYd)
+inline Layout LayoutShape(Shape shape, float gapYd, int count, float targetHalfYd)
 {
     Layout layout;
     if (count <= 0)
         return layout;
-    float const g = GapYd(gap);
+    float const g = gapYd;
     float const targetHalf = targetHalfYd > 0.0f ? targetHalfYd : 0.0f;
     float const ringMinimum = targetHalf > 0.0f ? targetHalf + g : g;
 
@@ -305,11 +524,35 @@ inline Layout LayoutShape(Shape shape, Gap gap, int count, float targetHalfYd)
     return layout;
 }
 
-struct Vec2
+inline Layout LayoutShape(Shape shape, Gap gap, int count, float targetHalfYd)
 {
-    float x = 0.0f;
-    float y = 0.0f;
-};
+    return LayoutShape(shape, GapYd(gap), count, targetHalfYd);
+}
+
+// `at:<x>,<y>[,<z>]`: two or three strict decimals. One or four parts is refused.
+inline bool ParsePoint(std::string_view word, Vec2& point, float& z, bool& hasZ)
+{
+    std::vector<std::string_view> parts;
+    size_t start = 0;
+    for (size_t i = 0; i <= word.size(); ++i)
+        if (i == word.size() || word[i] == ',')
+        {
+            parts.push_back(word.substr(start, i - start));
+            start = i + 1;
+        }
+    if (parts.size() != 2 && parts.size() != 3)
+        return false;
+    float x = 0.0f, y = 0.0f, zz = 0.0f;
+    if (!ParsePointNumber(parts[0], x) || !ParsePointNumber(parts[1], y))
+        return false;
+    if (parts.size() == 3 && !ParsePointNumber(parts[2], zz))
+        return false;
+    point.x = x;
+    point.y = y;
+    hasZ = parts.size() == 3;
+    z = hasZ ? zz : 0.0f;
+    return true;
+}
 
 inline Vec2 Normalized(Vec2 v, Vec2 fallback)
 {
@@ -325,46 +568,102 @@ struct Frame
     Vec2 front;     // unit vector: where the group faces
 };
 
+// The core's forward vector for an orientation, in world (x, y): x += cos(o) * d, y += sin(o) * d
+// (Position::RelocateOffset, WorldObject::GetNearPoint2D). The ONE facing helper of the module: player facing, anchor
+// tank facing, `face:<deg>` and TbThrown's knockback point all come from here, so an orientation means the same
+// direction everywhere.
+inline Vec2 FrontFromOrientation(float radians)
+{
+    return { std::cos(radians), std::sin(radians) };
+}
+
+// `face:<deg>`: the game's own orientation in degrees (0 = +X, 90 = +Y), the number `.gps` prints.
+inline Vec2 FaceFront(int deg)
+{
+    return FrontFromOrientation(float(deg) * 3.14159265358979f / 180.0f);
+}
+
+// Everything the frames read from the world, one struct so the round-1 call stays a call.
+struct FrameInput
+{
+    Vec2 player;
+    Vec2 playerFront{ 0.0f, 1.0f };
+    Vec2 target;
+    float targetHalf = 0.0f;
+    Vec2 cursor;
+    Vec2 tank;
+    Vec2 tankFacing{ 0.0f, 1.0f };
+    float tankReach = 0.0f;
+    Vec2 point;
+    bool hasFace = false;
+    Vec2 faceFront{ 0.0f, 1.0f };
+};
+
 // Where one shape stands for one anchor. `playerFront` is the player's facing (a unit vector or not: it is normalized).
-inline Frame FrameFor(Anchor anchor, Layout const& layout, float gapYd, Vec2 player, Vec2 playerFront, Vec2 target, float targetHalfYd, Vec2 cursor)
+inline Frame FrameFor(Anchor anchor, Layout const& layout, float gapYd, FrameInput const& in)
 {
     Frame frame;
-    Vec2 const facing = Normalized(playerFront, { 0.0f, 1.0f });
+    Vec2 const facing = Normalized(in.playerFront, { 0.0f, 1.0f });
+    Vec2 const override = in.hasFace ? Normalized(in.faceFront, facing) : facing;
     switch (anchor)
     {
         case Anchor::Here:
         {
-            // The whole shape ahead of the player along the facing, nearest slot kHereClearYd away.
-            frame.front = facing;
+            // The whole shape ahead of the player along the facing (or face:), nearest slot kHereClearYd away.
+            frame.front = in.hasFace ? override : facing;
             float const offset = kHereClearYd + layout.extent;
-            frame.centre = { player.x + frame.front.x * offset, player.y + frame.front.y * offset };
+            frame.centre = { in.player.x + frame.front.x * offset, in.player.y + frame.front.y * offset };
             break;
         }
         case Anchor::Target:
         {
             // A ring is centred on the target and starts on the player's side (the tank is the bot nearest the player, the group wraps round the
             // target). The row shapes stand between the player and the target with the tank row nearest the target, so the group never stands on the
-            // target and heals and ranged keep their distance from it.
+            // target and heals and ranged keep their distance from it. The target anchor faces the target: face: is refused.
             if (layout.radius > 0.0f)
             {
-                frame.front = Normalized({ player.x - target.x, player.y - target.y }, facing);
-                frame.centre = target;
+                frame.front = Normalized({ in.player.x - in.target.x, in.player.y - in.target.y }, facing);
+                frame.centre = in.target;
             }
             else
             {
-                frame.front = Normalized({ target.x - player.x, target.y - player.y }, facing);
-                float const offset = (targetHalfYd > 0.0f ? targetHalfYd : 0.0f) + gapYd + layout.extent;
-                frame.centre = { target.x - frame.front.x * offset, target.y - frame.front.y * offset };
+                frame.front = Normalized({ in.target.x - in.player.x, in.target.y - in.player.y }, facing);
+                float const offset = (in.targetHalf > 0.0f ? in.targetHalf : 0.0f) + gapYd + layout.extent;
+                frame.centre = { in.target.x - frame.front.x * offset, in.target.y - frame.front.y * offset };
             }
             break;
         }
         case Anchor::Cursor:
-            // Facing away from the player, centred on the ping.
-            frame.front = Normalized({ cursor.x - player.x, cursor.y - player.y }, facing);
-            frame.centre = cursor;
+            // Facing away from the player (or face:), centred on the ping.
+            frame.front = in.hasFace ? override : Normalized({ in.cursor.x - in.player.x, in.cursor.y - in.player.y }, facing);
+            frame.centre = in.cursor;
             break;
+        case Anchor::Tank:
+            // Slot 0 stands behind the tank, away from what it faces; face: overrides.
+            frame.front = in.hasFace ? override : Normalized({ -in.tankFacing.x, -in.tankFacing.y }, facing);
+            frame.centre = in.tank;
+            break;
+        case Anchor::Point:
+        {
+            // Centred on the point, facing away from the player; within 1 yd the player's own facing stands in.
+            float const dx = in.point.x - in.player.x, dy = in.point.y - in.player.y;
+            frame.front = in.hasFace ? override : (std::sqrt(dx * dx + dy * dy) < 1.0f ? facing : Normalized({ dx, dy }, facing));
+            frame.centre = in.point;
+            break;
+        }
     }
     return frame;
+}
+
+inline Frame FrameFor(Anchor anchor, Layout const& layout, float gapYd, Vec2 player, Vec2 playerFront, Vec2 target, float targetHalfYd, Vec2 cursor)
+{
+    FrameInput in;
+    in.player = player;
+    in.playerFront = playerFront;
+    in.target = target;
+    in.targetHalf = targetHalfYd;
+    in.cursor = cursor;
+    return FrameFor(anchor, layout, gapYd, in);
 }
 
 // One local slot in the world. right = (front.y, -front.x).
@@ -374,19 +673,28 @@ inline Vec2 Place(Frame const& frame, Slot const& slot)
              frame.centre.y - slot.x * frame.front.x + slot.y * frame.front.y };
 }
 
-// The commander's own spot is never a slot's: a circle turns by half a slot once (so it keeps every bot), every other shape leaves the slots that stand
-// on the commander empty. Geometry only: the slots stay in the local frame; the result says which slots a bot may still take.
-inline std::vector<bool> ClearCommanderSpot(std::vector<Slot>& slots, Shape shape, Frame const& frame, Vec2 commander, int count)
+// A cleared spot (the commander's own, or the anchor tank's) is never a slot's: a circle turns by half a slot once (so it keeps every bot), every other
+// shape leaves the slots that stand on a spot empty. Geometry only: the slots stay in the local frame; the result says which slots a bot may still take.
+inline std::vector<bool> ClearSpots(std::vector<Slot>& slots, Shape shape, Frame const& frame, std::vector<Vec2> const& spots, int count)
 {
     std::vector<bool> usable(slots.size(), true);
-    if (slots.empty())
+    if (slots.empty() || spots.empty())
         return usable;
-    float const dx = commander.x - frame.centre.x, dy = commander.y - frame.centre.y;
-    Vec2 const local{ dx * frame.front.y - dy * frame.front.x, dx * frame.front.x + dy * frame.front.y };
+    std::vector<Vec2> local;
+    for (Vec2 const& spot : spots)
+    {
+        float const dx = spot.x - frame.centre.x, dy = spot.y - frame.centre.y;
+        local.push_back({ dx * frame.front.y - dy * frame.front.x, dx * frame.front.x + dy * frame.front.y });
+    }
     auto const collides = [&](Slot const& slot)
     {
-        float const ex = slot.x - local.x, ey = slot.y - local.y;
-        return ex * ex + ey * ey < kCommanderClearYd * kCommanderClearYd;
+        for (Vec2 const& spot : local)
+        {
+            float const ex = slot.x - spot.x, ey = slot.y - spot.y;
+            if (ex * ex + ey * ey < kCommanderClearYd * kCommanderClearYd)
+                return true;
+        }
+        return false;
     };
     if (shape == Shape::Circle && count > 1)
     {
@@ -410,6 +718,12 @@ inline std::vector<bool> ClearCommanderSpot(std::vector<Slot>& slots, Shape shap
     for (size_t i = 0; i < slots.size(); ++i)
         usable[i] = !collides(slots[i]);
     return usable;
+}
+
+// The round-1 call: one cleared spot, the commander's own.
+inline std::vector<bool> ClearCommanderSpot(std::vector<Slot>& slots, Shape shape, Frame const& frame, Vec2 commander, int count)
+{
+    return ClearSpots(slots, shape, frame, { commander }, count);
 }
 
 struct BotRank
@@ -539,9 +853,9 @@ struct FallbackCounts
     int healers = 0;
 };
 
-inline std::vector<Slot> FallbackSlots(FallbackCounts const& counts, Gap gap)
+inline std::vector<Slot> FallbackSlots(FallbackCounts const& counts, float gapYd)
 {
-    float const g = GapYd(gap);
+    float const g = gapYd;
     std::vector<Slot> slots;
     // The tank row half a gap ahead, the melee row half a gap behind it: nobody stands on the rally point itself.
     for (int i = 0; i < counts.tanks; ++i)
@@ -580,6 +894,11 @@ inline std::vector<Slot> FallbackSlots(FallbackCounts const& counts, Gap gap)
             slots.push_back(points[next++]);
     }
     return slots;
+}
+
+inline std::vector<Slot> FallbackSlots(FallbackCounts const& counts, Gap gap)
+{
+    return FallbackSlots(counts, GapYd(gap));
 }
 
 // ---- the commander's minimap ping ----

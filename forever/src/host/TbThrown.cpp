@@ -1,6 +1,7 @@
 // S3 (throws and falls): see TbThrown.h. Core only; no engine header and no legacy type.
 #include "host/TbThrown.h"
 #include "host/TbThrownPure.h"
+#include "host/cmd/TbPlacePure.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbH3.h"
 #include "TbBotMgr.h"
@@ -144,9 +145,9 @@ bool HandleKnock(ChatHandler* handler, std::string name, float speedXY, float sp
         return false;
     }
 
-    float const x = bot->GetPositionX() + std::cos(bot->GetOrientation());
-    float const y = bot->GetPositionY() + std::sin(bot->GetOrientation());
-    bot->KnockbackFrom(Position(x, y, bot->GetPositionZ(), bot->GetOrientation()), speedXY, speedZ);
+    place::Vec2 const front = place::FrontFromOrientation(bot->GetOrientation());
+    bot->KnockbackFrom(Position(bot->GetPositionX() + front.x, bot->GetPositionY() + front.y, bot->GetPositionZ(), bot->GetOrientation()),
+        speedXY, speedZ);
     handler->PSendSysMessage("TortoiseBots: %s knocked back (speedXY %.1f, speedZ %.1f); the host watches the flight and lands it with the core's fall damage.",
         name.c_str(), speedXY, speedZ);
     return true;

@@ -1,7 +1,7 @@
 // Standalone test of the PURE half of the place/rally command (forever/src/host/cmd/TbPlacePure.h; issue #15, forever/docs/PLACE-RALLY-NOTES.md):
 //   g++ -std=c++17 -O1 -Wall -Wextra -I. forever/tools/test_place_pure.cpp -o /tmp/test_place_pure && /tmp/test_place_pure
 // Every shape, the gap and ring rules, the slot order, the anchor frames, the who-filter words and the minimap-ping layout at the pinned core.
-#include "forever/src/host/cmd/TbPlacePure.h"
+#include "forever/src/host/cmd/TbPlacePlan.h"   // the pure header alone for the geometry; the plan for the words it parses
 
 #include <cmath>
 #include <cstdio>
@@ -374,6 +374,209 @@ static void TestMinimapPing()
     CHECK(!P::ParseMinimapPing(bad, sizeof bad, point));
 }
 
+static void TestGapYards()
+{
+    P::GapSpec spec;
+    CHECK(P::ParseGapWord("5", spec) && spec.custom && std::fabs(spec.yd - 5.0f) < 1e-4f);
+    CHECK(P::GapText(spec) == "5.0");
+    CHECK(P::ParseGapWord("4", spec) && spec.custom && std::fabs(spec.yd - 4.0f) < 1e-4f);
+    // A numeric gap lays out exactly as the preset it names.
+    P::Layout const numeric = P::LayoutShape(P::Shape::Circle, 4.0f, 6, 0.0f);
+    P::Layout const normal = P::LayoutShape(P::Shape::Circle, P::Gap::Normal, 6, 0.0f);
+    CHECK(std::fabs(numeric.radius - normal.radius) < 1e-4f);
+    for (size_t i = 0; i < numeric.slots.size(); ++i)
+        CHECK(std::fabs(numeric.slots[i].x - normal.slots[i].x) < 1e-4f
+            && std::fabs(numeric.slots[i].y - normal.slots[i].y) < 1e-4f);
+    CHECK(P::ParseGapWord("1.5", spec) && spec.custom);
+    CHECK(P::ParseGapWord("12.0", spec) && spec.custom);
+    for (char const* bad : { "1.4", "12.5", "-3", "5e1", "nan", "5.", "5.x", "5.25", "", "inf" })
+        CHECK(!P::ParseGapWord(bad, spec));
+    // `Nan` and `Inf` are legal character names: a bare word that does not start like a number is a who name, and the gap
+    // parser still refuses it as a gap.
+    P::Command const named = P::ParseCommand({ "place", "circle", "Nan" });
+    CHECK(named.code.empty() && named.who.size() == 1 && named.who[0].kind == P::WhoKind::Name && named.who[0].word == "Nan");
+    // A number is always a gap attempt, never a who name.
+    CHECK(P::ParseCommand({ "place", "circle", "5e1" }).code == "bad-argument");
+    CHECK(P::ParseCommand({ "place", "circle", "-3" }).code == "bad-argument");
+    P::Command const five = P::ParseCommand({ "place", "circle", "5", "Mtank" });
+    CHECK(five.code.empty() && five.gapSpec.custom && std::fabs(five.gapSpec.yd - 5.0f) < 1e-4f);
+    CHECK(five.who.size() == 1 && five.who[0].kind == P::WhoKind::Name);
+}
+
+// The path verdict asks the run's ONE liquid rule over the WHOLE path: a bot standing in water may walk out (a wet prefix and a
+// dry end is accepted). Asking per leg refused the wet start when its own leg still ended wet.
+static void TestWalkVerdict()
+{
+    P::PathWalk walk;
+    walk.points = { { 0.0f, 0.0f, 0.0f }, { 2.0f, 0.0f, 0.0f }, { 4.0f, 0.0f, 0.0f } };
+    walk.end = { 4.0f, 0.0f, 0.0f };
+    auto wetStart = [](float x, float, float) { return x < 3.0f; };
+    CHECK(P::WalkVerdict(walk, { 4.0f, 0.0f }, 0.0f, { 0.0f, 0.0f }, wetStart) == P::PathVerdict::Ok);
+    auto entersWater = [](float x, float, float) { return x > 1.0f; };
+    CHECK(P::WalkVerdict(walk, { 4.0f, 0.0f }, 0.0f, { 0.0f, 0.0f }, entersWater) == P::PathVerdict::LiquidPath);
+    // An end that does not reach the point is no path at all.
+    walk.end = { 20.0f, 0.0f, 0.0f };
+    CHECK(P::WalkVerdict(walk, { 4.0f, 0.0f }, 0.0f, { 0.0f, 0.0f }, wetStart) == P::PathVerdict::NoPath);
+    // A path far longer than the straight line is a detour.
+    P::PathWalk around;
+    around.points = { { 0.0f, 0.0f, 0.0f }, { 0.0f, 20.0f, 0.0f }, { 10.0f, 20.0f, 0.0f }, { 10.0f, 0.0f, 0.0f } };
+    around.end = { 10.0f, 0.0f, 0.0f };
+    CHECK(P::WalkVerdict(around, { 10.0f, 0.0f }, 0.0f, { 0.0f, 0.0f }, [](float, float, float) { return false; })
+        == P::PathVerdict::Detour);
+    CHECK(std::string(P::PathVerdictWord(P::PathVerdict::LiquidPath)) == "liquid-path");
+}
+
+static void TestFaceOverride()
+{
+    int deg = 0;
+    CHECK(P::ParseFace("0", deg) && deg == 0);
+    CHECK(P::ParseFace("90", deg) && deg == 90);
+    CHECK(P::ParseFace("359", deg) && deg == 359);
+    CHECK(!P::ParseFace("360", deg));
+    CHECK(!P::ParseFace("-1", deg));
+    CHECK(!P::ParseFace("", deg));
+    CHECK(P::ParseCommand({ "place", "line", "face:90", "here" }).hasFace);
+    CHECK(P::ParseCommand({ "place", "line", "face:360" }).code == "bad-argument");
+    CHECK(P::ParseCommand({ "place", "line", "face:" }).code == "bad-argument");
+    CHECK(P::ParseCommand({ "place", "line", "face:90", "target" }).code == "bad-argument");
+
+    // The ONE facing helper uses the core's convention (Position::RelocateOffset, GetNearPoint2D): x += cos(o), y += sin(o).
+    P::Vec2 const east = P::FrontFromOrientation(0.0f);
+    P::Vec2 const north = P::FrontFromOrientation(3.14159265358979f * 0.5f);
+    CHECK(std::fabs(east.x - 1.0f) < 1e-4f && std::fabs(east.y) < 1e-4f);
+    CHECK(std::fabs(north.x) < 1e-4f && std::fabs(north.y - 1.0f) < 1e-4f);
+    CHECK(std::fabs(P::FaceFront(0).x - 1.0f) < 1e-4f);
+    CHECK(std::fabs(P::FaceFront(90).y - 1.0f) < 1e-4f);
+
+    P::Layout const line = P::LayoutShape(P::Shape::Line, P::Gap::Normal, 1, 0.0f);
+    P::FrameInput in;
+    in.player = { 0.0f, 0.0f };
+    in.playerFront = { 0.0f, 1.0f };
+    struct Case { int deg; float x, y; };
+    for (Case const& c : { Case{ 0, 1.0f, 0.0f }, Case{ 90, 0.0f, 1.0f }, Case{ 180, -1.0f, 0.0f } })
+    {
+        in.hasFace = true;
+        in.faceFront = P::FaceFront(c.deg);
+        P::Frame const frame = P::FrameFor(P::Anchor::Here, line, P::GapYd(P::Gap::Normal), in);
+        P::Vec2 const origin = P::Place(frame, line.slots[0]);
+        CHECK((origin.x - in.player.x) * c.x + (origin.y - in.player.y) * c.y > 1.0f);
+        CHECK(std::fabs(frame.front.x - c.x) < 1e-4f && std::fabs(frame.front.y - c.y) < 1e-4f);
+    }
+}
+
+static void TestPointAnchor()
+{
+    P::Vec2 point;
+    float z = 0.0f;
+    bool hasZ = true;
+    CHECK(P::ParsePoint("10,20", point, z, hasZ) && !hasZ && point.x == 10.0f && point.y == 20.0f);
+    CHECK(P::ParsePoint("-1.5,2.25,3", point, z, hasZ) && hasZ && std::fabs(z - 3.0f) < 1e-4f);
+    for (char const* bad : { "10", "1,2,3,4", "1,,2", "inf,2", "1,2,", "1;2" })
+        CHECK(!P::ParsePoint(bad, point, z, hasZ));
+    CHECK(P::ParseCommand({ "place", "line", "at:10,20" }).anchor == P::Anchor::Point);
+    CHECK(P::ParseCommand({ "place", "line", "at:10" }).code == "bad-argument");
+
+    // The ONE facing helper uses the core's convention (Position::RelocateOffset, GetNearPoint2D): x += cos(o), y += sin(o).
+    P::Vec2 const east = P::FrontFromOrientation(0.0f);
+    P::Vec2 const north = P::FrontFromOrientation(3.14159265358979f * 0.5f);
+    CHECK(std::fabs(east.x - 1.0f) < 1e-4f && std::fabs(east.y) < 1e-4f);
+    CHECK(std::fabs(north.x) < 1e-4f && std::fabs(north.y - 1.0f) < 1e-4f);
+    CHECK(std::fabs(P::FaceFront(0).x - 1.0f) < 1e-4f);
+    CHECK(std::fabs(P::FaceFront(90).y - 1.0f) < 1e-4f);
+
+    P::Layout const line = P::LayoutShape(P::Shape::Line, P::Gap::Normal, 1, 0.0f);
+    P::FrameInput in;
+    in.player = { 0.0f, 20.0f };
+    in.playerFront = { 0.0f, 1.0f };
+    in.point = { 10.0f, 20.0f };
+    P::Frame const frame = P::FrameFor(P::Anchor::Point, line, P::GapYd(P::Gap::Normal), in);
+    CHECK(std::fabs(frame.centre.x - 10.0f) < 1e-4f && std::fabs(frame.centre.y - 20.0f) < 1e-4f);
+    CHECK(frame.front.x > 0.99f && std::fabs(frame.front.y) < 1e-3f);   // away from the player
+    in.player = { 10.5f, 20.0f };                                       // within 1 yd: the player's own facing
+    P::Frame const near = P::FrameFor(P::Anchor::Point, line, P::GapYd(P::Gap::Normal), in);
+    CHECK(near.front.y > 0.99f);
+}
+
+static void TestTankAnchor()
+{
+    P::Vec2 const tank{ 0.0f, 0.0f };
+    P::Vec2 const tankFacing{ 1.0f, 0.0f };
+    float const reach = 3.0f;
+    float const gap = P::GapYd(P::Gap::Normal);
+    P::AnchorFacts anchor;
+    anchor.kind = P::Anchor::Tank;
+    anchor.player = { 0.0f, 20.0f };
+    anchor.playerFront = { 0.0f, 1.0f };
+    anchor.tankPos = tank;
+    anchor.tankFacing = tankFacing;
+    anchor.tankReach = reach;
+    std::vector<P::BotFacts> const bots = {
+        { "Mtank2", "warrior", 1, P::Rank::Tank },
+        { "Mrogue", "rogue", 1, P::Rank::Melee },
+        { "Mmage", "mage", 1, P::Rank::Ranged },
+        { "Mpriest", "priest", 1, P::Rank::Healer },
+    };
+    P::Probe probe;
+    probe.ground = [](P::Vec2 const&, float& z) { z = 0.0f; return true; };
+    probe.reachable = [](size_t, P::Vec2 const&, float) { return P::PathVerdict::Ok; };
+    for (P::Shape shape : { P::Shape::Circle, P::Shape::Arc, P::Shape::Spread })
+    {
+        P::PlanResult const plan = P::PlanPlace(shape, P::Gap::Normal, anchor, bots, {}, probe);
+        CHECK(plan.ok && plan.placed == 4);
+        for (P::Step const& step : plan.steps)
+            CHECK(Dist(step.pos, tank) >= P::kCommanderClearYd - 1e-3f);
+        if (P::IsRing(shape))
+            CHECK(plan.layout.radius >= reach + gap - 1e-3f);
+        // Slot 0 stands behind the tank (away from what it faces).
+        CHECK(plan.steps[0].pos.x < tank.x);
+    }
+    // Spread round a tank leaves the tank's own cell empty.
+    P::Layout const spread = P::LayoutShape(P::Shape::Spread, P::Gap::Normal, 9, 0.0f);
+    std::vector<P::Slot> slots = spread.slots;
+    P::Frame frame;
+    frame.centre = tank;
+    frame.front = { 0.0f, -1.0f };
+    std::vector<bool> const usable = P::ClearSpots(slots, P::Shape::Spread, frame, { tank }, 9);
+    bool anyCleared = false;
+    for (bool ok : usable)
+        anyCleared = anyCleared || !ok;
+    CHECK(anyCleared);
+    CHECK(P::ParseCommand({ "place", "line", "tank" }).code == "bad-argument");
+}
+
+static void TestClearSpots()
+{
+    // One spot is the round-1 call, for every shape; and the wrapper is not vacuous (a spot on a slot clears it).
+    P::Vec2 const commander{ 0.0f, 0.0f };
+    for (P::Shape shape : { P::Shape::Close, P::Shape::Circle, P::Shape::Arc, P::Shape::Spread,
+                            P::Shape::Line, P::Shape::Column, P::Shape::Spear, P::Shape::Arrow })
+    {
+        for (int count = 1; count <= 8; ++count)
+        {
+            std::vector<P::Slot> slots = P::LayoutShape(shape, P::Gap::Normal, count, 0.0f).slots;
+            P::Frame frame;
+            frame.centre = { 0.0f, 10.0f };
+            frame.front = { 0.0f, 1.0f };
+            std::vector<P::Slot> a = slots, b = slots;
+            std::vector<bool> const one = P::ClearSpots(a, shape, frame, { commander }, count);
+            std::vector<bool> const round1 = P::ClearCommanderSpot(b, shape, frame, commander, count);
+            CHECK(one == round1);
+            CHECK(a.size() == b.size());
+            for (size_t i = 0; i < a.size(); ++i)
+                CHECK(a[i].x == b[i].x && a[i].y == b[i].y);
+        }
+    }
+    std::vector<P::Slot> slots = P::LayoutShape(P::Shape::Line, P::Gap::Normal, 5, 0.0f).slots;
+    P::Frame frame;
+    frame.centre = commander;
+    frame.front = { 0.0f, 1.0f };
+    std::vector<bool> const usable = P::ClearSpots(slots, P::Shape::Line, frame, { commander }, 5);
+    bool cleared = false;
+    for (bool ok : usable)
+        cleared = cleared || !ok;
+    CHECK(cleared);   // slot 0 is the commander's own spot
+}
+
 int main()
 {
     TestWords();
@@ -382,6 +585,12 @@ int main()
     TestRanksAndWho();
     TestFallback();
     TestMinimapPing();
+    TestGapYards();
+    TestWalkVerdict();
+    TestFaceOverride();
+    TestPointAnchor();
+    TestTankAnchor();
+    TestClearSpots();
     if (g_fail)
     {
         std::printf("%d of %d checks FAILED\n", g_fail, g_checks);

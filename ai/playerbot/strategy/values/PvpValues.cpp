@@ -1,12 +1,16 @@
 
 #include "playerbot/playerbot.h"
 #include "PvpValues.h"
-#include "Battlegrounds/BattleGroundWS.h"
+#include "playerbot/TbCompatBg.h"
 #include "playerbot/ServerFacade.h"
+#if TB_BG_BATTLEMASTER_PATH
 #include "playerbot/TravelMgr.h"
 #include "SharedValueContext.h"
+#endif
 
 using namespace ai;
+
+#if TB_BG_BATTLEMASTER_PATH
 
 std::list<CreatureDataPair const*> BgMastersValue::Calculate()
 {
@@ -155,35 +159,9 @@ BattleGroundTypeId RpgBgTypeValue::Calculate()
     return BATTLEGROUND_TYPE_NONE;
 }
 
+#endif // TB_BG_BATTLEMASTER_PATH
+
 Unit* FlagCarrierValue::Calculate()
 {
-    Unit* carrier = nullptr;
-
-    if (ai->GetBot()->InBattleGround())
-    {
-        if (ai->GetBot()->GetBattleGroundTypeId() == BattleGroundTypeId::BATTLEGROUND_WS)
-        {
-            BattleGroundWS *bg = (BattleGroundWS*)ai->GetBot()->GetBattleGround();
-
-            if (!bg)
-                return nullptr;
-
-            if ((!sameTeam && bot->GetTeam() == HORDE || (sameTeam && bot->GetTeam() == ALLIANCE)) && !bg->GetHordeFlagPickerGuid().IsEmpty())
-                carrier = bg->GetBgMap()->GetPlayer(bg->GetHordeFlagPickerGuid());
-
-            if ((!sameTeam && bot->GetTeam() == ALLIANCE || (sameTeam && bot->GetTeam() == HORDE)) && !bg->GetAllianceFlagPickerGuid().IsEmpty())
-                carrier = bg->GetBgMap()->GetPlayer(bg->GetAllianceFlagPickerGuid());
-
-            if (carrier)
-            {
-                if (ignoreRange || bot->IsWithinDistInMap(carrier, sPlayerbotAIConfig.sightDistance))
-                {
-                    return carrier;
-                }
-                else
-                    return nullptr;
-            }
-        }
-    }
-    return carrier;
+    return BgFlagCarrierCompat(bot, sameTeam, sPlayerbotAIConfig.sightDistance, ignoreRange);
 }

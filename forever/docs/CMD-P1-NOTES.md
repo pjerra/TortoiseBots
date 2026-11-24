@@ -23,7 +23,7 @@ subgroup), the commander (online, map, position), the lead, the party counter, `
 
 | File | Line | Why |
 |---|---|---|
-| `host/TbOrders.cpp` HandleMaster | `cmd::NoteMaster(who.bots, who.leader, commander);` before the end record | the lead named and `boundAt`; a release drops the record |
+| `host/TbOrders.cpp` HandleMaster | `cmd::NoteMaster(boundBots, boundKinds, who.leader, commander, commanderInstance);` before the end record (`boundKinds`: each bot's kind, BG2) | the lead named and `boundAt`; a release drops the record |
 | `host/TbOrders.cpp` HandleOrder | `cmd::NoteOrder(outcomes, verb, rest);` before the end record; `outcomes` gets one `{bot, refusal code}` per addressed bot (`refuse` pushes the code, a queued bot pushes an empty one) | each card's own order log |
 | `host/run/TbRun.cpp` (the run tick) | `cmd::NoteRunOrder(rec.leader, order, answer.accepted, answer.code, answer.text);` right after `Issue`, plus the include | the run's own orders in the log. The spec named `Issue` itself; the one caller is the better place until P3 lifts `Issue` to a `Party` (then move it into `Issue`) |
 | `TbScripts.cpp` | the `commander` row of the `.tb` table, plus the include | the command |

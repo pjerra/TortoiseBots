@@ -47,8 +47,9 @@ what decides what, why, and what has to be checked live.
    so the order also drops the bot's target). Every bot's slot is judged first: same map and instance as the commander, alive, valid coordinates, a floor
    from `GetHeightCompat` (25 yd search) and a real path from the same `PathGenerator` the move judge reads (`PathCalculateCompat`/`PathActualEndCompat`,
    at least two points, the end within 3 yd). A slot that fails any of them is skipped with its code and that bot is not queued at all.
-6. **Holding the slot, and runs.** The slot *is* the bot's stay position, so the engine's own `return to stay position` walk brings a bot back after a fight (it is
-   in the stay strategy's combat triggers too). `place::Update()` adds the net under the cases that walk gives up in: outside combat, more than 3 yd
+6. **Holding the slot, and runs.** The slot *is* the bot's stay position, so the engine's own `return to stay position` walk brings a bot back after a fight. In combat `stay` is
+   kept out of the combat state (a combat `stay` blocked `ReachTargetAction`, `MovementAction` and healer LOS movement), so melee still step in
+   and the bot returns to the slot when the fight ends; a fall back keeps `stay` and adds `passive` until the bot reaches its spot. `place::Update()` adds the net under the cases that walk gives up in: outside combat, more than 3 yd
    (`kSlotToleranceYd`) from the slot, not casting, not moving, at most a fresh `come` every 5 s. A bot that leaves the map/instance, dies, is unbound or
    logs out drops out of the hold, and so does a bot a dungeon run drives (the run owns its movement; a walk-back `come` would read as an outside order and
    pause the run) or one a newer order of someone else left off its stay. A place command typed while a run goes on still moves the bots — the run pauses
@@ -63,8 +64,8 @@ what decides what, why, and what has to be checked live.
    `follow` to every bot that formed up after re-checking that it still answers to this commander).
 8. **Only the commander's own bots.** `cmd::ResolveBinding` is the binding (the existing commander check `.tb cmd` uses) and every bot is re-checked with
    `cmd::IsCommandedBy` before it may take a slot; a bound bot that fails it (or is not in the world) is a refused row, never placed. The chat form only
-   counts for a commander's own chat: a whisper to one of its own bots, or party/raid chat, and a non-commander's text is left alone (`ResolveBinding`
-   decides). The bare aliases (`back`, `fallback`, `resume`, `rally`) only count when the whole message is the command, so ordinary conversation ("back
+   counts for a commander's own chat: a whisper to one of its own bots, or party/raid chat that holds at least one of the commander's bots; it runs
+   the same `h3::CheckBotAccess` as `.tb cmd`, and a non-commander's text is left alone (`ResolveBinding` decides). The bare aliases (`back`, `fallback`, `resume`, `rally`) only count when the whole message is the command, so ordinary conversation ("back
    off, pull!") is never an order.
 9. **The hold's rows are released, not just forgotten.** Dropping a row (a new placement, a fall back replacing a place hold, a death, a map change, a
    run taking the bot, a newer order off stay, an unreachable slot) releases the bot: `follow` while this commander still commands it (`h3::QueueOrder`),
@@ -72,7 +73,7 @@ what decides what, why, and what has to be checked live.
    order, so the old commander never orders a bot it no longer owns. A placement replaces only the rows of the bots it addressed; a placement that put
    nobody leaves the hold exactly as it was (a fall back always replaces the whole hold).
 10. **The clock and the walk-back.** `Update` gates on a `uint32` clock with a wrap-safe compare (`TimeReached`, `int32(now - target) >= 0`), never an
-   `int64` wall comparison. A walk-back re-runs `Reachable` first and gives up after three failed checks, logging once; the row is then released.
+   `int64` wall comparison. A walk-back re-runs the placement's own `VerdictFor` first (no-path, liquid path and detour included) and gives up after three failed checks, logging the rule that refused; the row is then released.
 11. **The cursor request is cancellable.** A pending `place ... cursor` is ended by any later command from the commander — every `.tb cmd` verb, every
    `.tb order`, and the place/chat forms — with `error code=cancelled` on its own token. A malformed ping leaves the request waiting. Logout forgets the
    commander's rallies, holds and pending request.
@@ -156,7 +157,7 @@ These are the exact lines of the runs that judged this round (slot 7, core d0264
 
 ### Module build, TORTOISEBOTS_SLICE1=ON
 
-`tar -C ~/wt-place-rally --exclude=.git -cf - . | ssh yulon-ubuntu2 "~/forever-build/slot-sync-build.sh 7 tortoisebots -DTORTOISEBOTS_SLICE1=ON"`
+`tar -C <worktree> --exclude=.git -cf - . | ssh <build-host> "~/forever-build/slot-sync-build.sh <slot> tortoisebots -DTORTOISEBOTS_SLICE1=ON"`
 
 ```
 combined build: slot 7 key core-9b88bd2d6584-opt-85c8cb4e
@@ -201,17 +202,17 @@ $ git diff --check
 (no output)
 ```
 
-### Turtle build, `vm-build ~/wt-place-rally --wait`
+### Turtle build, `vm-build <worktree> --wait`
 
 ```
-worktree /home/perzi/wt-place-rally sha=7bdf6de7e-dirty dirty-entries=12 files=4076 (tracked as on disk + untracked-not-ignored)
+worktree <worktree> sha=<sha>-dirty dirty-entries=12 files=4076 (tracked as on disk + untracked-not-ignored)
 queued job 1-1795235285501126854-3959797 (priority 1)
 QUEUE_SLOT=0
 QUEUE_WAITED_SECONDS=0 (enqueue to runner pick-up)
-CORE_SELECT: default core CORE_BASE=/mnt/tb/tb-build/src/core-e836b85b8d5c CORE=/mnt/tb/tb-build/src/core-e836b85b8d5c-s0 BUILD=/mnt/tb/tb-build/build-s0
+CORE_SELECT: default core CORE_BASE=<core-root> CORE=<core-slot> BUILD=<build-slot>
 module files changed/added/removed: 63
 COMPILE_SECONDS=36 CMAKE_RC=0 MAKE_RC=2
-BUILD FAILED, first errors in /mnt/tb/tb-build/logs/20261121T042805Z-s0-errors.txt
+BUILD FAILED, first errors in <build-root>/logs/<stamp>-s0-errors.txt
 QUEUE_RC=1 QUEUE_RUN_SECONDS=41
 --- first 60 error lines
 logs/20261121T042805Z-s0-make.log:./../../src/modules/TortoiseBots/ai/cmangos-compat-unported.h:126:44: error: 'char* ChatHandler::ExtractKeyFromLink(char**, const char*, char**)' is protected within this context
@@ -225,7 +226,7 @@ The failure is in the Turtle half (`ai/cmangos-compat-unported.h`, a file this b
 worktree /tmp/tb-main sha=5f1ac1dae-dirty dirty-entries=0 files=4078
 module files changed/added/removed: 13
 COMPILE_SECONDS=45 CMAKE_RC=0 MAKE_RC=2
-BUILD FAILED, first errors in /mnt/tb/tb-build/logs/20261121T042932Z-s0-errors.txt
+BUILD FAILED, first errors in <build-root>/logs/<stamp>-s0-errors.txt
 QUEUE_RC=1 QUEUE_RUN_SECONDS=49
 --- first 60 error lines
 logs/20261121T042932Z-s0-make.log:./../../src/modules/TortoiseBots/ai/cmangos-compat-unported.h:126:44: error: 'char* ChatHandler::ExtractKeyFromLink(char**, const char*, char**)' is protected within this context
@@ -234,3 +235,391 @@ logs/20261121T042932Z-s0-make.log:make[3]: *** [modules/CMakeFiles/modules.dir/b
 ```
 
 So the Turtle gate is red on the branch itself, before this round's changes; it is not judged by this round's module work (ForeverCore ON and OFF are green), and nothing in `ai/` was touched here.
+
+## Round 2 (M2): terrain, anchors, rally points and the card
+
+Round 2 extends the landed command (`COMMANDER-SHAPES-SPEC.md` section 2). Nothing above is rewritten; every round-1 word parses and plans as before. No core change, no SQL, no config key.
+
+### What was added
+
+| Area | Rule |
+|---|---|
+| Gap | `tight`/`normal`/`wide` or a number 1.5..12.0 yd with at most one fraction digit (`5` = `5.0`); a bare number is never a who name. `GapSpec` carries the preset and the yards. |
+| Facing | `face:<deg>` 0..359, the game's own degrees (0 = +X, 90 = +Y). It replaces the front for `here`, `cursor`, `tank` and `at:`; with `target` it is refused. |
+| Anchors | `tank`: the first tank in rank order among every bound bot alive/in world/on the commander's map and instance/still commanded; slot 0 behind the tank, ring never narrower than its reach plus a gap; only `circle`, `arc`, `spread`; the tank is removed from the selection and its hold row is untouched (`anchor_bot=`). `at:<x>,<y>[,<z>]`: floor-snapped, facing away from the player (or `face:`), at most 100 yd. |
+| Terrain | Per slot, in order: `too-far`, `no-ground` (25 yd search from the anchor's z), `ledge` (more than 5 yd from the anchor z), `liquid` (`run::liquid::PointRefusedOnMap`), `unreachable`, `liquid-path` (`SegmentPrefixRefusedOnMap` per leg), `detour` (`IsDetour`: path > 2.5× straight + 10 yd). The nudge tries 1, 2, 3 yd towards the frame centre, skipping a cleared spot or a point within half a gap of an accepted slot; the row says `nudged=`. |
+| Fall back | A bot whose slot still fails after the nudge is queued anyway: `slot=-1 to=centre|commander` (centre when it passes `JudgeSlot`, else the commander's own position), its refusal in `code=`, a `to=` row counted as placed. Only `dead`, `other-map` and order-queue refusals leave a fall-back bot unqueued. |
+| Rally | Bare `rally` = read-back (`status=shown set=yes|no`); `rally clear` (`cleared=`); `rally at:` judged (`no-ground`, `liquid`, 100 yd). `fallback rally|last` insists on a stored point (`no-rally`); `here` ignores it; `at:` is a typed point; `from=` gains `point`. |
+| Card | `place::ViewFor(commander)` and the pure `CardHoldKeys`: `binding` gets `hold=place|fallback`, `rally=`, `rmap=`, `rinst=`; a `member` gets `hold=`/`slot=` only when it holds a row. |
+| Persistence | Still memory only (decision in the spec: the binding store is five fixed fields, and after a restart the bots are elsewhere). |
+
+### Tests (each fails without its change)
+
+`test_place_pure.cpp`: `TestGapYards` (5 -> 5.0; 4 lays out as normal; 1.4, 12.5, -3, 5e1, nan, 5.x refused), `TestFaceOverride` (0/90/180, 360/-1/empty, target+face refused), `TestPointAnchor` (`at:10,20`, facing away, within 1 yd, malformed points), `TestTankAnchor` (clear of the tank, ring floor, slot 0 behind, spread centre cell empty, `line tank` refused), `TestClearSpots` (the one-spot wrapper equals the round-1 output for every shape).
+
+`test_place_plan.cpp`: `TestLedgeSlotIsRefused`, `TestLiquidSlotIsNudged`, `TestNudgeGoesInward`, `TestPathVerdicts`, `TestTankExcluded`, `TestFallbackRefusedStillDisengages`, `TestRallyAndFallbackWords` (incl. `ChooseFallback`), `TestCardHoldKeys`.
+
+`test_place_wiring.py` adds `test_terrain_rules_are_the_run_rules`, `test_new_anchor_and_wire_words`, `test_anchor_tank_is_removed`, `test_card_keys_are_written_once`, and two mutation pairs (the liquid probe, the card's `ViewFor`).
+
+### Mutations (applied once in a scratch copy, each caught, then reverted)
+
+| Mutation | Test that went red |
+|---|---|
+| M-1 drop the ledge compare | `TestLedgeSlotIsRefused` (`code == "ledge"`, `placed == 3`) |
+| M-2 `probe.liquid` never called | `TestLiquidSlotIsNudged` (7 checks) |
+| M-3 nudge step sign flipped | `TestNudgeGoesInward` (2 checks) |
+| M-4 `face:` uses −sin | `TestFaceOverride` (2 checks) |
+| M-5 anchor tank left in the selection | `test_anchor_tank_is_removed` (+2 wiring pins) |
+| M-6 refused fall-back bots not queued | `TestFallbackRefusedStillDisengages` (3 checks) |
+| M-7 `fallback last` falls through to the commander | `TestRallyAndFallbackWords` (`no-rally`) |
+| M-8 `CardHoldKeys` slot on every member | `TestCardHoldKeys` (`SlotOf` an unheld bot) |
+
+### Gate lines (slot 4, core d02645dd21, through the slot lock)
+
+Disk before the gates: `df -h <tb-volume> <core-volume>` -> `<tb-volume> 59G 41G 16G 73%`, `<core-volume> 79G 69G 5.6G 93%`.
+
+`tar -C <worktree> --exclude=.git -cf - . | ssh <build-host> "~/forever-build/slot-sync-build.sh <slot> tortoisebots -DTORTOISEBOTS_SLICE1=ON"`
+
+```
+combined build: slot 4 key core-9b88bd2d6584-opt-85c8cb4e
+build token 1 of 3 (slot 4)
+module sync: 1 changed/new/deleted files
+CMAKE_RC=0
+MAKE_RC=0
+TOTAL_SECONDS=49
+```
+
+The option OFF (the same command without the extra option):
+
+```
+combined build: slot 4 key core-9b88bd2d6584-opt-78bf025f
+build token 1 of 3 (slot 4)
+module sync: 2 changed/new/deleted files
+CMAKE_RC=0
+MAKE_RC=0
+TOTAL_SECONDS=5
+```
+
+The full worldserver link:
+
+`tar -C <worktree> --exclude=.git -cf - . | ssh <build-host> "~/forever-build/slot-sync-build.sh <slot> worldserver -DTORTOISEBOTS_SLICE1=ON"`
+
+```
+combined build: slot 4 key core-9b88bd2d6584-opt-85c8cb4e
+build token 1 of 3 (slot 4)
+module sync: 0 changed/new/deleted files
+CMAKE_RC=0
+MAKE_RC=0
+TOTAL_SECONDS=8
+```
+
+Unit and wiring tests:
+
+```
+$ g++ -std=c++17 -O1 -Wall -Wextra -Werror -I. forever/tools/test_place_pure.cpp -o /tmp/test_place_pure && /tmp/test_place_pure
+all 2001 checks passed
+$ g++ -std=c++17 -O1 -Wall -Wextra -Werror -I. forever/tools/test_place_plan.cpp -o /tmp/test_place_plan && /tmp/test_place_plan
+all 186 checks passed
+$ python3 forever/tools/test_place_wiring.py
+Ran 15 tests in 0.008s
+
+OK
+$ PLACE_MUTATE=1 python3 forever/tools/test_place_wiring.py
+MUTATION CAUGHT: place verbs fall through to the judge
+MUTATION CAUGHT: ping packet written instead of read
+MUTATION CAUGHT: walk back leaves the row's order number stale
+MUTATION CAUGHT: dropped row follows past a newer order
+MUTATION CAUGHT: the liquid stand rule is never asked
+MUTATION CAUGHT: the card never reads the hold
+```
+
+The premerge gate (Turtle build, then the module ON and OFF from a clean merge of the branch into `tbf/main`):
+
+```
+$ tbf-premerge <worktree>
+merge: clean (1 commits over tbf/main)
+COMPILE_SECONDS=17 CMAKE_RC=0 MAKE_RC=0 turtle: PASS
+slice1-ON: PASS
+slice1-OFF: PASS
+PREMERGE: PASS
+```
+
+(The older Turtle failure quoted above is from the round-1 branch; the clean merge of this branch builds the Turtle target.)
+
+### Live checks for the lead's queue (not run: no live server in this round)
+
+1. **Water.** `place spread wide at:<a point by a lake shore>`: no `pos=` in the water; rows on the shore read `nudged=` or `code=liquid`; `.tb where` at each `pos=` shows no liquid.
+2. **Ledge.** `place line wide here` facing off a ledge (≥ 6 yd drop): the slots past the edge are `ledge` or nudged back onto the upper floor; nobody walks down.
+3. **Tank anchor.** `place circle tank` while the tank holds a mob: the tank keeps its target and spot, the others ring it, `anchor_bot=` is the tank.
+4. **Fall back, refused slot.** `rally at:` next to water, `fallback last` mid-fight: a bot whose slot was wet is `to=centre` and still drops its target.
+5. **Card.** After 1 and after a fall back, `.tb commander status` shows `hold=`, `slot=` on exactly the held bots and `rally=`; `rally clear` removes `rally=`.
+6. **Cursor + face.** A real minimap ping completing `place line wide cursor face:90`; the line faces the typed bearing.
+7. **Whisper.** Whisper `rally clear` and `back` to one bot after a fight.
+
+
+## Round 2 review fixes
+
+The three cold reviews (`claude-cmd-m2`, `codex-cmd-m2`, `hydrogen-cmd-m2`) are the source of this section. Every critical/high/medium
+finding has a fix and a test that fails without it; the low findings that were one-liners are fixed too. Where a review disagreed with
+the spec, the review won; the deviations are named in the rows.
+
+| Finding | Fix | Test |
+|---|---|---|
+| Claude 1 / Codex M / Hydrogen C: a refused `rally at:` wrote the rally first | `DecideRally` decides the point (judging `At` through the host rule) before the host commits `Memory().rallies[key] = decision.value` | `TestRallyDecision` (a refused point is not stored; an older point untouched), wiring `test_rally_state_is_committed_after_the_judge` |
+| Hydrogen C: `fall back`'s `come` never stopped the fight | `OrderSpec::disengage`: `AttackStop`, `InterruptNonMeleeSpells(false)`, the pet's `AttackStop`, `Reset`, `+passive` in all three states; `ReleasePlaceDisengage` clears it on arrival | `PlanFallback` rows carry `disengage`; wiring pins on the `come` branch |
+| Claude 2 / Hydrogen H / Codex H: two facing conventions (`playerFront`/`tankFacing` were `(sin, cos)`) | ONE helper, `FrontFromOrientation`, with the core's convention `x += cos(o)`, `y += sin(o)` (`Position::RelocateOffset`, `WorldObject::GetNearPoint2D`); `FaceFront` and TbThrown use it too | `TestFaceOverride`/`TestWalkVerdict` convention checks; wiring `test_facing_is_the_core_convention`; mutation "the player facing is 90 degrees off" |
+| Codex H: `fall back` to the commander was never judged | both emergency destinations run `JudgeSlot`; a failing commander point leaves the bot refused | `TestFallbackCommanderValidated` |
+| Codex H: hold walk-backs used the weaker `Reachable` | the walk back calls `VerdictFor` (no path, liquid path, detour); the verdict words the log | wiring `test_walk_back_and_fall_back_ends`; `TestWalkVerdict` |
+| Hydrogen C/H: `at:` only 2D-checked, unbounded floor search, no reachability | finite check, `IsValidMapCoord(x,y,z)`, 100 yd on every axis, `GroundUnder` (bounded vmap read from `anchor + 5 + 2`, never the 10,000 yd retry), dry, commander path `VerdictFor` | wiring `test_typed_point_bounds`; `TestWalkVerdict` |
+| Hydrogen H: per-leg liquid check refused a bot walking out of water | `WalkVerdict` asks `run::liquid::PathPrefixRefused` once over the whole path | `TestWalkVerdict` (wet prefix + dry end accepted; dry→wet refused) |
+| Hydrogen M: `place` set `+stay` in combat and reset mid-fight | a place `come` does not `Reset` while in combat and removes `stay` from the combat state; fall back keeps it with `passive` | wiring pins on the `come` branch |
+| Hydrogen M: `attack`/`pull` ended a fall back without clearing the hold | `ReleasePlaceHold` clears the placement's `stay`/`passive` when the stay position is still the row's spot | wiring `test_walk_back_and_fall_back_ends` |
+| Hydrogen M: a `Target` nudge could enter the boss | `StepRules::guardHalf`: a candidate nearer than the target's combat reach is skipped | `TestTargetNudgeGuard` |
+| Claude 3: a `no-slot` bot was sent to the centre (the commander's spot) | a fall back nudges such a slot off the commander/tank spot (`StepRules::nudgeCleared`); a place still leaves it empty | `TestFallbackFront` under-commander case, `test_fallback_emergency` |
+| Claude 4 / Hydrogen M: `TestTankExcluded` did its own erasing; no rally map test | the exclusion is `SelectBots(..., anchorName)` used by the host and driven in the plan test; `StoredRallyFor` is the map/instance filter | `TestTankExcluded`, `TestStoredRallyFilter` |
+| Claude 5: `Nan`/`Inf` names refused as a gap; `5.` accepted | `LooksNumeric` only treats a word that starts like a number; a gap needs one fraction digit after `.` | `TestGapYards` |
+| Hydrogen H: chat and the deferred ping skipped `CheckBotAccess` | `CheckAccess` (lead + bots) runs in `Handle` and in `CompleteCursor`; `HandleChat` takes the channel group and requires it to hold a bot | wiring `test_access_on_every_entry` |
+
+Deviations from `COMMANDER-SHAPES-SPEC.md`: section 2.4's "commander's position, no terrain judgement" is replaced by a
+judged commander point (an unstandable destination stays unqueued); section 2.3's `at:` rule gains the player's path
+verdict; section 1's combat stay is now non-combat only for a place (the engine's reach/LOS actions are otherwise
+blocked), while a fall back keeps it with `passive`.
+
+
+### Gate lines (review fix round, commit d387be9d)
+
+Run through the slot lock on a clean committed tree (`d387be9dd153933cfe7a2e2b03737333a24af701`, `git status --short` empty).
+
+Module, `TORTOISEBOTS_SLICE1=ON` (`git archive HEAD | ... slot-sync-build.sh <slot> tortoisebots -DTORTOISEBOTS_SLICE1=ON`):
+
+```
+combined build: slot 5 key core-9b88bd2d6584-opt-85c8cb4e
+module sync: 258 changed/new/deleted files
+CMAKE_RC=0
+MAKE_RC=0
+TOTAL_SECONDS=3
+```
+
+The same tree's first build (the compile that caught and then passed the `PositionEntry::isSet()` const fix) reported `TOTAL_SECONDS=35`; the committed content is byte-identical, so the rebuild only re-synced.
+
+Module, `TORTOISEBOTS_SLICE1=OFF`:
+
+```
+combined build: slot 5 key core-9b88bd2d6584-opt-21be6ecd
+module sync: 258 changed/new/deleted files
+CMAKE_RC=0
+MAKE_RC=0
+TOTAL_SECONDS=2
+```
+
+Full worldserver link, `TORTOISEBOTS_SLICE1=ON`:
+
+```
+combined build: slot 5 key core-9b88bd2d6584-opt-85c8cb4e
+module sync: 0 changed/new/deleted files
+CMAKE_RC=0
+MAKE_RC=0
+TOTAL_SECONDS=8
+```
+
+`build-5/make.log`: `[2/2] Linking CXX executable bin/Release/bin/worldserver`.
+
+Policy and wiring:
+
+```
+$ g++ -std=c++17 -O1 -Wall -Wextra -Werror -I. forever/tools/test_place_pure.cpp -o /tmp/test_place_pure && /tmp/test_place_pure
+all 2016 checks passed
+$ g++ -std=c++17 -O1 -Wall -Wextra -Werror -I. forever/tools/test_place_plan.cpp -o /tmp/test_place_plan && /tmp/test_place_plan
+all 215 checks passed
+$ g++ -std=c++17 -O1 -Wall -Wextra -Werror -I. forever/tools/test_thrown.cpp -o /tmp/test_thrown && /tmp/test_thrown
+57 checks, 0 failed
+$ python3 forever/tools/test_place_wiring.py
+Ran 20 tests in 0.028s
+OK
+$ PLACE_MUTATE=1 python3 forever/tools/test_place_wiring.py
+MUTATION CAUGHT: ... (8 of 8)
+$ python3 tools/verify_okf.py
+OKF verification PASSED (60 nodes validated, graph edges consistent).
+$ git diff --check
+(no output)
+```
+
+Fail-before proof: each pure/plan fix was reverted in a scratch copy and the named test turned red (per-leg liquid -> `TestWalkVerdict`; rally written
+before the judge -> `TestRallyDecision`; `nudgeCleared=false` -> the under-commander fall-back case; `guardHalf=0` -> `TestTargetNudgeGuard`; an
+unchecked commander destination -> `TestFallbackCommanderValidated`; the anchor exclusion removed -> `TestTankExcluded`; the map/instance filter
+removed -> `TestStoredRallyFilter`; `nan`/`inf` back in `LooksNumeric` -> `TestGapYards`; the fraction-digit rule removed -> `TestGapYards`). The
+host-only pins were proven by the mutation mode (facing swap, rally entry created before the decision).
+
+`tbf-premerge <worktree> 6`:
+
+```
+merge: clean (4 commits over tbf/main)
+COMPILE_SECONDS=7 CMAKE_RC=0 MAKE_RC=0 turtle: PASS
+slice1-ON: PASS
+slice1-OFF: PASS
+PREMERGE: PASS
+```
+
+`RESULT: PASS kind=tb sha=d387be9d dirty=0`
+
+Re-run on the final docs-only tip (`55507b4`, same module sources): module ON and OFF `CMAKE_RC=0 MAKE_RC=0 TOTAL_SECONDS=1` each,
+`slice1-ON: PASS`, `slice1-OFF: PASS`, `PREMERGE: PASS` (5 commits over tbf/main), `RESULT: PASS kind=tb sha=55507b4 dirty=0`.
+
+## Round 3 (fix round 2): the placement-only combat path and the passive's exits
+
+The cold reviews' final round (`claude-cmd-m2` "Final", `codex-cmd-m2-r2`) are the source. Codex r2's one finding is the absence of live runtime
+evidence, and this round has no live server (the documented live checks below stay open); everything else is fixed here.
+
+**The high: every non-fall-back `come` took the placement's combat path.** The round-2 fix keyed the new combat handling on `!o.disengage`, so a run's
+lead walk (`run/TbRunOrders.cpp`), a run's walk to a task stand (`run/TbRunTasks.cpp`) and a plain `.tb order come` no longer ran `ai->Reset()` in a
+fight and lost `stay` from the combat state: a fighting tank kept its target and had no "return to stay position" to answer the pull. Fixed with
+`OrderSpec::placed`, set only by `place`'s `QueueCome`: `PlanCome(placed, disengage, inCombat)` (pure, `TbPlacePlan.h`) decides the reset, the
+disengage stops and the combat-state `stay`, and `Run` reads it. Every other `come` is back to tbf/main: `ai->Reset()` always, no combat-state change,
+no passive. Fall-back rows keep their own `disengage` path.
+
+**The medium: the fall back's `+passive` could outlive its order.** It now ends on arrival, when the bot has stopped short in a fight (walk ended, after
+a 1.5 s grace: a blocked or crowded slot), or after a 10 s cap (`DisengageEnds`), and every exit path releases it: a dropped row (`ReleaseRow`, which
+covers death, a change of commander/unbind, another map, a run taking the bot, a newer order), `.tb cmd place follow`, `resume`, a replaced hold, a
+cancelled/substituted fall back, the ending orders (`attack`/`pull`/`pullback`/`resume`), `follow`, and the commander's logout (`NoteLogout`, new
+`ReleasePlacePassive`). Deeper low findings:
+
+| Finding | Fix | Test |
+|---|---|---|
+| Codex r2 M: no live runtime evidence | not run in this round (the brief forbids a live run); the checks stay listed and open | — |
+| Claude low: a foreign bound bot refused the whole command | `CheckAccess` refuses the whole command only on the binding's lead; `PickBots` asks `CheckBotAccess` per bot and refuses that bot's row (`status=refused`, the check's `code=`) | wiring `test_access_on_every_entry` |
+| Claude low: a placed `come` typed mid-fight moves only after the fight | documented in TB-COMMANDS section 20 (placement's own `come` only; ranged may leave the slot during the fight) | — |
+| Claude low: `at:` is stricter than the slot rules (the commander must walk there) | documented in TB-COMMANDS section 20 | — |
+| Claude low: a `no-slot` fall-back bot whose nudges all fail still lands on the commander's spot when no rally is stored | documented as the residual in TB-COMMANDS section 20; the emergency `come` still fires (round-1 spec) | — |
+| Claude low: `TbPlace.cpp` is covered by source pins only | accepted (Hydrogen M6 in round 2); the host half is proved by the wiring mutations and the build | — |
+
+### Tests (each fails without its change)
+
+* `TestComePolicy` (`test_place_plan.cpp`): a run's walk and a plain `come` reset in combat with no passive and no combat-state change; a placed
+  `come` in a fight does not reset and keeps `stay` out of the combat state; out of combat it resets; a fall back stops the fight and holds passive.
+* `TestDisengageEnds`: arrival ends the hold; a bot stopped short in a fight ends it after the grace but not while still walking; the 10 s cap ends it
+  even while walking and out of combat.
+* Wiring (`test_place_wiring.py`): `PlanCome(o.placed, ...)` and `come.reset`/`come.keepCombatStayOut`/`come.passive`; `ReleasePlacePassive` in
+  `ReleaseRow`; `DisengageEnds(...)` in `Update`; the lead-only access check and the per-bot one. Mutation mode adds "a run's come takes the
+  placement's combat path" and "a dropped fall-back row keeps its passive" (10 of 10 caught).
+
+Fail-before: with `PlanCome` reverted to the round-2 rule, "a run's come takes the placement's combat path" is caught by the mutation pin and
+`TestComePolicy`'s run-walk case fails; with `DisengageEnds` reduced to `distance <= tolerance`, `TestDisengageEnds` fails; with the `ReleaseRow`
+release removed, "a dropped fall-back row keeps its passive" is caught.
+
+### Gate lines (round 3, commit 27ba14b3d, through the slot lock, slot 5)
+
+Module, `TORTOISEBOTS_SLICE1=ON` (`git archive`-free tar of the committed tree into `slot-sync-build.sh 5 tortoisebots -DTORTOISEBOTS_SLICE1=ON`):
+
+```
+combined build: slot 5 key core-9b88bd2d6584-opt-85c8cb4e
+module sync: 2 changed/new/deleted files
+CMAKE_RC=0
+MAKE_RC=0
+TOTAL_SECONDS=48
+```
+
+Module, `TORTOISEBOTS_SLICE1=OFF`:
+
+```
+combined build: slot 5 key core-9b88bd2d6584-opt-21be6ecd
+module sync: 297 changed/new/deleted files
+CMAKE_RC=0
+MAKE_RC=0
+TOTAL_SECONDS=28
+```
+
+Full worldserver link, `TORTOISEBOTS_SLICE1=ON` (`slot-sync-build.sh 5 worldserver -DTORTOISEBOTS_SLICE1=ON`):
+
+```
+combined build: slot 5 key core-9b88bd2d6584-opt-85c8cb4e
+module sync: 0 changed/new/deleted files
+CMAKE_RC=0
+MAKE_RC=0
+TOTAL_SECONDS=8
+```
+`build-5/make.log`: `[2/2] Linking CXX executable bin/Release/bin/worldserver`.
+
+Run and policy tests (standalone, g++ -std=c++17 -O1 -Wall -Wextra -Werror -I.):
+
+```
+test_run_orders  RESULT: PASS (276 checks)
+test_run_wc      test_run_wc: 727 checks, 0 failed (plan: 302 steps, 31 legs, 193 unit rows)
+test_run_c6      RESULT: PASS: 28 checks, 0 failed
+test_run_cancel  RESULT: PASS
+test_place_pure  all 2016 checks passed
+test_place_plan  all 227 checks passed
+test_place_wiring.py            Ran 20 tests, OK
+PLACE_MUTATE=1 test_place_wiring.py  10 of 10 mutations caught
+python3 tools/verify_okf.py     PASSED (60 nodes)
+```
+
+`test_run_facts` (the RFC facts table) fails on this tree and on tbf/main alike: `FAIL: the table has 246 rows, Facts has 251 fields`.
+`forever/src/host/run/*`, `forever/tools/test_run_facts.cpp` and `forever/docs/RUN-S6-F-FIELDS.tsv` are identical to tbf/main, so the five
+new `Facts` fields predate this round and no run walk is affected. `tools/verify_all.sh` exceeded the 300 s command window in this
+environment and is not claimed as run.
+
+`tbf-premerge ~/wt-cmd-m2 5`:
+
+```
+merge: clean (8 commits over tbf/main)
+COMPILE_SECONDS=20 CMAKE_RC=0 MAKE_RC=0 turtle: PASS
+slice1-ON: PASS
+slice1-OFF: PASS
+PREMERGE: PASS
+```
+
+## Round 4 (fix round 3, #259): the fall back releases only the passive it set (F1)
+
+The dev-based cold review (`6b1a3d95`) found one blocking issue: the fall back's passive release was unconditional, so a newer dev order
+that sets `passive` itself (`flee`, `hold`, an owner's `+passive`) had its passivity stripped at the fall back's exit (arrival/cap in
+`place::Update`, a dropped row, `place follow`, `resume`, `logout`, `follow`) and a fleeing bot started fighting again.
+
+**The fix: the record of whose passive it is.** The fall back's `come` records that IT added the passive (`BotRec::placePassiveSeq`, set only
+when the bot was not already passive in any state, so an owner's `+passive`/`hold`/`flee` is never the row's; a walk-back `come` of the same
+row carries the record on under the row's new number). Every order that sets `passive` itself (`hold`, `flee`, `co/nc +passive`, a fall back's
+`come`) records its number (`BotRec::lastPassiveSeq`) and, when newer than the fall back's `come`, takes the row's record over. The release
+(`ReleasePlacePassive(Player*, seq)`, all seven exit sites pass the row's `seq`) drops passive only for the row that owns the record, and only
+while no newer order that sets `passive` itself is the bot's last one. The decision is pure (`PlaceClaimsPassive`, `OrderSetsPassive`,
+`PlacePassiveReleasable` in `TbPlacePlan.h`), so the 21 Nov rule "passive is released on every exit path" still holds for the fall back's own
+passive: a row that set it and was replaced/ended by a plain `come`, `attack`, `follow` or `free` releases it exactly as before.
+
+Boundary (documented, not fixed): the core `.bot co +passive` typed *on a bot mid-fall-back* is not an order (`PlayerbotAI::HandleCommand`), so
+the order record cannot see it; the fall back still releases the passive it set in that one case. The `+passive` typed *before* the fall back is
+covered (the row never claims a passive that was already on). The module's order form (`<owner> .tb order <bot> co +passive`) is covered.
+
+Tests (fail on the reviewed head; the three helpers do not exist there):
+
+* `TestFallbackPassiveOwnership` (`test_place_plan.cpp`): fall back then `flee` and fall back then `hold` keep the passive (at the 10 s cap and at
+  the stopped-short end); `<owner> co +passive` after the fall back keeps it too while `co -passive` does not block the row's release; an owner's
+  `+passive` before a fall back is never released (the row has no record); a fall back alone releases on every exit shape (its own `come` number,
+  a walk-back number, an older hold that does not block it, a newer `attack`/`follow`/`free`/plain `come`).
+* Wiring (`test_place_wiring.py`): all seven exit sites pass `row.seq` and no bare `ReleasePlacePassive(bot)` remains; the release consults
+  `PlacePassiveReleasable`, the `come` records `placePassiveSeq`, and the runner records `OrderSetsPassive`. Mutation mode adds "the fall back drops
+  passive whatever set it" and "the fall back's come records no passive of its own" (12 of 12 caught).
+
+Fail-before: with `PlacePassiveReleasable` returning `claimed` alone, the flee/hold cases of `TestFallbackPassiveOwnership` fail; with the
+`ReleasePlacePassive` guard reduced to the old unconditional clear, "the fall back drops passive whatever set it" is caught.
+
+## Round 5 (fix round 4, #259): the fall back's 10 s cap restarted with every walk back (F1b)
+
+**Live 11-24 (forever-test3, row F1b): FAIL.** A plain `fallback here` with no passive before: passive stayed on three of four bots at 2 s,
+8 s and 17 s (and 40 s after an earlier `fallback last`), `hold=fallback` on every row, the bots idle off their slots; only `resume` cleared it.
+
+**Cause (`place::Update`, TbPlace.cpp).** The cap and the stopped-short grace were measured as `now - row.walkMs`, but `walkMs` is the walk
+back's own clock: every `kWalkBackEveryMs` (5 s) a bot that stands idle out of combat more than `kSlotToleranceYd` off its slot gets its `come`
+re-queued (`AfterWalkBack` writes `walkMs = now`; a failed path check writes it too). So the elapsed time never reached `kDisengageMaxMs`
+(10 s); out of combat the stopped-short end does not apply and the bot was not on its slot, so no exit path ever fired, and each re-queued
+`come` (still `disengage`) set the passive again. Not the F1 ownership record: the release itself was never asked. The F1 record behaves (the
+walk back's `come` carries it, its number is the row's).
+
+**Fix.** `HoldRow::disengageMs`: the fall back's own start, written once with the row (`StartRowClock`) and never by a walk back.
+`RowDisengageEnds(row, distance, inCombat, walkEnded, now)` measures the cap and the grace from it; `kWalkBackEveryMs` moved into
+`TbPlacePlan.h` so the test drives the same interval. The walk back keeps its own clock (it serves the slot after the passive ends).
+
+Tests: `TestFallbackCapSurvivesWalkBacks` (`test_place_plan.cpp`) drives Update's 1 Hz pass with the 5 s walk back on an idle bot 8 yd off its
+slot: the hold ends at exactly 10 s (on the reviewed head's clock it never ends in 40 s: 3 checks fail), a failed path check does not move the
+cap, the in-fight grace counts from the start. Wiring: Update calls `RowDisengageEnds(..., now)`, no `now - row.walkMs` is left, the row starts
+with `StartRowClock`; mutation mode adds "the fall back's cap restarts with every walk back" and "the walk back restarts the fall back's cap".
+
+Open for the live re-run: why the bots did not walk to their slots at all (positions unchanged for 40 s). The engine's passive multiplier
+lets `return to stay position` through ("stay" part), so the passive alone does not explain it; the re-run must show whether the bots walk.
