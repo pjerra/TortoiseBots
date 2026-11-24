@@ -862,7 +862,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (266 of its keys)
+    // the registry of ValueContext (267 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -1110,6 +1110,7 @@ namespace slice
             creators["possible rpg targets"] = [](PlayerbotAI* ai) { return new PossibleRpgTargetsValue(ai); };
             creators["next rpg action"] = [](PlayerbotAI* ai) { return new NextRpgActionValue(ai); };
             creators["can fight equal"] = [](PlayerbotAI* ai) { return new CanFightEqualValue(ai); };
+            creators["following party"] = [](PlayerbotAI* ai) { return new IsFollowingPartyValue(ai); };
             creators["free quest log slots"] = [](PlayerbotAI* ai) { return new FreeQuestLogSlotValue(ai); };
             creators["has rewardable finished quest"] = [](PlayerbotAI* ai) { return new HasFinishedQuestValue(ai); };
             creators["dialog status"] = [](PlayerbotAI* ai) { return new DialogStatusValue(ai); };
@@ -1138,7 +1139,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 82, kActions = 208, kTriggers = 240, kValues = 266;
+    constexpr unsigned kStrategies = 82, kActions = 208, kTriggers = 240, kValues = 267;
 }
 }
 
