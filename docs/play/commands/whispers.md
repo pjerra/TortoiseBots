@@ -36,7 +36,7 @@ Commands fall into three tiers, checked before the bot acts:
 
 Ownership is the Battle.net account, read fresh on every line: two game accounts of one Battle.net account own the same bots. An unknown word fails closed to Owner or GM.
 
-A line from someone the bot may not receive is dropped without a reply. An admitted line that fails its tier answers in chat (`Only this bot's owner (or a GameMaster) may do that.`) plus one addon error line; a GM-only word from a non-GM answers `That command is restricted to GameMasters.` Other chat kinds stay silent.
+A line from someone the bot may not receive is dropped without a reply. An admitted line that fails its tier answers in chat (`Only this bot's owner (or a GameMaster) may do that.`); a GM-only word from a non-GM answers `That command is restricted to GameMasters.` Other chat kinds stay silent.
 
 ## Chaining with `\\`
 
