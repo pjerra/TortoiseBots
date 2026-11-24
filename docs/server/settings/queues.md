@@ -1,156 +1,127 @@
 ---
 id: server-settings-queues
-title: Queue settings (LFT & battlegrounds)
+title: Queue settings (dungeon fill & battlegrounds)
 category: server
-summary: Configuration settings for Looking for Turtles (LFT) dungeon autofill and battleground auto-queue systems.
-tags: [config, queues, lft, dungeon-finder, battlegrounds, pvp]
+summary: Settings for the module's dungeon-party fill and the Warsong Gulch / Arathi Basin bot round.
+tags: [config, queues, dungeon, battlegrounds, pvp]
 relates_to:
   - world-queues
   - server-settings-performance
+  - server-configuration
 ---
 
-# Queue Settings (LFT & Battlegrounds)
+# Queue Settings (Dungeon Fill & Battlegrounds)
 
-These settings configure automated Looking for Turtles (LFT) dungeon finder autofill and player-versus-player (PvP) battleground queue services. Settings go in `aiplayerbot.conf`; see [How configuration works](../configuration.md).
+These settings configure the bot fill for a player's dungeon party and the battleground round that queues bots into Warsong Gulch and Arathi Basin. The first four live in `aiplayerbot.conf`, the rest in `tortoisebots.conf`; see [How configuration works](../configuration.md).
 
-For general matchmaking behavior, dungeon portal pathing, and battleground mechanics, see [Queues & Matchmaking](../../world/queues.md).
+For what the bots do, see [Dungeon & battleground queues](../../world/queues.md).
 
 ## Summary
 
-| Setting | Default | What it does |
-| :--- | :---: | :--- |
-| [`AiPlayerbot.RandomBotLftEnabled`](#aiplayerbotrandombotlftenabled) | `1` | Enables random bots filling vacant slots in human LFT dungeon queues. |
-| [`AiPlayerbot.RandomBotLftAllowRoleBorrow`](#aiplayerbotrandombotlftallowroleborrow) | `0` | Allows LFT to borrow and respec bots into roles they do not naturally fit. |
-| [`AiPlayerbot.RandomBotLftUpdateInterval`](#aiplayerbotrandombotlftupdateinterval) | `15000` | Milliseconds between evaluation passes of the LFT autofill service. |
-| [`AiPlayerbot.RandomBotLftMaxFillsPerInterval`](#aiplayerbotrandombotlftmaxfillsperinterval) | `1` | Maximum bots queued into dungeon groups per autofill service tick. |
-| [`AiPlayerbot.RandomBotBgEnabled`](#aiplayerbotrandombotbgenabled) | `1` | Injects bots into Warsong Gulch, Arathi Basin, and Alterac Valley when players queue. |
-| [`AiPlayerbot.RandomBotBgAutonomous`](#aiplayerbotrandombotbgautonomous) | `1` | Seeds bot-only Warsong Gulch matches when no human players are in queue. |
-| [`AiPlayerbot.RandomBotBgAutonomousMaxInstances`](#aiplayerbotrandombotbgautonomousmaxinstances) | `1` | Maximum concurrent bot-only battleground instances allowed per level bracket. |
-| [`AiPlayerbot.RandomBotBgQueueInterval`](#aiplayerbotrandombotbgqueueinterval) | `30000` | Milliseconds between autonomous battleground seeder queue evaluation passes. |
-| [`AiPlayerbot.RandomBotBgMaxQueuePerInterval`](#aiplayerbotrandombotbgmaxqueueperinterval) | `1` | Number of bots queued into autonomous battlegrounds per seeder check. |
-| [`AiPlayerbot.WsgFlagRoles`](#aiplayerbotwsgflagroles) | `0` | Opt-in: split each Warsong Gulch team into attackers, defenders and midfielders. |
+| Setting | File | Default | What it does |
+| :--- | :--- | :---: | :--- |
+| [`AiPlayerbot.RandomBotLftEnabled`](#aiplayerbotrandombotlftenabled) | `aiplayerbot.conf` | `1` | Enables the dungeon-party fill. |
+| [`AiPlayerbot.RandomBotLftUpdateInterval`](#aiplayerbotrandombotlftupdateinterval) | `aiplayerbot.conf` | `15000` | Milliseconds between fill passes. |
+| [`AiPlayerbot.RandomBotLftMaxFillsPerInterval`](#aiplayerbotrandombotlftmaxfillsperinterval) | `aiplayerbot.conf` | `1` | Most bots queued into a party per pass. |
+| [`AiPlayerbot.RandomBotLftAllowRoleBorrow`](#aiplayerbotrandombotlftallowroleborrow) | `aiplayerbot.conf` | `0` | Lets the fill pull a bot into a role its own spec does not cover. |
+| [`TortoiseBots.Bg.Enable`](#tortoisebotsbgenable) | `tortoisebots.conf` | `0` | Turns the battleground round on. |
+| [`TortoiseBots.Bg.Maps`](#tortoisebotsbgmaps) | `tortoisebots.conf` | `"wsg,ab"` | Which maps the round plays. |
+| [`TortoiseBots.Bg.FillHumanQueues`](#tortoisebotsbgfillhumanqueues) | `tortoisebots.conf` | `1` | Queues bots into a real player's WSG/AB queue. |
+| [`TortoiseBots.Bg.MinPlayersPerTeam`](#tortoisebotsbgminplayersperteam) | `tortoisebots.conf` | `5` | The fill's target per side (it queues one more). |
+| [`TortoiseBots.Bg.MaxInstancesWithBots`](#tortoisebotsbgmaxinstanceswithbots) | `tortoisebots.conf` | `2` | Instances that may hold bots at once. |
+| [`TortoiseBots.Bg.MaxBots`](#tortoisebotsbgmaxbots) | `tortoisebots.conf` | `50` | Bots held for battlegrounds server-wide. |
+| [`TortoiseBots.Bg.MaxMinutes`](#tortoisebotsbgmaxminutes) | `tortoisebots.conf` | `45` | Longest stay of one bot in one instance. |
+| [`TortoiseBots.Bg.Autonomous`](#tortoisebotsbgautonomous) | `tortoisebots.conf` | `0` | Whether bot-only matches may start. Keep it `0`. |
 
-## Settings
+## Dungeon fill
 
 ### `AiPlayerbot.RandomBotLftEnabled`
-Enables automatic bot backfill for players queued in the Looking for Turtles (LFT) tool.
-**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
+Enables the dungeon-party fill.
+**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** not needed
 
-<details>
-<summary>How it works in detail</summary>
+The fill only answers a player who queues with `.bot lfg join`; it never queues a bot on its own. With the key at `0` the queue refuses joins and no bot is grouped.
 
-Fill is demand-driven: with no human player waiting, bots queue nothing new (pending offers are still reconciled). Fill-owned bots accept the dungeon invite themselves; humans always accept their own. The fill service itself never teleports anyone: the formed party walks to the portal. (A separate follow catch-up may summon a bot whose human master is already inside a dungeon or raid.)
-
-If you queue as a party with your own bots, they accept on the same tick even with `RandomBotLftEnabled = 0`. The toggle only gates random-pool backfill.
-</details>
-
-### `AiPlayerbot.RandomBotLftAllowRoleBorrow`
-Allows the LFT autofill service to borrow and respec bots into missing group roles.
-**Default:** `0` · **Values:** `0` strict spec matching, `1` allow borrowing · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-By default (`0`), role assignment is fail-closed on each bot's natural spec and gear. A tank slot needs a dedicated tank with a shield, a druid tank needs bear form, a shaman tank needs tank talents or the tank kit, and a healer needs healing talents and spells. If no matching bot is online, the slot waits.
-
-Setting this to `1` lets the matcher pick a bot and rebuild it into the missing role (forced role plus talent rebuild). Even with `0`, a bot whose spec fits but whose installed kit does not (for example a feral druid defaulting to Cat queued as a tank) still gets the matching kit.
-
-</details>
 ### `AiPlayerbot.RandomBotLftUpdateInterval`
-Interval in milliseconds between LFT queue evaluation passes.
-**Default:** `15000` · **Values:** milliseconds, clamped 5000..60000 in service · **Restart:** needed
+Milliseconds between fill passes.
+**Default:** `15000` · **Values:** 5000 to 60000 (a value outside is clamped) · **Restart:** not needed
 
-<details>
-<summary>How it works in detail</summary>
-
-Defines how often the LFT autofill service scans the matchmaking queue for waiting players needing bot companions.
-
-</details>
+Each pass tops up every waiting player by at most the per-pass budget below. The pass also runs at once when a player queues.
 
 ### `AiPlayerbot.RandomBotLftMaxFillsPerInterval`
-Maximum number of bots queued into dungeon groups per autofill service tick.
-**Default:** `1` · **Values:** integer count (0 disables; above 5 capped at 5 in service) · **Restart:** needed
+Most bots the fill groups per pass.
+**Default:** `1` · **Values:** 0 to 5 (a larger value is read as 5) · **Restart:** not needed
 
-<details>
-<summary>How it works in detail</summary>
+`0` keeps the queue running but groups nobody.
 
-Limits how many bots are queued into dungeon groups within a single update interval, spreading strategy reconfigurations smoothly across time.
+### `AiPlayerbot.RandomBotLftAllowRoleBorrow`
+Lets the fill pull a bot into a role its own spec does not cover.
+**Default:** `0` · **Values:** `0` strict, `1` allow borrowing · **Restart:** not needed
 
-</details>
+At `0` a bot fills only a slot its spec covers. At `1` a missing tank may be a warrior, protection paladin or druid, and a missing healer a paladin, priest, shaman or druid; the bot is rebuilt into that role's kit and gets its own kit back when the party ends. Only the bot's own spec is a natural fit either way.
 
-### `AiPlayerbot.RandomBotBgEnabled`
-Enables automatic bot matchmaking for battleground PvP queues when players queue.
-**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
+## Battlegrounds
 
-<details>
-<summary>How it works in detail</summary>
+### `TortoiseBots.Bg.Enable`
+Turns the battleground round on.
+**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** not needed (`.reload config` re-reads it)
 
-Monitors PvP queues for Warsong Gulch (WSG), Arathi Basin (AB), Alterac Valley (AV), Sunnyglade Valley (SV) and the Blood Ring arena (BR); SV and BR are queued only for their own maps, and BR takes max-level bots only. When real human players queue, random bots of the matching level bracket queue on both factions toward the core's minimum player requirement plus one.
+With it off no bot queues for a battleground, no invitation is answered and nothing is cleaned out of a queue. Your own party bots still queue and enter with you through the battlemaster's Join as Group, because the core queues them for you.
 
-This launches battleground matches within seconds even on low-population private servers. When a match concludes, bots leave rather than waiting for instance shutdown timers.
+### `TortoiseBots.Bg.Maps`
+Which battlegrounds the round plays.
+**Default:** `"wsg,ab"` · **Values:** a comma-separated list of `wsg`, `ab` · **Restart:** not needed (`.reload config` re-reads it)
 
-Your own party bots can queue alongside you via "Join as Group" at battlemasters (supported for WSG and AB; AV needs solo queues in the core) and auto-accept match invites regardless of this toggle. Hired companions refuse battleground invites while `HireAllowPvP = 0`, and the service never queues a party that includes a hire then.
+Warsong Gulch and Arathi Basin are the only supported maps; any other word is refused with a warning. A map whose start data is missing at boot is turned off with one error line.
 
-</details>
-### `AiPlayerbot.WsgFlagRoles`
-Splits each Warsong Gulch team's bots into attackers, defenders and midfielders.
-**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+### `TortoiseBots.Bg.FillHumanQueues`
+Queues bots into a real player's WSG/AB queue.
+**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** not needed (`.reload config` re-reads it)
 
-<details>
-<summary>How it works in detail</summary>
+While a player waits, both sides are filled toward the per-side target, at most five bots per side per five-second check. With it off the round only tracks and cleans up queue entries it already made.
 
-With the key off, bots keep the current WSG behaviour: guard or escort their own carrier, chase the enemy carrier, go for the enemy flag only when no real player is on their team, and otherwise patrol midfield.
+### `TortoiseBots.Bg.MinPlayersPerTeam`
+The fill's own minimum per side.
+**Default:** `5` · **Values:** 0 to 40 · **Restart:** not needed (`.reload config` re-reads it)
 
-With the key on, each team's bots are re-split only when the match or the team roster changes: about 40% attack the enemy flag (or chase its carrier and escort the team's), about 30% hold their own flag room and chase an enemy carrier, and the rest hold midfield and escort. Real players are not counted in the split and keep their own play.
+The fill aims for this number plus one bot per side, and never more than the map's team size. The extra bot covers one that drops out between checks. At `0` the target is the map's own minimum.
 
-</details>
+### `TortoiseBots.Bg.MaxInstancesWithBots`
+How many battleground instances may hold bots at once.
+**Default:** `2` · **Values:** 0 to 50 · **Restart:** not needed (`.reload config` re-reads it)
 
-### `AiPlayerbot.RandomBotBgAutonomous`
-Allows pool bots to initiate bot-only Warsong Gulch matches when no human players are queued.
-**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
+A bot is not queued while the cap is reached. `0` turns the fill off.
 
-<details>
-<summary>How it works in detail</summary>
+### `TortoiseBots.Bg.MaxBots`
+How many bots the module holds for battlegrounds server-wide.
+**Default:** `50` · **Values:** 0 to 2000 · **Restart:** not needed (`.reload config` re-reads it)
 
-When no human players are waiting in any PvP queue, the system seeds 10v10 Warsong Gulch matches in the most populated level bracket so bots have competitive matches of their own.
+Queued, invited and inside bots all count. `0` turns the fill off.
 
-Human player demand always takes precedence: the autonomous seeder halts immediately whenever a real human queues for any battleground. This feature requires `AiPlayerbot.RandomBotBgEnabled = 1` to operate.
+### `TortoiseBots.Bg.MaxMinutes`
+Longest stay of one bot in one instance.
+**Default:** `45` · **Values:** 1 to 240 · **Restart:** not needed (`.reload config` re-reads it)
 
-</details>
+At the limit the bot leaves without the Deserter debuff. A bot that entered with its own player leaves with that player instead.
 
-### `AiPlayerbot.RandomBotBgAutonomousMaxInstances`
-Limits how many bot-only battlegrounds can run at once per level bracket.
-**Default:** `1` · **Values:** integers (0..2) · **Restart:** needed
+### `TortoiseBots.Bg.Autonomous`
+Whether bot-only matches may start.
+**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** not needed (`.reload config` re-reads it)
 
-<details>
-<summary>How it works in detail</summary>
+Keep it `0`: this round has no seeder that would keep a bot-only queue fed, so the value only decides whether the core may start an instance nobody but bots waits for.
 
-Caps full bot-only matches per level bracket. A still-forming match keeps absorbing queued seeds and does not count; top-up stops once both sides reach 10 or a full match forms. The default of 1 suits average hardware. Raise to 2 only on fast dedicated servers.
+## Keys that do nothing on the Forever build
 
-</details>
+<a id="aiplayerbotrandombotbgenabled"></a>
+<a id="aiplayerbotrandombotbgautonomous"></a>
+<a id="aiplayerbotwsgflagroles"></a>
+These keys appear in the Turtle version's config, and the Forever template does not ship them because no part of the build reads their values. Setting one changes nothing; the rounds above use the module keys instead. The generated [key census](../config-keys.md) lists each one with where it is read.
 
-### `AiPlayerbot.RandomBotBgQueueInterval`
-Interval in milliseconds between queue checks for the autonomous battleground seeder.
-**Default:** `30000` · **Values:** milliseconds, clamped 5000..600000 in service · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-Defines how frequently the autonomous seeder checks whether an additional bot can be queued into an unfilled bot-only match.
-
-Human demand is checked every 5 s (up to 10 bots per check); the interval and budget pace the autonomous seeder; setting `AiPlayerbot.RandomBotBgMaxQueuePerInterval = 0` disables both paths.
-
-</details>
-
-### `AiPlayerbot.RandomBotBgMaxQueuePerInterval`
-Number of bots queued per interval check by the autonomous battleground seeder.
-**Default:** `1` · **Values:** integer count 0..10 (0 disables both autonomous and human demand queues; above 10 capped at 10 in service) · **Restart:** needed
-
-<details>
-<summary>How it works in detail</summary>
-
-How many bots the autonomous seeder queues per check into a forming bot-only match.
-
-Human-demand backfill always uses a fixed pace (10 bots per 5-second check, 5 per side); this knob only switches it off: setting it to `0` disables both autonomous seeding and human-demand backfill.
-
-</details>
+| Key | What it was for |
+| :--- | :--- |
+| `AiPlayerbot.RandomBotBgEnabled` | The old battleground service switch. Use `TortoiseBots.Bg.Enable`. |
+| `AiPlayerbot.RandomBotBgAutonomous` | Bot-only match seeding. No seeder exists here. |
+| `AiPlayerbot.RandomBotBgAutonomousMaxInstances` | Cap of the old autonomous seeder. |
+| `AiPlayerbot.RandomBotBgQueueInterval` | Cadence of the old autonomous seeder. |
+| `AiPlayerbot.RandomBotBgMaxQueuePerInterval` | Budget of the old autonomous seeder. |
+| `AiPlayerbot.WsgFlagRoles` | The old split of a Warsong Gulch team into attackers, defenders and midfielders. No battleground objective rows exist here. |
+| `AiPlayerbot.HireAllowPvP` | The old switch for hired companions in battlegrounds. Companions now queue and enter with their owner's group, and leave with it. |
