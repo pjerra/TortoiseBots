@@ -36,6 +36,7 @@
 #include "host/run/TbRunLiquid.h"
 #include "host/gear/TbGearGen.h"
 #include "host/TbHostProfession.h"
+#include "host/TbHostWorldPvp.h"
 #include "runtime/PassingBuffsService.h"
 #endif
 #include "compat/TbSpellEntry.h"
@@ -508,6 +509,8 @@ public:
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
             TortoiseBots::p11::EnsureHunterStarterAmmo(player);
             TortoiseBots::p11::EnsureShamanStarterTotems(player);
+            // The /pvp preference of the flagged share of free bots: a streamless session cannot send CMSG_SET_PVP.
+            tbhost::worldpvp::OnBotLogin(player);
 #endif
             // A bot's first login after its creation, and every later one, catches up on the class-quest spells its level earns.
             tbhost::autotrain::Sync(player, "login");

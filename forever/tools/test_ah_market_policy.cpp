@@ -58,7 +58,6 @@ int main()
         struct Block { bool SweepCandidateInput::*field; char const* name; };
         Block blocks[] = {
             { &SweepCandidateInput::inCombat, "inCombat" },
-            { &SweepCandidateInput::moving, "moving" },
             { &SweepCandidateInput::casting, "casting" },
             { &SweepCandidateInput::inDuel, "inDuel" },
             { &SweepCandidateInput::grouped, "grouped" },

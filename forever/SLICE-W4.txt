@@ -424,3 +424,12 @@ ai/playerbot/strategy/generic/EmoteStrategy.cpp
 
 # Duels: the duel strategy (duel target -> attack duel opponent), so a bot fights a duel with its class kit.
 ai/playerbot/strategy/generic/DuelStrategy.cpp
+
+# Open-world PvP seek: the `world pvp` and `pvp` strategies and the enemy-player target values. The host hands the role
+# to a share of free bots (forever/src/host/TbHostWorldPvp.cpp); `EnemyPlayerNear` gets its own translation unit because
+# PvpTriggers.cpp carries the Warsong Gulch flag code the Forever slice does not build.
+ai/playerbot/strategy/generic/WorldPvpStrategy.cpp
+ai/playerbot/strategy/generic/AttackEnemyPlayersStrategy.cpp
+ai/playerbot/strategy/values/EnemyPlayerValue.cpp
+ai/playerbot/strategy/values/WorldPvpSeekChecks.cpp
+ai/playerbot/strategy/triggers/EnemyPlayerNearTrigger.cpp

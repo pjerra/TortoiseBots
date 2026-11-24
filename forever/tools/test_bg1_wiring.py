@@ -224,11 +224,12 @@ def check_core_untouched():
     assert not touched, f"a core file is in the diff: {touched}"
 
 
+# The battleground-only PvP files stay out. EnemyPlayerValue.cpp and AttackEnemyPlayersStrategy.cpp are slice files now:
+# world-PvP seeking uses them outside a battleground (TBF #163), and EnemyPlayerNear lives in its own translation unit so
+# PvpTriggers.cpp's Warsong Gulch code stays unbuilt.
 BG2_FILES = (
-    "strategy/values/EnemyPlayerValue.cpp",
     "strategy/values/PvpValues.cpp",
     "strategy/triggers/PvpTriggers.cpp",
-    "strategy/generic/AttackEnemyPlayersStrategy.cpp",
 )
 
 
