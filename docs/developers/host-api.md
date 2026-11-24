@@ -1,1091 +1,165 @@
 ---
 id: developers-host-api
-title: Core Host Seams & Module API Contract
+title: Host Seams & Module Contract
 category: developers
-summary: Technical specification of the generic C++ host seams, headless session lifecycle, packet bridge, and module integration contracts.
-tags: [host-api, seams, c++, headless, packets, contract]
+summary: "How the Forever module attaches to ForeverCore: bot sessions, lifecycle, script hooks, command entry points, host services, and data mirrors."
+tags: [host-api, seams, c++, sessions, packets, contract]
 relates_to:
   - developers-architecture
   - developers-strategy-engine
 ---
 
-# HOST_API — current TortoiseBots host contract
+# Host seams and module contract
 
-**Target:** Tortoise WoW 1.18.1 core
-**Purpose:** describe the implemented generic core/module boundary used by TortoiseBots.
+**Target:** ForeverCore (TrinityCore-based, branch `forever-bots`) at the commit pinned in `forever/PINNED_CORE`.
 
-This file describes the current contract. Historical Phase 1 discovery and design
-proposals remain available in Git history and are not active implementation
-instructions.
+**Purpose:** describe the generic core/module boundary the Forever build actually uses.
 
-## 1. Boundary rule
-
-The core exposes generic capabilities. TortoiseBots assigns bot meaning to those
-capabilities.
+The core exposes generic capabilities. TortoiseBots assigns bot meaning to those capabilities.
 
 ```text
-Tortoise core
-    -> session / lifecycle / packet / module primitives
+ForeverCore
+    -> sessions, script hooks, public Player/Unit/Group APIs, DB2 data
 TortoiseBots
-    -> bot records / AI / commands / gameplay behavior
+    -> bot records, sessions, AI, commands, host services, gameplay behaviour
 ```
 
-Normal gameplay systems should not require PlayerBots-specific state. Do not
-reintroduce `WorldSession::GetBot()`, `WorldSession::SetBot()`, `m_bot`,
-`sPlayerBotMgr`, `PlayerBotEntry`, or scattered bot checks in normal gameplay
-code.
+Normal gameplay systems do not need bot state. Do not reintroduce `WorldSession::GetBot()`, `WorldSession::SetBot()`, `Player::m_bot`, `sPlayerBotMgr`, `PlayerBotEntry`, or scattered module singletons into the core.
 
-## 2. Compatible baseline
+## 1. Build contract
 
-The supported core target is merged upstream `main`, not a candidate branch:
+| Option | Meaning |
+| :--- | :--- |
+| `BUILD_TORTOISEBOTS` | Builds the module library. Off by default; the core then builds and runs with no bot code. |
+| `TORTOISEBOTS_SLICE1` | Also builds the legacy bot engine: the `ai/playerbot` files listed in `forever/SLICE-W4.txt`, the replaced factory and context sources, the shared run/why-trace runtime units, and the engine-facing host services (`forever/src/host/TbHost*.cpp`). |
+
+The Turtle build path (`TortoiseBots.cmake`, `src/`, `host/`, `runtime/`) is not compiled into the Forever module. The module also refuses to configure beside the core's own PlayerbotV2 module: two bot systems would register two `.bot` command sets and two session drivers.
+
+Sources are compiled from `forever/src` (recursively) plus the slice list. `forever/src/compat` holds the translations between the legacy bot code and ForeverCore; it is not an alternative API for new code.
+
+## 2. Bot sessions
+
+A bot is a `TortoiseBots::BotSession`, a `WorldSession` subclass created with the core's `isBot` flag. It uses only public `WorldSession` members.
+
+| Aspect | Behaviour |
+| :--- | :--- |
+| Login | `BeginLogin(characterGuid)` builds the core's `LoginQueryHolder` and enters the world through the normal `HandlePlayerLogin` path, on the world thread. |
+| Transport | No socket. The core skips socket teardown and the account-level `online` write, and clears only the bot character's online flag. |
+| Inbound packets | Dropped, except `SMSG_SPELL_FAILURE`, `SMSG_CAST_FAILED` and `SMSG_SPELL_DELAYED` for the bot's own cast, which are copied into a bounded cast-result queue for the engine. |
+| Cast-result queue | Thread-safe; any sending thread may push. The engine drains it on the world thread at the start of the bot's turn. A refusal the engine caused synchronously is counted instead of queued. |
+| Teleports | The session acknowledges pending teleports and calls the host's teleport hook so the engine sees the landing. |
+| Logout | `RequestLogout(reason)`; the next tick logs the character out. The engine brain is destroyed first. |
+
+## 3. Lifecycle
+
+`BotMgr` is the only owner of bot records and sessions.
 
 ```text
-Core: tortoise-wow/tortoise-wow main @ 5fafe43b
-      ("Merging headless session and module API expansion")
+BotMgr::Login(characterGuid, master, free, pool, owned)
+BotMgr::Logout(characterGuid, reason)
+BotMgr::LogoutAll(reason)
+BotMgr::CreateCharacter(accountId, name, race, class, gender)
+BotMgr::Update(diff)            <- WorldScript::OnBeforeMapsUpdate
 ```
 
-Every generic seam in this contract is merged upstream. The [#411](https://github.com/tortoise-wow/tortoise-wow/pull/411) and [#416](https://github.com/tortoise-wow/tortoise-wow/pull/416)
-candidates were superseded and closed; their combined surface landed through the
-merged PRs below.
+Rules the manager enforces:
 
-| Seam | Upstream |
-| --- | --- |
-| Transport plus `World` Headless lifecycle (`SessionTransport`, `InitHeadlessSession`, `StartHeadlessSession`, `StopHeadlessSession`, `GetHeadlessSessionState`) | [#438](https://github.com/tortoise-wow/tortoise-wow/pull/438) (supersedes [#411](https://github.com/tortoise-wow/tortoise-wow/pull/411)) |
-| Generic participant primitives (`CharacterCreation::CreateCharacter`, copy-only `LFTMgr` queue API, `BattleGroundMgr::GetQueuedParticipants`) | [#438](https://github.com/tortoise-wow/tortoise-wow/pull/438) (supersedes [#416](https://github.com/tortoise-wow/tortoise-wow/pull/416)) |
-| Module script hooks (`PlayerScript`, `WorldScript`) | [#469](https://github.com/tortoise-wow/tortoise-wow/pull/469) |
-| Headless sessions drain synthesized client packets | [#475](https://github.com/tortoise-wow/tortoise-wow/pull/475) |
-| Chat hooks hardened behind delivery checks; addon payloads no longer parsed as commands | [#476](https://github.com/tortoise-wow/tortoise-wow/pull/476) |
-| `PlayerScript::OnChatYell` | [#493](https://github.com/tortoise-wow/tortoise-wow/pull/493) |
+- **One session per game account**, except owned bots of the same Battle.net account under the stated conditions. No caller can put two characters of an account into the world.
+- **A bot is always a free bot when it has no master** and the engine is wanted: it grinds, loots and corpse-runs on its own. A masterless bot without the engine stands still.
+- **The owner reclaims the character.** If the account's real session starts loading while a bot is in the world, the bot is asked to log out after a short guard window; its `Player` leaves and the human keeps the character.
+- **Master grace.** A bot whose master logs out waits for `TortoiseBots.Slice.MasterGraceSeconds`, then logs out.
+- **Shutdown.** The world script saves and logs out every bot while the world is still up.
 
-The pre-build gate is `tools/verify_penqle_host_contract.sh --core <core>`: a
-read-only source check that the merged core still exposes the generic interfaces
-this module calls, that legacy bot-object coupling has not returned to normal
-gameplay code, and that prints the core revision it verified. It passes against
-`5fafe43b`.
+## 4. Script hooks
 
-The last recorded compile-verified pair predates that merge and
-must be refreshed at the next module build against merged `main`:
+The module registers no core patch. `AddSC_tortoisebots` creates the scripts below.
 
-```text
-Core:         e63161c2da7f13ab25687ea389026aa2e3c97647   (closed #411/#416 candidate)
-TortoiseBots: b9c7784accb8c719e8d7aadd2f6a9e0bda8d07a2
-```
+| Script | Hook | Use |
+| :--- | :--- | :--- |
+| `tortoisebots_world` | `OnConfigLoad`, `OnWorldInitialized`, `OnBeforeMapsUpdate`, `OnAfterReload`, `OnShutdown` | Load module and engine config, run the bot pass and host services, save/exit on shutdown. |
+| `tortoisebots_player` | `OnCreatureKill`, `OnPlayerKilledByCreature`, `OnQuestStatusChange`, `OnLootItem`, `OnMoneyChanged`, `OnSpellCast`, `OnChat`, `OnChatSent`, `OnLogin`, `OnLevelChanged`, `OnFreeTalentPointsChanged`, `OnTalentsReset`, `OnLogout` | Dashboard events, bot life counters, commander chat orders, per-login/level syncs, engine teardown. |
+| `tortoisebots_unit` | `OnDamageSpell`, `OnHealOutcome`, `OnUnitDeath` | Death and fight numbers. |
+| `tortoisebots_group` | group hooks | Group bookkeeping used by the host services. |
+| `tortoisebots_server` | `OnPacketReceive` | Reads the minimap-ping packet for a pending commander placement; the core's handler still runs. |
+| `tortoisebots_commands` | `CommandScript` table | The `.tb` GM/console commands. |
+| Player command script | `PlayerScript::OnCommand` | Claims `.bot` before the core's lookup; without the engine or with the module off it declines and the core answers. |
+| Addon script | `PlayerScript::OnAddonMessageSent` | TBM addon channel; queues requester key + text for a separate world `OnUpdate` drain. |
+| Chat-in script | `PlayerScript::OnChat` | Copies whispers/party lines into bot inboxes. |
+| Other host scripts | `PlayerScript::OnCommand` for `.autogear`, `ServerScript`/`PlayerScript` fight-monitor and battleground/LFG hooks | Registered by their host services in the slice build. |
 
-The exact tested core/module pair must be recorded whenever the core changes;
-do not infer compatibility from a branch name.
+## 5. World tick
 
-The world-update hook returns immediately while `AiPlayerbot.Enabled = 0`,
-including when the AI configuration file is missing. Services are not ticked
-against configuration or the managed-pool registry that disabled startup did
-not initialize; periodic `BOTPERF` reporting and stale-hire recovery resume
-only after restarting with AI enabled. Startup and shutdown diagnostics remain
-available.
+`WorldScript::OnBeforeMapsUpdate` calls `BotMgr::Update` first; that pass drains the chat arrivals queued since the last tick, confirms pending character creations and then updates the bots. After it the world script runs the pool reset and (slice build) passing buffs, the pool scheduler and character creation, the battleground service, the dashboard, and the slice-build run/feed/trace services.
 
-## 3. Session transport
+Bot scheduling and the per-tick budget are described in [Strategy Engine & Action Scheduling](strategy-engine.md).
 
-`WorldSession` distinguishes transport capability from gameplay identity:
+The module is inert when `TortoiseBots.Enable = 0`: no bot is created or logged in, `.tb login`/`.tb create` refuse, and `.bot` hands the word back to the core. Building a bot's brain needs the engine config; if `aiplayerbot.conf` is missing or `AiPlayerbot.Enabled = 0`, the brain cannot be built and the bot keeps the spike behaviour (a bot with a master follows and assists; a masterless bot stands).
 
-```text
-SessionTransport::Network
-SessionTransport::Headless
-```
+## 6. Command entry points
 
-Generic transport queries include `IsHeadless()` and
-`HasNetworkTransport()`. TortoiseBots interprets a Headless session as
-module-controlled; the core does not expose a bot object through
-`WorldSession`.
+| Entry | Path | Rules |
+| :--- | :--- | :--- |
+| `.tb …` | `forever/src/TbScripts.cpp` command table, handlers in `forever/src/host` | GM permission by default; the console may use most rows. `.tb create` needs the account-creation permission; `.tb pool prune` needs the GM permission and `confirm` for the destructive half. |
+| `.bot …` | `host/player/TbPlayerCmd.cpp` | Player words (help/version/features, who/roster/list, add, logout/remove, follow/stay/attack/flee, summon, stats, maintenance, choice/service/totem/blessing/behavior, autogear, lfg). Inline on the world thread. |
+| TBM addon messages | `host/TbAddonChannel.cpp` plus the `TbAddon*` verb services | Prefix `TBM`; bounded queue; a separate world `OnUpdate` drain; Send/Ack/Err answers. |
+| Bot chat | `host/chat/TbChatIn.cpp` | `PlayerScript::OnChat` copies the line; the engine's `chat` strategy turns registered words into triggers/actions. |
 
-Headless initialization uses the core's null/no-network anticheat path rather
-than pretending a real socket exists.
+`.bot` and `.tb` are separate surfaces: `.tb` is the server operator's/test surface, `.bot` is the player's. Do not document one as the other.
 
-## 4. Session registry and lifetime
+## 7. Host services
 
-The supported invariant is:
+`forever/src/host` holds the server-side features the engine and the commands ask about. The main groups:
 
-```text
-one account
-    +-- at most one active Network session
-    +-- zero or more active Headless character sessions
-```
+| Group | Files (representative) | What they answer |
+| :--- | :--- | :--- |
+| Pool | `pool/TbPoolCreate`, `TbPoolRegistry`, `TbPoolReset`, `TbPoolScheduler` | Pool accounts/characters, the registry, reset, and the login/logout scheduler. |
+| Commander/orders | `cmd/TbCmdBinding`, `TbCmdOrders`, `TbCmdFeeds`, `TbPlace`, `TbOrders` | Commander bindings, party orders, position feeds, placement, stored orders. |
+| Guild | `TbHostGuild`, `TbHostGuildJoin`, `TbHostGuildMail`, `TbHostGuildOrders*`, `TbHostGuildOrder*` | Guild participation, mail, order board, farm/craft/enchant/disenchant/fish services. |
+| Auction house | `TbHostAuction`, `TbHostAhMarket*` | Market reading/supply and the seller/buyer service the engine consumes. |
+| Errands/professions | `TbHostCapitalErrands`, `TbHostProfession`, `TbHostFishing`, `TbHostThievery` | Capital errands, profession travel/craft, fishing, pickpocketing. |
+| LFG fill | `TbHostLfgFill` | Module-owned dungeon-finder fill (the 1.60 client has no dungeon list; nothing writes `sLFGMgr`). |
+| Open-world PvP | `TbHostWorldPvp` | Gives the seek role to a share of free bots and honours the core's PvP state. |
+| Raids | `TbTactics`, `TbH3`, `TbH4`, `TbOnyxia`, `TbOnyxiaGround` | Raid tactics, group-fight commands, boss observation. |
+| Automations | `TbAutoTrain`, `TbAutoSkillSpells`, `TbClassQuestSpells`, `TbTalents`, `TbAutoProfs`, `TbAutoTools`, `TbAutoHunterPet`, `TbAutoFood`, `TbAutogear`, `TbMountShop` | Login/level syncs that keep bots trained, geared, fed and mounted. |
+| Rolls/party state | `TbRollVote`, `TbRollWon`, `TbPartyState` | Loot-method votes, won-roll reporting, party state queries. |
+| Runs/plans | `run/TbPlanCommands`, `TbRunCommands`, `TbRunHooks`, `TbPlanUnits`, `TbRunTasks` | Dungeon plans and the run controller. |
+| Dashboard/observability | `TbDashboard`, `dash/TbDashLink`, `dash/TbDashRuns` | Dashboard state, UDP feed, run summaries. |
+| Lua API | `TbLuaBots` | Provider for the ForeverLua bot API; compiled only with the engine and `BUILD_FOREVER_LUA`. |
 
-Network sessions are account-keyed. Headless sessions are character-GUID keyed.
-`World` owns both Network and Headless `WorldSession` lifetime; the
-`HeadlessSessionMgr` is the only Headless owner.
+A host service is engine-facing code. It may include legacy headers and read `Player`/`Unit` state on the world thread; it must not keep a `Player` pointer across ticks.
 
-The module-facing lifecycle is:
+## 8. Data and compat mirrors
 
-```text
-World::StartHeadlessSession(accountId, characterGuid, locale, tag)
-World::StopHeadlessSession(characterGuid, save)
-World::GetHeadlessSessionState(characterGuid)
-```
+The legacy engine reads item and spell data through public fields (`proto->Class`, `spellInfo->Effect[i]`). ForeverCore's `ItemTemplate` and `SpellInfo` expose them differently, so the module keeps two mirrors:
 
-Start performs account, character, lock, ownership, duplicate, and live-player
-validation before constructing or dispatching anything. Stop hides pending
-cancellation, logout, deletion, and character-online cleanup. State hides the
-pending/active maps and reports `NotFound`, `Pending`, `Loading`, or `Active`.
-An active Headless session whose materialized player remains out of world for five seconds, while neither loading nor teleporting, is stopped and its character-online state is cleared. This generic recovery prevents a failed map or instance transfer from blocking a later Network reclaim.
+- `compat/TbItemPrototype.h` — the legacy `ItemPrototype` field names, filled from the core's `ItemTemplate` once per item.
+- `compat/TbSpellEntry.h` — the legacy `SpellEntry` field names and units, filled from the core's `SpellInfo`; vanilla effect dice come from the core's `classic_spell_value` row when it is matched.
 
-Headless sessions never enter the account-keyed Network map and never own
-`LoginDatabase` account `online` or `current_realm` state.
+A field without a true ForeverCore counterpart is left out rather than guessed; its readers become census errors.
 
-## 5. Async login dispatch
-
-Async login state carries immutable identity instead of a retained raw session
-pointer:
-
-```text
-accountId
-characterGuid
-SessionTransport
-request generation/token
-```
-
-Completion resolves the appropriate registry and requires every identity field
-to match:
-
-```text
-Network  -> account-keyed session
-Headless -> character-GUID-keyed manager entry
-```
-
-The core dispatches exactly one normal `LoginQueryHolder` bundle per accepted
-Start request and then calls the shared character materializer. TortoiseBots
-does not queue, promote, or dispatch login.
-
-## 6. Human reclaim
-
-A real Network session takes precedence when the same character returns under
-human control. The core performs normal session/player lifecycle work only
-after proving the existing Headless entry, transport, character, and account
-match. It then detaches and deletes that manager-owned Headless session;
-TortoiseBots releases or rebinds its record/AI state as appropriate.
-
-The durable master relationship remains module-owned. The core owns the
-generic session/player lifecycle and the reclaim transfer.
-
-## 7. Native lifecycle hooks
-
-TortoiseBots integrates through the native module/script system rather than
-hard-wired manager calls in unrelated core files.
-
-Current adapters:
-
-| Adapter | Responsibility |
-| --- | --- |
-| `BotHostAdapter` | startup, shutdown and world update; at startup registers the observability emitter's commander provider (`ObservabilityEmitter::SetCommanderProvider` -> `BotCommands::CollectCommanderTelemetry`, module-internal: the dashboard's Commanders tab, no core seam; the `COMMANDERS` datagram also carries map data, i.e. the commander's position, each bound bot's target and up to 24 hostile units near the lead from the `TBM:VIEW` feed's own builder, plus unit info (each bot's AI state, newest action, spell being cast, crowd control, drinking/eating and target name; each unit's level, rank, cast and crowd control; a boss's or elite's facing, cast timing and spell area; the binding's start time), read once per 2 s cycle only while a binding stands: no per-tick cost, no world scan, no new core call; fields in `runtime/CommanderTelemetry.h`, see `tools/observability/README.md`); also the dungeon mob provider (`SetDungeonMobProvider` -> `BotCommands::CollectDungeonMobs`, issue #1101: the `DUNGEON_MOBS` datagram, mobs per dungeon run from the members' own victims, attackers and cached lists — up to 48 per party run and 64 per raid run, fewer when many runs share the 384-mob cycle budget, whole runs packed into parts of at most 96 mobs and 8 runs — once per 2 s cycle, no world scan; policy in `runtime/DungeonMobTelemetry.h`) |
-| `BotSessionAdapter` | Headless session lifecycle |
-| `BotPlayerAdapter` | player lifecycle/reclaim attachment; answers core LFT managed-bot rolecheck (`IsManagedBot`/`GetBotRoles`); answers the core's managed-bot dungeon repop (`GetBotRepopEntrance`: a bot released inside Scarlet Monastery or Uldaman (the validated maps) revives at the external door nearest its corpse, answered as a trigger id the core re-checks, `ai::PickRepopEntrance`; no answer keeps the core's lowest-id trigger); logs bot quest completions for `bot_events.csv`; on a bot's own `OnMapChanged` re-applies the [#218](https://github.com/Sagiroth/TortoiseBots/issues/218) instance guard to its non-combat strategies (`AiFactory::ApplyInstanceGuardOnMapChange`); `OnUpdate` (map thread, end of the owner's update) hands a bot pet more than 100 yd from its owner (the core unsummons at 120) to `BotManager::CheckNewPetSpawn` before the map updates creatures (a summon cast completing inside `Player::Update`); the same check also runs on the world thread after each bot's AI turn. Each pet guid is checked once and a pet that appeared out of sight, more than 5 yd off the owner's height or more than 30 yd away is moved onto its owner [#1043](https://github.com/Sagiroth/TortoiseBots/issues/1043), `runtime/PetSpawnPolicy.h`); real players return on the first field read, and the fast path takes no lock |
-| `BotUnitAdapter` | `UnitScript::OnUnitDeath`: killer attribution for `deaths.csv`; `UnitScript::OnDamage`: last-non-self-damager memory so Spirit of Redemption expiries (core self-kill) still log the real killer |
-| `BotChatAdapter` | native `.bot` command integration |
-| `BotPacketAdapter` | packet bridge into Existing PlayerBots (primarily AzerothCore/mod-playerbots) |
-| `HireRecruiterAdapter` | `<Mercenary Hire>` recruiter gossip (`Hire bots` wizard + capital `World buffs` branch, [#492](https://github.com/Sagiroth/TortoiseBots/issues/492); pure logic in `runtime/WorldBuffPolicy.h` + `runtime/WorldBuffService.h`; capital `Mercenary contracts` branch, [#490](https://github.com/Sagiroth/TortoiseBots/issues/490); pure math in `runtime/HireUnlockSync.h`) |
-| `HireGroupAdapter` | hired-companion group hooks |
-| `ClaimGuildAdapter` | `GuildScript::OnRemoveMember`/`OnDisband`: unclaims a claimed guild bot [#489](https://github.com/Sagiroth/TortoiseBots/issues/489) back to the wandering pool |
-| `WorldBuffKillAdapter` | `PlayerScript::OnCreatureKill`: Onyxia/Nefarian → invisible Rally credit 95100 via `RewardPlayerAndGroupAtEvent` [#492](https://github.com/Sagiroth/TortoiseBots/issues/492) |
-| `WorldBuffAuraAdapter` | `UnitScript::OnAuraApply`: DM/Sayge/Songflower aura → receiver-only event credit via `AreaExploredOrEventHappens`, recruiter casters ignored [#492](https://github.com/Sagiroth/TortoiseBots/issues/492) |
-| `WorldBuffPvpAdapter` | `PlayerScript::OnPVPKill`: opposite-faction kill in Silithus (zone 1377) → Silithyst credit 95101 via `RewardPlayerAndGroupAtEvent` [#492](https://github.com/Sagiroth/TortoiseBots/issues/492) |
-| `WorldBuffRaidAdapter` | `PlayerScript::OnBeforeTeleport` snapshot + `OnMapChanged` restore/strip + `OnLogout` memory cleanup for `KeepWorldBuffsInRaids` and Upper Karazhan 814 [#492](https://github.com/Sagiroth/TortoiseBots/issues/492); pure table in `runtime/WorldBuffRaidKeeper.h`) |
-| `HireUnlockKillAdapter` | `PlayerScript::OnCreatureKill` (killer only; core already fans out per member): unlock boss → per-character encounter record + `KilledMonsterCredit` counter credit, Four Horsemen on last death, bots excluded [#490](https://github.com/Sagiroth/TortoiseBots/issues/490); `OnLogin` cache load + counter sync, `OnLogout` drop, `OnDelete` row cleanup; quest-accept sync via `HireRecruiterAdapter::OnQuestAccept` |
-The module should prefer an existing generic hook before requesting a new core
-seam.
-
-## 8. World update
-
-Bot AI runs on the normal world/game thread. The core exposes a generic world
-update listener mechanism, and `BotHostAdapter` drives `BotManager` / AI,
-module-owned `PlayerConvenience`, `AhMarketService`, `AhBotService`, and
-`BattlegroundQueueService` updates from that tick. The remote commander's
-binding sweep [#884](https://github.com/Sagiroth/TortoiseBots/issues/884), `BotCommands::UpdateRemoteCommanders` runs there
-too: nothing while no commander is bound, otherwise a once-a-second check of
-each binding by guid (commander logout, disband, lead change), plus the
-bound commanders' `TBM:VIEW` perception feed (phase 2: one frame per
-`AiPlayerbot.RemoteCommanderViewMs`, read from the bots' cached values, at
-most 8 lines per commander per tick). It needs no core hook: bindings live in the module and are looked up again each time,
-never kept as `Group` or `Player` pointers.
-
-The dashboard's `COMMANDERS` datagram (`runtime/CommanderTelemetry.h`, built by the observability emitter once per 2 s
-snapshot cycle and only while a binding stands) carries, besides vitals, orders, mobs and the run line, the data the Commanders
-map draws from, all additive and bounded: per casting bot `ctgt` (the spell's unit target, read from the bot's current spell),
-per binding `objects[]` (doors, chests, levers, goobers and rituals from the bots' already calculated `nearest game objects`
-lists, resolved on the lead's map, at most 16 per binding and 24 per datagram) and, for a run leader's run, `run.plan_steps[]`
-(the current section's steps, at most 20 per run and 32 per datagram, windowed around the current step). Since the owner's
-request of 2026-10-21 a binding whose lead stood on a dungeon or raid map also carried `bosses_map` and `bosses[]`: every known
-boss of that map at its spawn point with its state in the lead's instance (`a` alive, `d` killed, `u` not known) and `p` for the
-plan's bosses, at most 32 per binding and 48 per datagram (a longer list was left out whole, never cut short; the list tried first moved on
-with each snapshot, so no binding was left out every time); the spawn points came from one pass over the core's creature spawn data made once at
-server start, right after the plans were sealed and never inside a commander snapshot (its duration logged), and each report then read one
-creature guid and one respawn time per spawn row; a boss once read killed in an instance stayed killed there until it was seen alive, the
-instance id changed or no binding had stood on that instance for 10 minutes. None of it runs per bot tick, scans
-the grid or touches the database. Up to 20 standing bindings are reported. A cycle that would need more than one datagram is split into
-parts: besides the count caps (eight bindings, 64 bots, 64 mobs) every part is measured as it will go out and kept at or under 60 000 bytes
-(UDP's 65 507-byte limit with room to spare), and a binding is never split, so one that alone is still too large drops its mob overlays,
-then its objects, then its run's step notes, then its ready facts, and carries `trimmed: true` (the module logs it once a binding per
-minute; `tools/test_commander_telemetry.cpp` pins the cap and the order). Parts carry
-`part` and `parts` after `seq` only when there is more than one, so a cycle of eight bindings or fewer is byte-identical to what an
-older module sent. A raid binding whose group went through the module's raid layout also carries `layout` (main tank, off-tanks, tank healer pairs and raid healers), and a run's current step its `label` (the plan row's comment, clipped to 80 bytes), with each `run.plan_steps[]` entry carrying its own `c`. An older module simply omits the fields.
-
-The dashboard's `RAIDS` datagram (spec dash-raids-tab, `runtime/RaidTelemetry.h`, built by the observability emitter once
-per 2 s snapshot cycle right after `COMMANDERS`, and only while `AiPlayerbot.ObservabilityRaids = 1`) lists every raid map
-copy that holds a bot, bound or not: per group its id, fight key (`raid#<group id>` unbound, the commander's display name
-when bound), map and instance, whether it is a raid group, the leader, the member rows (guid and subgroup; a name and an
-offline flag for members not online) and the live combat window raw JSON while the group's book fights. Groups are packed
-whole into parts that each stay under 16 000 bytes (a group alone over it drops the window, then the offline names, then
-members, and names the cut section in `trimmed`); one part carries no part fields, and one `"raids":[]` follows the cycle in
-which the last group ended. The same key enables the 1 Hz observed-raid combat sampler, which feeds the books under
-`raid#<group id>` and skips a group whose binding owns its book. The roster's `BOT_BATCH` rows also carry `"raid":true` on a
-raid map (additive, not behind the flag), so the dashboard's Dungeons/Raids split needs no second feed.
-
-The core listener is generic; it does not call a PlayerBots singleton.
-
-Players' `.bot` commands do not arrive on that thread: the core dispatches
-`AllCommandScript::CanExecuteCommand` wherever the chat packet is processed —
-a map thread for `SAY` / `YELL` / `EMOTE` (`PACKET_PROCESS_MAP`), the
-AsyncPackets thread for `PARTY`, `RAID`, `GUILD`, `WHISPER`, `CHANNEL` and the
-other group types (`PACKET_PROCESS_DB_QUERY`, whose window overlaps the next
-tick's `WORLDHOOK_ON_UPDATE`), and the world thread only for GM sessions and
-`LANG_ADDON`. Since [#833](https://github.com/Sagiroth/TortoiseBots/issues/833) `BotChatAdapter` and `BotAddonAdapter` therefore
-only queue an in-game player's command (requester guid, transport, a copy of the
-text — no `Player`, session or handler pointer; `commands/BotCommandQueue.h`),
-and `BotHostAdapter::OnUpdate` drains the queue every tick — right after the
-lease expiry, also while `AiPlayerbot.Enabled = 0`, before the hook's early
-return — so it runs before `BotManager` updates the bots: the command runs on the world thread at most one tick later, with a fresh
-`ChatHandler` (chat) or the TBM addon reply sink (addon); a requester who logged
-out meanwhile is dropped. Every in-game transport, GM and addon included, uses
-the one FIFO, so commands run, and reply, in the order the module received them.
-That is not necessarily the order the client sent them: party chat is processed on
-the AsyncPackets thread and addon / GM chat in the world session update, so an
-addon click can overtake a `/p .bot` typed just before it. Commands without an
-in-game player (the server console, remote access, `pending_commands` rows)
-already run on the world thread and stay inline.
-
-Commands and the deferred bot chat and packets (§10) are separate queues, so
-since [#846](https://github.com/Sagiroth/TortoiseBots/issues/846) every item in them carries one shared sequence number
-(`NextWorldQueueSequence`, `runtime/WorldThreadQueue.h`), stamped under the
-queue's lock at enqueue. Before each command the drain runs the bot chat and
-packets queued ahead of it, and after the commands the rest, merged by that
-number: `/p stay` then `/p .bot action follow` in one tick end in follow, as
-typed, and each bot's packets keep their arrival order. Items queued behind a
-command that arrives during the drain wait for it (next tick). The order is the
-order the module queued them; packets a hook hands to an AI inline on the world
-thread (§10) are not queued and run when they arrive.
-
-Handing a chat line to the AI in order is not running it in order: the AI only
-queues a chat command (`PlayerbotAI::chatCommands`) and turns it into a trigger
-and an action on its own later turns, while a `.bot` command runs its action at
-once. So an explicit `.bot` movement order (`.bot action follow/stay/flee/come/
-hold/comestay`, the tactical orders that end a stay, `.bot follow/stay/guard/
-free`) first drops the bot's movement orders still queued from chat (`follow`,
-`stay`, `guard`, `free`, `flee`, `wander`) and clears their pending triggers
-(`PlayerbotAI::DropQueuedMovementOrders`, `runtime/QueuedOrderPolicy.h`). Those
-are always older than the command, as the drain ran every line queued before
-it; a line queued after the command reaches the AI after it and stands. The
-live test of 2026-10-13 that found this: `/p stay` then `/p .bot action follow`
-0 ms or 50 ms apart ended in stay, 100 ms and more in follow.
-
-Inside that pass (`BotManager::UpdateBots`) bots under a real player are
-updated first and without a budget, then the random pool follows as one
-turn queue, each bot due when its AI asked to think next, capped by its
-situation (`runtime/BotTurnScheduler.h`); the pool's per-tick time budget engages
-while the previous world tick ran longer than
-`AiPlayerbot.PoolBudgetWhenTickOverMs` (default 0 = every tick; the
-self-tuning `AiPlayerbot.TargetWorldTickMs` controller reclaims full
-ceilings on healthy ticks; see [Configuration](../server/configuration.md)).
-"Under a real player" means a live master with a network session, or a
-character on an account the pool does not own (`runtime/PlayerBotClassification.h`);
-the `random` flag and the `PlayerMaster` lease are not ownership signals.
-This is module-internal scheduling and needs no core seam.
+Features that do not work yet are listed in `forever/docs/UNPORTED.md`, counted through `compat/TbCompat_Unported.h`, logged once (`TortoiseBots: not ported yet: <name>`) and printed by `.tb unported`. A helper returns "the action did not happen", never an invented value.
 
 ## 9. Ownership model
 
 | Responsibility | Owner |
-| --- | --- |
-| Network `WorldSession` lifetime | Core `World` |
-| Headless `WorldSession` lifetime | `World::HeadlessSessionMgr` |
-| Pending Headless requests | `World::HeadlessSessionMgr` |
-| Headless validation and async callback identity | `World::HeadlessSessionMgr` |
-| Bot record lifecycle | `BotManager` |
-| AI lifetime | `PlayerbotAIAdapter` |
-| AI lookup | `PlayerbotAIStorage` |
-| Gameplay decisions | `PlayerbotAI` |
-| Movement semantics | Existing PlayerBots (primarily AzerothCore/mod-playerbots) actions/strategies |
-| Short-lived player convenience state | `PlayerConvenience` |
-| Durable master GUID | `BotRecord.masterGuid` |
-| Live master pointer | `PlayerbotAI` |
-| Durable hire ledger | `HireLifecycle` (`tortoise_bots_hire`) |
-| Durable claimed-guild-bot ledger | `ClaimLifecycle` (`tortoise_bots_claimed`, [#489](https://github.com/Sagiroth/TortoiseBots/issues/489)) |
-
-A second owner for session lifetime, AI state, movement or master identity is an
-architecture warning.
-
-`BotRecord::InWorld` is bookkeeping, not command readiness. `BotManager` only
-publishes a bot through its controllable/live snapshots when the Player has an
-active module-owned Headless session, the `PlayerbotAIAdapter` is usable, and
-the same `PlayerbotAI` is registered in `PlayerbotAIStorage`. An attach failure
-marks the record for removal and stops the Headless session instead of leaving
-an apparently online but inert bot.
-
-## 10. Packet bridge and chat seams
-
-The core exposes generic packet send/receive hooks. `BotPacketAdapter` is the
-module packet interpretation layer:
-
-```text
-Headless outgoing
-    -> PlayerbotAI::HandleBotOutgoingPacket
-
-Network master outgoing
-    -> owned AIs HandleMasterOutgoingPacket
-
-Network master incoming
-    -> owned AIs HandleMasterIncomingPacket
-```
-
-No bot-specific opcode branches belong in core packet handlers.
-
-Threading ([#839](https://github.com/Sagiroth/TortoiseBots/issues/839), [#844](https://github.com/Sagiroth/TortoiseBots/issues/844)): `SERVERHOOK_CAN_PACKET_SEND` fires on the thread that
-calls `WorldSession::SendPacket` and `SERVERHOOK_CAN_PACKET_RECEIVE` on the thread
-that processes the packet (`WorldSession::ProcessPackets`): the world thread, a
-map thread, the AsyncPackets thread (party / raid / guild / whisper chat, name
-and item queries) or `ChannelBroadcaster::ThreadProc` (channel chat). The
-AsyncPackets thread overlaps the world-thread bot update. `ChannelBroadcaster`
-only sends between `EnableSendingMessages()` and `DisableSendingMessages()`
-inside `MapManager::Update`, alongside the map threads (`Maps/MapManager.cpp`),
-so it does not overlap `WORLDHOOK_ON_UPDATE` and the bot update; it is still
-not the world thread, so channel chat is deferred like the rest. The world thread is
-also where a bot's AI is deleted (logout, removal: `PlayerbotAIAdapter::Shutdown`). The AI
-storage lock covers only the lookup, not the AI's lifetime, and holding it
-across `PacketHandlingHelper::AddPacket` would invert the lock order against
-`PacketHandlingHelper::Handle`. So off the world thread no hook keeps a
-`PlayerbotAI` (or the bot's `Player`) pointer: it copies the packet into a
-per-bot FIFO keyed by the bot's raw guid (`runtime/WorldThreadQueue.h`), and
-`BotHostAdapter::OnUpdate` hands the copies to the AIs before the bot update,
-resolving each guid again, so a bot whose AI is gone by then is skipped. A hook
-that runs on the world thread itself (marked at the top of every
-`BotHostAdapter::OnUpdate`, before the command drain,
-`WorldThreadMark`) cannot race the deletion, so it hands the packet to the AI at once
-unless the bot is between maps or already has a held backlog (`DeliverNowOrHold`: the
-same gate as the drain, so a newer packet never overtakes an older held one).
-Only opcodes an AI handles are copied (`PlayerbotAI::Handles*Opcode`, built from
-the same table the AI registers its handlers from). An item whose bot is between
-maps when the drain runs (not in world, or a far teleport the bot update has not
-acked yet) is not handed to the AI: the drain keeps it for the next tick and
-drops it after three such ticks, except the handlers that read the bot's map
-(cast result, spell failure, spell delay, knock-back), which are dropped at once
-(`runtime/policy/infra/DeferredDeliveryPolicy.h`, whose opcode values the adapter
-checks against the core's at compile time). A bot whose far teleport is acked
-later in the same tick therefore cannot meet a map-reading handler off its map.
-
-| Entry | Threads | What it does now |
-| --- | --- | --- |
-| `CanPacketSend`, headless session, `SMSG_MESSAGECHAT` | any (AsyncPackets, ChannelBroadcaster, map, world) | copies the packet (chat types the AI reacts to only) into the per-bot chat FIFO, also on the world thread; the drain runs `HandleBotOutgoingPacket`, so party / whisper commands and chat state change on the world thread, in arrival order per bot, at most one tick later; over 64 per bot per tick are dropped. Not copied [#846](https://github.com/Sagiroth/TortoiseBots/issues/846), `runtime/BotChatGate.h`: any line for a bot whose `AllowActivity()` is false (activity throttling only), and any line other than party chat or a whisper for a bot that is not recording chat (the AI reads only its orders there) — published by each AI's update on change |
-| `CanPacketSend`, headless session, other handled opcodes (invites, loot, quest updates, cast results, spell failure / delay, knockback, ...) | any; the spell / knockback cases come from the bot's map thread or the world thread | world thread: `HandleBotOutgoingPacket` at once. Otherwise: the bot guid from `PlayerbotAIStorage::GetBotGuid` (pointer comparison, no `Player` dereference), a copy into the per-bot packet FIFO, `HandleBotOutgoingPacket` in the drain; over 256 per bot per tick are dropped. A map-thread packet is handled before any further map update, so the AI sees the same game state |
-| `CanPacketSend`, network master session | any | bot guids from `BotManager::GetBotGuidsForMasterAnyThread` (a master -> bot view published under a lock at the end of every `OnWorldUpdate`, at most one tick stale); world thread: `HandleMasterOutgoingPacket` at once; otherwise one shared copy queued for every bot, handed over in the drain |
-| `CanPacketReceive` / `DispatchMasterIncoming` | world, map or AsyncPackets | same view and the same world-thread-gate (`DeliverNowOrHold`, `PacketRoute::MasterIncoming`) / queue-elsewhere split, `HandleMasterIncomingPacket` |
-| `CanPacketReceive` / `MaybeSendMimicSummary` (`CMSG_USE_ITEM`) | the master's map thread (`PACKET_PROCESS_MAP`) | same view; reads AI strategy flags and whispers directly: the world thread waits in `MapManager::Update` while map threads run, so no AI is updated or deleted meanwhile |
-
-Both caps drop silently in play; since [#846](https://github.com/Sagiroth/TortoiseBots/issues/846) the end-of-tick drain logs
-the drops at `TortoiseBots.LogLevel = 3` (debug), at most once per bot
-per minute, with the count since the bot's last line. General, LFG and World
-channel lines still reach masterless pool bots: they reply there, so their cost
-on the world thread is O(pool bots in the channel x lines).
-
-`BotManager::GetBotsForMaster` (records + `Player*`) is world-thread only.
-
-Synthesized client packets (gameobject use, open/use item, chat) use the
-core receive queues: headless sessions drain them via `CanProcessPackets:IsHeadless`
-([#475](https://github.com/tortoise-wow/tortoise-wow/pull/475)). This runs the canonical `ProcessPackets` wrapper (script receive
-hooks, flood accounting, per-update cap, `ExecuteOpcode` teleport boundary).
-Note: core stamps `packetTime` only for perflog profiling — it does not
-`FillPacketTime`, so movement opcodes with `m_recvdTime == 0` remain subject to
-`MovementHandler` reject-time drops.
-
-The recorded fixture exercised Headless outgoing delivery, Network-master
-outgoing delivery and the existing group-invite Trigger -> Action acceptance
-path. Real-client incoming delivery remains a separate manual-client acceptance
-boundary.
-
-### Chat and addon-message seams ([#476](https://github.com/tortoise-wow/tortoise-wow/pull/476))
-
-A non-addon chat message that carries a body runs
-`ProcessChatMessageAfterSecurityCheck` before its destination case:
-`CheckChatMessageValidity`, `PLAYERHOOK_ON_BEFORE_SEND_CHAT_MESSAGE`, then
-`ChatHandler::ParseCommands`. Synthesized bot speech (`SAY`, `YELL`, `PARTY`,
-`GUILD`, …) that begins with `.` or `!` is therefore still parsed as a server
-command; [#476](https://github.com/tortoise-wow/tortoise-wow/pull/476) removed addon payloads from that path only.
-`PlayerbotAI::SanitizeCommandLikeChat` prepends one space to bot speech starting
-with `.` or `!` (literal `..` / `!!` are left alone) and remains required by
-design.
-
-`LANG_ADDON` messages no longer reach the command parser:
-
-- `CHAT_MSG_CHANNEL` runs `CheckChatMessageValidity` instead of
-  `ProcessChatMessageAfterSecurityCheck`. Channel authorization — membership,
-  level, moderation and mute checks — still runs in the destination case.
-- `PARTY`, `GUILD`, `OFFICER`, `RAID`, `RAID_LEADER`, `RAID_WARNING`,
-  `BATTLEGROUND` and `BATTLEGROUND_LEADER` call
-  `sScriptMgr.OnAddonMessage(_player, msg)` after their destination and
-  permission checks. Returning `true` consumes the message: it is neither
-  relayed nor written to the chat log.
-- `SAY`, `YELL`, `EMOTE`, `WHISPER` and `CHANNEL` dispatch no
-  `OnAddonMessage`; `WorldSession::IsLanguageAllowedForChatType` (reached
-  through `CheckChatMessageValidity`) rejects `LANG_ADDON` for every type except
-  the eight above plus `CHANNEL`.
-- Turtle's own addon protocols (`HandleTurtleAddonMessages`: LFT, custom
-  merchant, guild bank, honor and threat requests) run before the destination
-  switch and consume matching `LANG_ADDON` payloads first; a module addon
-  protocol needs a prefix none of them claim.
-- `LANG_ADDON` chat is forced onto the world thread
-  (`WorldSession::GetChatPacketProcessingType`), and
-  `CONFIG_BOOL_ADDON_CHANNEL=0` drops the message before any module sees it.
-  The module still queues `TBM` commands with typed `.bot` commands (§8) so
-  both transports share one ordered, world-thread execution path.
-
-The remaining chat hooks fire on real delivery only:
-
-| Hook | Delivery condition |
-| --- | --- |
-| `PLAYERHOOK_ON_CHAT_WHISPER` | whisper was allowed (`allowSendWhisper`) and is not `LANG_ADDON`; also fires for non-addon party text |
-| `PLAYERHOOK_ON_CHAT_GUILD` | sender is in a guild and the language is not `LANG_ADDON` |
-| `PLAYERHOOK_ON_CHAT_SAY` | language is not `LANG_ADDON` |
-| `PLAYERHOOK_ON_CHAT_YELL` | language is not `LANG_ADDON` and the session is not fingerprint-banned ([#493](https://github.com/tortoise-wow/tortoise-wow/pull/493)) |
-| `PLAYERHOOK_ON_TEXT_EMOTE_HEARD` | the emote resolved to a unit within `CONFIG_FLOAT_LISTEN_RANGE_TEXTEMOTE` |
-| `PLAYERHOOK_ON_CHAT_CHANNEL` | non-addon channel message from a session that is neither muted nor banned; dispatched inside `Channel::Say` |
-
-Threading caveat: `Channel::Say` runs on `ChannelBroadcaster::ThreadProc`, not
-the world thread (`Channel::AsyncSay` therefore fires the generic
-`WORLDHOOK_ON_CHANNEL_BROADCAST` on the caller's thread instead). Until PR
-[#498](https://github.com/tortoise-wow/tortoise-wow/pull/498) moves
-`PLAYERHOOK_ON_CHAT_CHANNEL` back onto the world thread, a module channel hook
-must not touch world state.
-
-TortoiseBots consumes one chat hook: `BotAddonAdapter` registers
-`PLAYERHOOK_ON_ADDON_MESSAGE` for the `TBM` prefix (below). `BotChatAdapter`
-owns the generic `AllCommandScript` entry for `.bot`, and `BotPlayerAdapter`
-registers `PLAYERHOOK_ON_LOGIN`, `PLAYERHOOK_ON_MAP_CHANGED`,
-`PLAYERHOOK_ON_UPDATE`, `PLAYERHOOK_ON_PLAYER_COMPLETE_QUEST`,
-`PLAYERHOOK_ON_BEFORE_LOGOUT` and `PLAYERHOOK_ON_LOGOUT`. No module code
-registers `OnChatChannel`; do not add it until [#498](https://github.com/tortoise-wow/tortoise-wow/pull/498) is merged.
-
-#### Addon command transport
-
-The companion addon sends its UI commands over the addon channel once the
-server says it can:
-
-```text
-client -> server   addon message, prefix "TBM", body "<verb> [args]"
-                   (same grammar as `.bot <verb> [args]`)
-server -> client   addon message, prefix "TBM", one line per command reply
-                   (the same lines the chat path sends as CHAT_MSG_SYSTEM —
-                   the same `TBM:` protocol lines a hand-typed `.bot`
-                   command also prints in chat)
-server -> client   "TBM:TRANSPORT|party" or "TBM:TRANSPORT|none", trailing the
-                   roster response
-```
-
-`BotAddonAdapter` consumes `TBM\t...` on the `PARTY` and `RAID` destinations,
-forwards the payload to the single `.bot` command entry, and returns `true`, so
-the core neither relays the request nor writes it to the chat log. Replies are
-delivered by a `ChatHandler` that overrides the virtual `SendSysMessage`, so
-every command reply — human text and structured `TBM:` lines alike — becomes an
-addon message instead of a yellow `CHAT_MSG_SYSTEM` line. Authorization is
-unchanged: the same command layer checks ownership and GM status.
-
-`TBM:TRANSPORT` is per-group state, not a capability flag. It reads `none` when
-the requester's group is a battleground group with no pre-battleground group,
-because the core drops those addon messages before the module hook
-(`WorldSession::HandleMessagechatOpcode`); the addon keeps using `.bot` chat
-whenever the verdict is missing, stale, or `none`.
-
-## 11. Command contract
-
-TortoiseBots owns the native `.bot` surface. Current commands include
-(see [Available Bot Commands & Addon Controls](../play/commands/README.md) for
-the complete player-facing list):
-
-```text
-add
-remove
-logout
-roster
-action attack|interrupt|stop|pull|pullback|come|stay|follow|flee
-action focus skull
-action cc <raid-mark> [bot]  # star/circle/diamond/triangle/moon/square/cross/skull (exclusive per-bot ownership; explicit name wins over target; unknown name -> ACTION_ERR no-bot; ACK scope bot:<Name>)
-action cc clear [bot]  # dismiss ownership: named bot, targeted bot, or whole owned party; ACK scope bot:<Name> or party
-action auto cc [on|off]  # opt-in smart auto CC (OFF default); per-bot persisted strategy toggle; ACK on|off|mixed
-action aoe [on|off]
-commander bind <LeadBot> [<Bot>...] [inparty] | unbind | status | view on|off  # remote commander [#884](https://github.com/Sagiroth/TortoiseBots/issues/884), AiPlayerbot.RemoteCommander, default off
-cmd attack|pull|pullback <guid> [seconds] | cc <mark> <guid> [bot] [family] | focus <guid> | move <x> <y> <z> | stay | follow | rest | revive <bot> | summon <bot>  # orders to the bound group; ACK/ERR intent "cmd <verb>"
-inv <bot>  # TBM:INV_BEGIN/INV_EQ/INV_ITEM/INV_END inventory snapshot
-professions <bot>  # TBM:PROF_BEGIN/PROF/RECIPE/RECIPE_MISSING/PROF_END profession snapshot (RECIPE carries an order field: ok/enchant/bound/needsprofession/cooldown)
-item <bot> trade | equip <bag> <slot> [mainhand|offhand|finger1|finger2|trinket1|trinket2] | unequip|give <bag> <slot>  # item order by server bag/slot; ACK/ERR intent "item <op>"
-behavior <bot> <loot|aoe|autocc|savemana|boost|threat|potions|mimic|spread|hold|noblink> <on|off>  # allowlisted per-bot strategy toggle; ACK + TBM:BOTSTATE line
-follow
-invite
-uninvite
-stay
-guard
-free
-ready
-attack
-formation
-pullback
-summon
-list
-stats
-status
-command
-help
-```
-
-The surface has two transports: chat (`.bot <verb>` in a normal chat type) and
-the addon command channel (§10, prefix `TBM`). Both run through the same parser,
-the same authorization and the same replies; the addon transport exists so the
-companion UI does not print request or reply lines into the chat frame.
-
-`.bot roster` reads the requester's undeleted account characters and any
-explicit cross-account ownership rows from the module-owned durable table. It
-emits the stable six-field `TBM:ROSTER_BEGIN`, `TBM:ROSTER`, and
-`TBM:ROSTER_END` system-message stream, then one `TBM:ALTBOTS|<name,name>` line
-naming the roster characters that currently play on their own [#872](https://github.com/Sagiroth/TortoiseBots/issues/872); empty
-after the pipe when none; older addons ignore it), followed by a separate
-`TBM:CC_ASSIGN_BEGIN`, `TBM:CC_ASSIGN`, `TBM:CC_ASSIGN_END` stream for live
-CC assignments of the controllable party bots that have the `cc` strategy and a
-CC mark set (owned alts and hired companions;
-built from the same set as BOTSTATE, not from the roster rows, so hires that the
-rows leave out are still listed and ungrouped owned alts are not), then a `TBM:BOTSTATE_BEGIN`, `TBM:BOTSTATE|<bot>|move=…,loot=on,…`,
-`TBM:BOTSTATE_END` stream with the movement mode and behaviour toggles of every
-controllable party bot (owned alts and hired companions). Keeping this metadata
-in separate streams means an older addon can still consume the roster unchanged. The roster remains the source of truth for
-offline and online owned rows; runtime `BotManager` records remain transient
-Headless lifecycle state.
-
-`.bot action` builds one request context from the requester's normal target and
-group. Dynamic actions resolve to the targeted controllable owned bot or the
-controllable party bots. Interrupt is an executor action: it probes the mature
-class/pet action graph for a ready interrupt whose spell data can interrupt the
-target's active cast, then executes it or queues the existing reach action.
-Pull and Pullback both use the mature `PullStrategy`
-but select different existing policy state: ordinary Pull removes `pull back`,
-while Pullback enables its return-to-pull-position trigger. CC resolves a
-requested raid mark and a suitable executor server-side. An explicit bot name
-(`cc <mark> <Bot>`) assigns that owned live bot directly, winning over the
-live target; unknown or uncontrollable names fail with `no-bot`. Otherwise
-targeting an owned bot sets that bot's persistent `rti cc` preference, and
-targeting an enemy (or an existing group mark) lets the server select a
-capable executor and immediately attempt the mature CC action. Mark ownership
-is exclusive: assigning a mark resets every other owned live party bot holding
-it to `none` and persists the change. `action cc clear [bot]` dismisses
-ownership (named bot, else targeted bot, else the whole owned party when no
-bot is targeted); `none` is reported as `-` in the `TBM:CC_ASSIGN` snapshot.
-Executor discovery walks the registered mature
-CC actions, so Hunter traps/beast control, Paladin Turn Undead, Rogue Sap, and
-the other class actions remain eligible without a second class policy table.
-Among the bots whose mature action is usable, the best spell fit wins (Sap on an
-unengaged target, then Shackle Undead, Banish, Hibernate, Polymorph, Freezing
-Trap, Turn Undead, Scare Beast, Entangling Roots, and Fear last). Ties go to the
-lowest bot GUID, so the choice never depends on party invite order [#58](https://github.com/Sagiroth/TortoiseBots/issues/58).
-Assignment is persisted even when the current marked creature is not legal for
-the selected bot; the immediate cast is best-effort and normal AI fallback
-remains available. Inside non-raid dungeons the generic CC triggers fire only
-on the bot's assigned mark; AoE triggers refuse packs holding a breakable CC.
-Addon requests receive one structured
-`TBM:ACTION_ACK` or `TBM:ACTION_ERR`; incidental mature-AI chat is suppressed
-where the existing silent strategy supports it.
-
-`.bot command` delegates to `PlayerbotAI::HandleCommand` for Existing PlayerBots
-(primarily AzerothCore/mod-playerbots) command behavior. Authorization uses
-the normal account/GM policy implemented by the module/core boundary. Legacy
-named commands remain available for CLI and macro compatibility.
-
-## 12. Native module/build contract
-
-The core consumes the repository at:
-
-```text
-modules/TortoiseBots/
-```
-
-`src/TortoiseBotsModule.cpp` is intentionally the only loader-recursed source.
-The broader source graph is registered by `TortoiseBots.cmake`.
-
-Normal native selection:
-
-```text
-BUILD_LEGACY_PLAYERBOTS=OFF
-MODULES=static
-MODULE_TORTOISEBOTS=static
-```
-
-`BUILD_LEGACY_PLAYERBOTS` controls the separate legacy escape hatch; it is not
-the native module selector.
-
-Static module compile definitions, include paths and the compatibility PCH are
-applied from this repository's `TortoiseBots.cmake` through the core's module
-CMake phase hooks (`TORTOISE_MODULE_CMAKE_PHASE`: `DISCOVERY`, `POST_TARGETS`);
-the module keeps this setup out of the core build files.
-
-## 13. Configuration and database contract
-
-The module owns:
-
-```text
-conf/tortoise_bots.conf.dist
-ai/playerbot/aiplayerbot.conf.dist.in
-data/sql/world/
-data/sql/character/
-```
-
-Schema belongs in migrations, not surprise runtime DDL. Missing optional data
-should fail closed or use an explicit supported fallback. Expensive travel/cache
-generation must not start implicitly on the world thread.
-
-The inherited AI config is broader than the currently accepted Tortoise product;
-a config key existing is not itself a support claim.
-
-## 14. Tortoise data contract
-
-Tortoise-specific legality/content should come from the target core/data where
-possible:
-
-- race/class legality from core player data;
-- race/team identity from core data;
-- start locations from `playercreateinfo`;
-- Tortoise spells/talents/items from local DBC/SQL;
-- collection mounts from the target mapping;
-- LFG/meeting-stone and taxi behavior from native core APIs.
-
-Do not replace target data with old Vanilla tables when the target already owns
-the answer.
-
-## 15. Unsupported capabilities
-
-When a donor behavior has no meaningful equivalent in the pinned core, adapt it
-to a real API, remove/disable it, or fail closed. Do not return fake success
-only to satisfy a donor interface.
-
-The completed audit removed or disabled several such compatibility surfaces;
-evidence is preserved in Git history.
-
-## 16. LFT queue integration (optional, default-on)
-
-`LftBotFillService` observes the copy-only generic LFT API merged with the
-participant primitives ([#438](https://github.com/tortoise-wow/tortoise-wow/pull/438))
-and never owns `m_queue`, offers, groups, or a second queue.
-The service actually uses only `GetQueuedPlayers`, `QueuePlayer`, `LeaveQueue`,
-`IsQueued`, `IsInOffer`, and `AcceptOffer`; core retains all offer,
-acceptance, cancellation, and group-formation semantics. `AcceptOffer` is
-called only for module-owned Headless participants (fill-owned bots in
-`m_pending`, plus a human's own party bots (alts and hires, not other random-pool bots) whose master/group
-leader is a real player in the same offer); humans still accept
-through the native addon path.
-
-Candidates are filtered in memory by team, hardcore state, group/live state,
-role, and the authoritative Turtle client `LFT_Data.lua` `LFT_Instances`
-dungeon `code`/`minLevel`/`maxLevel` range (exact code and normalized display-name
-aliases; see `runtime/policy/lfg/LftDungeonRangePolicy.h:LftDungeonRangeTable`).
-Instance names are normalized through the small module alias table; unknown,
-corrupt, and absent (Tortoise-only/custom) ranges fail closed and are logged once. There is no average-human +/-5 approximation,
-When the picked bot's installed kit would not play its slot (feral druid
-queued tank with the default cat kit), the fill hands the queued role over
-(`SetForcedRole`, cleared on every pending exit path), so the strategy
-rebuild at group adoption builds the slot's kit ([#966](https://github.com/Sagiroth/TortoiseBots/issues/966)).
-Forced roles are cleared on pending exit paths, and reconciliation runs even
-when the fill budget is zero.
-
-Config: `AiPlayerbot.RandomBotLftEnabled=1` (set `0` to opt out),
-`AiPlayerbot.RandomBotLftUpdateInterval=15000`,
-`AiPlayerbot.RandomBotLftMaxFillsPerInterval=1`.
-Random fill is demand-driven only: no human waiting means queued fill bots are
-pulled back out. A human queuing with their own party bots works with the
-switch on or off: the core auto-answers the rolecheck from the rolecheck hook
-(`BotPlayerAdapter::GetBotRoles` — explicit forced role first, then named
-combat specs, then `AiFactory` spec/gear fallback; ambient `tank assist` /
-`dps assist` ignored) and the service auto-accepts the offer for a human's own party bots (alts and hires, not other random-pool bots) whose master/group
-leader is a real player in the same offer, on the existing update cadence —
-no per-bot-tick world scans, no fill leases or forced roles for party bots, and
-fill-owned entries are never touched by the party path. So the addon role/spec
-buttons drive the rolecheck (tank button via `.bot role`, the rest via named
-combat specs). No teleport or summon
-exists on either path: after the group forms the party walks (follow) to the
-portal, so `.bot summon` stragglers first.
-
-## 16b. Bot LFG groups (optional, default-off)
-
-`BotLfgService` (`runtime/BotLfgService.{h,cpp}`, ticked by
-`host/BotLfgAdapter.cpp`) forms bot-only LFG groups from the proven plans of
-the `ai_bot_lfg_plan` world table. Scans eligible world bots through
-`BotLfg::CheckCandidate` (idle world bot, ungrouped, unbound, off LFT/BG,
-off instance maps, level 10+), composes tank/healer/damage with
-`BotLfg::ComposeWithOpen` (one role left open for a player), and ends every
-group either released (a real player in it or a commander's binding on it)
-or disbanded. A formed group holds the `Dungeon` activity lease on each
-member before inviting, so random-bot services leave the crew alone.
-
-## 17. AH market population and AHBot service
-
-### 17a. Organic AH market (`AhMarketService`, default-on)
-
-`AhMarketService` uses only the native auction transaction path: real bot
-inventory items, `AhAction` pricing/usage values, `GetAuctionDeposit`,
-`GetCheckedAuctionHouseForAuctioneer`, and
-`WorldSession::HandleAuctionSellItem` (plus `HandleAuctionPlaceBid` for the
-organic `AhMarketBuyer` when a pool bot is already standing at a matching
-auctioneer). Core owns auction/item persistence, deposits, limits, and
-ownership transfer. No per-tick DB scan, no second owner, no buyer teleport.
-
-Auctioneer creature positions are captured once from the core object store,
-validated for overworld/map/terrain/VMap ground and faction (no MMAP/pathfinding),
-and used for a bounded teleport fallback before the native sell handler is invoked.
-Active event-gated snapshot positions are not revalidated until restart/data reload.
-A shared `try_lock`, 5..3600-second cadence, 1..5 batch cap, and per-bot attempt
-cooldown bound world-thread work. Failed attempts are also rate-limited.
-
-Fail-closed eligibility (world-thread read-only, no `m_queue` mutation): bots
-with an active `PlayerbotAI` player master (`HasActivePlayerMaster`), any
-grouped/manual-use bot (`Player::GetGroup`), LFT queued/in-offer
-(`sLFTMgr.IsQueued`/`IsInOffer`, hard-requires the merged `LFT/LFTMgr.h` ([#438](https://github.com/tortoise-wow/tortoise-wow/pull/438)) — build fails with `#error` if absent, no silent fallback),
-or inside a battleground/instance (`InBattleGround`/`InBattleGroundQueue`/
-`Map::IsDungeon`/`IsBattleGround`) are never selected, posted, or teleported;
-per-bot AH action stays independent and never pulls owned/party bots from players.
-
-No per-tick AH/DB scan or new AH-specific core seam is required.
-`AiPlayerbot.AhMarketEnabled=1` is the default; the feature also requires
-`RandomBotAutologin=1`.
-
-### 17b. Offline AHBot stock and buyer (`AhBotService`, default-off)
-
-`AhBotService` (`runtime/AhBotService.{h,cpp}`, ticked right after
-`AhMarketService::Update` when `AiPlayerbot.AhBot.Enabled = 1`) stocks the
-Alliance (`1`), Horde (`6`), and Neutral (`7`) auction houses (or Neutral alone
-when `CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION` is enabled) toward
-configured `MinItems`/`MaxItems` targets using dedicated offline seller
-characters managed by `AhBotSellerAccount`, candidate selection from
-`AhBotItemPool`, and pricing/stack sizing from `AhBotPricing`.
-
-All persistence goes through core `Item::CreateItem`, `sAuctionMgr` (`AddAItem`,
-`GetAuctionsMap`, `SendAuctionSuccessfulMail`, `SendAuctionWonMail`),
-`AuctionHouseObject` (`AddAuction`, `RemoveAuction`), `WorldSession` outbid/cancel
-refund paths (or offline `MailDraft` + hardcore/account checks matching core),
-and `AuctionEntry` DB persistence without modifying core code. Listing, buyer,
-early unbid expiry (60 s before core `expireTime` so no expired mail is emitted),
-and first-enable legacy owner-0 cleanup all share the per-tick `TickBudgetUs` and
-`MaxListingsPerTick` budget. Seller mailbox rows are pruned in small batches via
-`AhBotSellerAccount::PurgeSellerMail`. Admin controls live in `.bot ah
-status|reload|empty|update` (`.ahbot` alias).
-
-## 18. Random-bot auto-create (optional, default-off)
-
-`RandomBotService` discovers the characters of **registered managed pool
-accounts** (character-database table `tortoise_bots_pool_account`, seeded by
-`data/sql/character/20260924120000_char.sql`); with
-`AiPlayerbot.RandomBotAutoCreate=1` (default `1`, one character per
-`RandomBotUpdateInterval`, world-thread) it creates the bounded deficit toward
-`MinRandomBots`/`MaxRandomBots` through `AccountMgr::CreateAccount` (random
-12-character alphanumeric password, hashed and never logged) and the generic
-synchronous `CharacterCreation::CreateCharacter` seam (merged [#438](https://github.com/tortoise-wow/tortoise-wow/pull/438)). Core owns account/character persistence and validation; the module
-never writes `account`/`characters` rows directly, uses no DB worker or donor
-creation loop, and does no per-tick `LIKE` scan. Because `LoginDatabase` queues
-account creation asynchronously after `AllowAsyncTransactions` (independent of [#438](https://github.com/tortoise-wow/tortoise-wow/pull/438)),
-the service remembers exactly one successful account name whose id is not
-immediately visible, retries that same name with bounded/log-throttled cadence
-while continuing the existing-account selection path and without allocating
-another fresh account (log once after prolonged unresolved period), and does not
-allocate orphan accounts. DBC `ChrRaces`/`ChrClasses` and `PlayerInfo`
-(`playercreateinfo`) are intersected before selection; permanent failures (mixed,
-limit, materialization) are remembered, transient failures (`CHAR_CREATE_ERROR`,
-dynamic `CHAR_CREATE_DISABLED`/`PVP_TEAMS_VIOLATION` via faction-balance, and
-`LoginDatabase` allocation) back off with 60s throttling, and transient name
-collisions (`CHAR_CREATE_NAME_IN_USE`/`CHAR_NAME_RESERVED`/`CHAR_NAME_PROFANE`/
-`CHAR_CREATE_FAILED`) are retried silently with another candidate, so a healthy
-account is not permanently poisoned by a single bad name or temporary balance
-state. Created GUIDs enter the existing Headless candidate/login path.
-
-## 18.1 Managed pool registry and startup reset (optional, default-off)
-
-`RandomBotAccountRegistry` (runtime/) is the authority for pool identity: an
-account is a pool account only if it has a registry row, and the row is
-validated against the login database (existence **and** username) before any
-destructive use. `AiPlayerbot.RandomBotAccountPrefix` is used only to name new
-module-created accounts and to list legacy accounts for explicit console
-adoption (`bot pool adopt preview` / `confirm`); a prefix match never authorizes
-deletion. Registration is written and read back before a character is created
-on the account, so an account the module cannot prove it registered is not used.
-The registry also owns the managed-account scope used by reporting and by the
-reset (`AccountIdList`, `CountManagedCharacters`), and a failed read is never
-reported as "no accounts": the adoption preview aborts and clears its pending
-challenge instead of enrolling a set whose size it cannot state. The observability
-daemon joins the same table for its armory views, so a personal account whose
-name merely looks like a bot account is not shown as a bot there either.
-
-`RandomBotPoolReset` (runtime/) executes `AiPlayerbot.RandomBotPoolReset` =
-`off` | `once:<token>` | `always` during initial world startup only
-(`BotHostAdapter::OnStartup` -> `PlayerbotAIConfig::Initialize` ->
-`RandomBotService::Initialize`). It deletes one snapshotted character per world
-tick through `Player::DeleteFromDB(guid, accountId, true, true)`, verifies that
-no managed character remains, and records the generation in
-`tortoise_bots_pool_state` **only after** deletion and verification succeed, so
-an interrupted reset resumes on the next start. `.reload config` never starts a
-reset and no live reset command exists.
-
-Ordering relative to world startup and headless sessions: the plan is built
-after the module's world-startup hook, so the database and DBC stores are
-loaded. The reset then runs `Planning` (drain every pool session with
-`BotManager::RemoveBot(guid, false)` plus `HireLifecycle::Forget`),
-`SettlingAuctions` (settle every target-owned listing, one character per tick,
-while all pool bidders still exist — a pool bot bidding on another pool bot's
-auction would otherwise be gone by the time that listing is reached), and only
-then `Deleting`. A character whose session has not closed is skipped, and a
-session that refuses to close within a bounded timeout fails the reset instead
-of deleting a live character. Human
-network sessions are never logged out or deleted — a pool character being played
-by a player aborts the reset. While maintenance is active (or after a failure)
-`RandomBotService::IsPoolAvailable()` is false, which pauses auto-create,
-autologin, pinned resolution, hiring, and battleground selection. Availability
-requires **both** a validated registry and no active/failed reset, so an
-unreadable registry never lets hiring create and register a new pool account on
-top of a known-invalid one; the free-alt scan is skipped in that state too, so
-existing pool accounts cannot be reclassified as personal alts. A reset whose
-snapshot is empty (no registered accounts, or none with characters) is a
-verified no-op that still records the one-shot generation.
-
-Related-data handling keeps the core bot-agnostic and needs **no core change**:
-
-- **Auctions** are settled through the existing public auction interfaces
-  (`sAuctionHouseStore` -> `sAuctionMgr.GetAuctionsMap` -> `AuctionHouseObject`):
-  an active bidder is refunded with the core's cancelled-to-bidder mail
-  (`MailDraft(...).SetMoney(bid).SendMailTo(MailReceiver(...), auction, ...)`),
-  the item is removed from the in-memory item map and `item_instance`, and the
-  listing is removed from memory and the `auction` table. No raw SQL is used for
-  auctions, so the in-memory auction manager cannot desynchronise. A bid whose
-  bidder can no longer be resolved fails the reset **before** the listing is
-  touched; a hardcore bidder is skipped exactly like the core's own cancel path
-  (`Player::IsHardcore` / the cached `HARDCORE_MODE_STATUS_ALIVE|DEAD|HC60`
-  status, which excludes `IMMORTAL`). Settlement runs in its own phase before
-  any deletion, so recovery never depends on a bidder that the reset already
-  deleted; the deletion step re-checks that the character owns no listing and
-  stops the reset if one appeared after settlement.
-- **Guilds** are preflighted from `guild`/`guild_member`: deleting a bot that
-  leads a guild promotes another member or disbands an empty guild, so a
-  bot-led guild holding any character outside the managed pool aborts the reset
-  before the first deletion.
-- **Module rows** for each deleted character (`ai_playerbot_db_store`,
-  `ai_playerbot_custom_strategy`, `tortoise_bots_owned_character`,
-  `tortoise_bots_armory_stats`, `tortoise_bots_hire`, `tortoise_bots_claimed`) and the core's `character_transmogs`
-  collection (which `Player::DeleteFromDB` omits) are removed explicitly —
-  the shared `CharacterCleanup` helper — and re-verified; character-owned data
-  (inventory, mail, pets, groups, instances, petitions, guild membership) stays
-  with `Player::DeleteFromDB`.
-
-## 18.2 Hired companions are temporary (optional, default-on with hiring)
-
-A hired companion is a **temporary character**, not a pool bot with extra
-steps: it lives while its master is online plus
-`AiPlayerbot.HireDisconnectGracePeriod` seconds after a disconnect, and when the
-hire ends its character is deleted (`.bot hire`, `<Mercenary Hire>`, and the
-`Hire*` knobs are described in [Roster and Hiring](../play/commands/roster-and-hiring.md)).
-`HireLifecycle` (runtime/) owns that lifecycle end to end:
-
-- **Ledger.** `HireLifecycle::Claim` writes one `tortoise_bots_hire` row per
-  hire, before the fee is charged, for a character `HireProvisionService`
-  itself created with `CharacterCreation::CreateCharacter`. A hire never adopts
-  an existing character: a roaming pool bot is never consumed, and a player's
-  own character is never taken over (the earlier candidate-reuse paths are
-  gone). The row is therefore the only proof that a character was created by
-  Hire(), and the deletion guard refuses without it.
-- **Ending the hire.** Every ending path funnels through
-  `HireLifecycle::Dismiss`: removal from the group (`HireGroupAdapter` group
-  hooks), the **master** leaving the party while online (the group hooks dismiss
-  the master's hires; a 5 s `SweepGracePeriod` backstop catches a departure no
-  hook reported, e.g. a raid removal — a hire still being provisioned and a
-  logged-out master are excluded, so logout keeps the grace period), group
-  disband, master grace expiry (`SweepGracePeriod`), explicit
-  `.bot remove`/`.bot logout` (`DismissNow`), and a vanished runtime record. The
-  ledger row is marked `dismissed` first, the master binding and activity lease
-  are released, and `BotManager::RemoveBot(guid, false)` logs the character off.
-- **Deletion.** A live character cannot be deleted, so the actual wipe is
-  asynchronous: `HireLifecycle::Update` pumps the queue on **every world tick**
-  and processes one queued character per pass once its Headless session is gone
-  (the same bounded step the pool reset's deletion phase uses), so a kicked
-  party of four — or the stale hires recovered after a restart — is gone within
-  ticks. A session that refuses to close is retried with a bounded budget: after
-  30 s the module issues an explicit `BotSessionAdapter::StopHeadlessSession`
-  once, and after 120 s it stops waiting and leaves the character alone (the
-  ledger row stays `dismissed`, so the next server start recovers it) instead of
-  polling and logging forever. Before deleting it revalidates the
-  ledger row, that the account is a registered managed pool account
-  (`tortoise_bots_pool_account`), and that `characters.account` still matches
-  the ledger (`HireDeletionPolicy`, unit-tested in
-  `tools/test_hire_deletion_policy.cpp`). Auctions are settled through
-  `CharacterCleanup` first (the core's `Player::DeleteFromDB` does not touch
-  listings); the core then removes the character, its group, guild/petition
-  membership, items, pets and mail, and the module rows go with it. A character
-  whose account no longer matches, or that a human session owns, is never
-  deleted — it stays and the refusal is logged. While a managed-pool reset is
-  active the queue waits it out (the reset settles every auction with all pool
-  bidders present and deletes the same characters itself).
-- **Crash safety.** No hire survives a restart: hire state is in-memory, so a
-  fresh process recovers **every** `tortoise_bots_hire` row on its first ticks
-  and deletes those characters (`state` is set to `dismissed` before the
-  deletion, and the row is removed with the character). A crash between the
-  logout and the deletion therefore cannot leave an orphan hire in the pool, and
-  a master cannot be reunited with a companion after a restart — hiring again
-  means paying the fee again.
-- **Population accounting.** Deleting a hire frees one character slot on a
-  managed pool account. The pool target (`MinRandomBots`/`MaxRandomBots`) is
-  unaffected: the freed slot is refilled by the same bounded auto-create pass
-  that fills any other missing pool character. A character whose ledger row is
-  `dismissed` is **not** counted against the per-account character limit when
-  immediately reuses the freed slot instead of being pushed onto a brand-new
-  pool account (or rejected while the deletion queue drains).
-
-## 18.3 Claimed guild bots are protected pool alts [#489](https://github.com/Sagiroth/TortoiseBots/issues/489)
-
-A wandering pool bot invited into a player's guild via `/ginvite` becomes a
-**claimed guild bot**: it stays on its pool account (avoiding the
-10-character player account cap) but is owned by the claiming player for
-control, gear, and raid assembly. `ClaimLifecycle` (runtime/) owns the
-durable `tortoise_bots_claimed` ledger end to end:
-
-- **Claim.** `GuildAcceptAction` records `(bot_guid, owner_account_id,
-  owner_player_guid, guild_id)` when a random pool bot accepts a real
-  player's guild invite. Policy gates live in `runtime/ClaimedBotPolicy.h`
-  (unit-tested in `tools/test_claimed_bot_policy.cpp`).
-- **Gear rules.** Claimed bots never run synthetic gear updates
-  (`UpdateGearAction`, `RandomBotService`/`BotManager` seeding) and never
-  auto-vendor at level 60 (`SellAction`, below 60 they preserve blue/epic
-  items). Auto-equip (`EquipUpgradesAction`) runs at all levels by default
-  (`AiPlayerbot.ClaimedBotSelfEquip`, `0` locks level 60), marks displaced
-  items `FORCE_USAGE_KEEP`, and pins owner-equipped items (`equip`, addon, or
-  equipped trade) as `FORCE_USAGE_EQUIP`.
-- **Control.** Guild members control claimed bots (`BotCommandContext`,
-  `PlayerbotSecurity`); the roster streams a `TBM:CLAIMED_*` snapshot plus a
-  `claimed-roster` capability for the addon's Guild tab.
-- **Protection.** Claimed guids are excluded from pool-reset snapshots and
-  managed-character counts (`RandomBotPoolReset`, `RandomBotAccountRegistry`);
-  `CharacterCleanup` drops the claim row with a deleted character, and
-  `ClaimGuildAdapter` unclaims on guild removal/disband, returning the bot to
-  the wandering pool.
-
-## 19. Battleground auto-queue (optional, default-on)
-
-`BattlegroundQueueService` provides bounded, demand-aware WSG/AB/AV/SV/BR participation
-for live Headless random bots through the existing native
-`WorldSession::HandleBattlemasterJoinOpcode` (guid 1337) for join and the existing
-native `WorldSession::HandleBattleFieldPortOpcode` action 0 (`CMSG_BATTLEFIELD_PORT`
-mapId+0, fail-closed `GetBattleGroundTemplate`/`GetMapId` validation) for
-master-reclaim leave. Demand is read from the copy-only generic
-`BattleGroundMgr::GetQueuedParticipants` snapshot (merged [#438](https://github.com/tortoise-wow/tortoise-wow/pull/438)): no human
-waiting participant means no bot is queued, and a non-empty bucket selects its
-queue type/bracket and fills both sides up to the core's match minimum plus a
-small margin (clamped below the minimum, so leftovers cannot start a second
-match), counting everyone already waiting (checked every 5 s while a human waits,
-`runtime/HumanBgDemandPolicy.h`). A waiting participant counts only
-when its session is non-headless and it is not a random bot, so neither random
-fill bots nor a human's own headless party bots create demand. The core remains
-the owner of queue state, invites, and port events; the module never mutates
-`m_BattleGroundQueues`, calls `BattleGroundQueue::RemovePlayer` directly, owns a
-second queue, starts a worker thread, or writes queue structures. Candidates are
-selected in memory and checked for the native level bracket, queue slots,
-alive/idle state, deserter/taxi/combat status, and active human master;
-reconcile is guarded by `InBattleGround`, `(guid, queueType)` ownership,
-`HasActivePlayerMaster` and `InBattleGroundQueueForBattleGroundQueueType` with
-fail-closed map validation, so a human's own party bots — never queued by the
-service and never holding its `BgQueued` lease — are left alone. AV and the
-Blood Ring arena (max-level bots only, like the core's own arena join) are always
-queued solo and success is verified after the native handler; WSG/AB group joins
-require every member to be a service-owned Headless bot. Cadence and per-interval
-budget are clamped and the setting defaults on (`RandomBotBgEnabled=1`; set `0`
-to opt out). Requires the merged session and participant primitives ([#438](https://github.com/tortoise-wow/tortoise-wow/pull/438)).
-
-A human queuing at the battlemaster with **Join as Group** alongside their own
-managed bots needs no service involvement: the core group-join path accepts
-headless members, each member receives the queue/invite status, and every bot's
-existing `bg status` packet action auto-accepts `STATUS_WAIT_JOIN` and runs the
-BG strategies (`follow` is dropped inside the battleground). AV group joins are
-rejected by the core, so AV parties queue solo.
-
-## 20. New core seam test
-
-Before adding another core seam, establish that:
-
-1. the behavior cannot live entirely inside TortoiseBots;
-2. no current generic hook/API exposes it;
-3. the proposed seam is a real generic core concept, not a bot special case.
-
-If the design would make PlayerBots-specific checks spread through normal
-core gameplay code, redesign it.
-
-## Raid boss diagnostics (module only)
-
-`RaidBossDiagnostics` observes the existing `UnitScript::OnUnitUpdate`,
-`OnUnitExitCombat`, `OnUnitDeath` and `ServerScript::CanPacketSend` hooks. With `AiPlayerbot.RaidBossDiagnostics = 1` and
-`bot_events.csv` enabled, living, engaged, non-evading world-boss-rank
-creatures in raid maps produce one `BossThreat` snapshot on first observation
-and then no more than once per two seconds per boss/instance. Only due snapshots
-read the threat list; numeric threat order is not the boss's target-selection rule.
-
-`BossSpellHit` observes `SMSG_SPELLNONMELEEDAMAGELOG` on the victim's session
-copy only (including headless sessions). It records reported damage, the health
-sample at packet send (`hp_sample`), and clamped subtraction (`hp_est`). The packet
-can precede damage application and intervening procs; neither field is exact
-post-hit health. Miss packets, melee swings, heals, and separate periodic-aura
-packet formats are not covered. Spell IDs are not hardcoded. Rows require an
-engaged raid boss as caster and a bot or grouped player as victim. These observers
-never modify combat, suppress packets, replace spell scripts, or require core edits.
-
-Only the synchronous combat damage opcode is observed directly. Current core emits it through `WorldObject::SendSpellNonMeleeDamageLog` and `Map::MessageBroadcast` on the owning map/world thread. Other packet types retain the existing deferred handling; the observer stores no player or AI pointer.
-
-## CSV columns (unchanged nine-column layout)
-
-| Column | Meaning |
-| --- | --- |
-| 1 `timestamp` | UTC event timestamp string, suffixed `+00`; uses a thread-local time conversion result. |
-| 2 `actor` | Boss name for BossThreat; victim player/bot name for BossSpellHit. This is not necessarily a bot, unlike older bot-only events. CSV-escaped. |
-| 3 `event` | `BossThreat` or `BossSpellHit`. |
-| 4 `position` | Existing quoted WorldPosition display-coordinate WKT POINT of the actor, not raw XYZ. |
-| 5 `race` | Victim race for BossSpellHit; 0 for BossThreat. |
-| 6 `class` | Victim class for BossSpellHit; 0 for BossThreat. |
-| 7 `level` | Actor's integer level rendered with two decimals; no XP fraction. |
-| 8 `info1` | Boss name, CSV-escaped. |
-| 9 `info2` | Key/value payload described below, CSV-escaped. |
-
-Payload separators are `|` between fields and `=` between key and value. Name bytes outside ASCII letters, digits, underscore and hyphen use percent-encoding (`%20` for space, `%25` for percent, etc.). Numeric GUIDs are raw unsigned 64-bit GUID values in decimal, not character low IDs. Map and instance disambiguate concurrent copies of the same boss.
-
-### BossThreat info2
-
-`entry=<creature entry>|map=<map ID>|instance=<instance ID>|boss_guid=<raw GUID>|victim=<name or none>|top=<0..5>|t1=<name>:<threat>:<GUID>|...`
-
-- `victim` is the boss's current `GetVictim()` name, independently of ranking.
-- `top` is the number of emitted threat entries, up to five.
-- `t1` through `t5` are descending finite numeric `HostileReference::getThreat()` values, with GUID ascending to break equal-threat ties. Values have two decimal places. These are threat points, not percentages.
-- Uses the current threat manager's active threat list with resolvable targets, including pets/creatures if present. The separate offline-reference list is not included. Null targets and nonfinite values are omitted.
-
-Example payload:
-
-`entry=16028|map=533|instance=42|boss_guid=9|victim=Tank%20One|top=2|t1=Tank%20One:12345.50:101|t2=Soaker:9876.25:102`
-
-### BossSpellHit info2
-
-`entry=<creature entry>|map=<map ID>|instance=<instance ID>|caster=<name>|caster_guid=<raw GUID>|spell=<spell ID>|victim=<name>|victim_guid=<raw GUID>|reported_damage=<packet amount>|hp_sample=<health at packet send>|hp_est=<clamped subtraction>|hp_sample_at=packet_send`
-
-- `reported_damage` is the packet's uint32 damage field, not a newly measured health loss. Zero-damage packets are preserved.
-- `hp_sample` is the victim's health when the packet-send hook executes.
-- `hp_est = max(0, hp_sample - reported_damage)`. **Neither health field is exact post-hit health.** The normal direct-damage path sends the packet before applying damage; procs occur between packet send and application. Immunity/god mode, prevention, intervening heals/damage, and other packet-emission paths can make the estimate wrong. It is never used for bot decisions.
-- The name `BossSpellHit` means an observed damage-log packet, not an independently verified successful reduction in health.
-
-### Forever Onyxia observer
-
-The Forever-only `host/TbOnyxia` observer runs from the existing
-`engine::Tick` and is forgotten by `engine::Dispose` using a saved full GUID.
-It introduces no core hook. It resolves only an explicitly named map-249
-Onyxia in the bot's instance, and never mutates gameplay during observation.
-See `forever/docs/ONYXIA.md` for the opt-in command, sampling and cleanup.
-
-The optional `host/TbOnyxiaGround` integration installs per-AI strategy/action/
-trigger contexts at engine creation. `ConfigureGround` validates an explicit
-same-instance boss and grouped host tank; `GroundTick` maintains ownership,
-threat holds and checked movement. `ForgetGround` releases owned movement and
-pet state, including followers when the owner leaves control. Successful manual
-orders release control except the owner's explicit pull of the configured boss.
-This is a controller seam, not a replacement for the pending `TbRun` slices.
+| :--- | :--- |
+| Network session lifetime | Core `World` |
+| Bot session lifetime | Module `BotMgr` |
+| Character load/save, map, spells, combat | Core |
+| Bot AI, strategy graph, decisions | Module (engine brain, slice build) |
+| Bot commands and chat | Module |
+| Pool registry rows | Module (`forever/sql` tables) |
+| Durable module tables | Module migrations in `forever/sql/{world,characters}` |
+| Module settings | `forever/conf/tortoisebots.conf.dist` |
+| Engine settings | `forever/conf/aiplayerbot.conf.dist` (generated from the code's reads) |
+
+## 10. Checks
+
+Before claiming a module/core pair works:
+
+- `forever/tools/slice_registry_check.py` — the generated registry matches the full build's keys and creators.
+- `python3 forever/tools/gen_aiplayerbot_conf.py --check` — the shipped engine config is current.
+- `python3 tools/verify_okf.py` — the docs graph and links resolve.
+- The module build with `TORTOISEBOTS_SLICE1` on, and the option-off build, both configure and compile.
+
+[`UNPORTED.md`](../../forever/docs/UNPORTED.md) and the notes in `forever/docs/` record why a feature is out and what porting it needs.
