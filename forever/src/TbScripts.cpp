@@ -97,6 +97,7 @@
 #include "host/cmd/TbTestTargetPure.h"
 #include "host/TbIgnore.h"
 #include "host/TbChatLinkCmd.h"
+#include "host/TbHostLfgFill.h"
 #include "host/chat/TbChatCmd.h"
 #include "host/chat/TbChatIn.h"
 #include "host/TbAddonChannel.h"
@@ -609,6 +610,7 @@ public:
             { "castlog", HandleCastLog, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "order",  TortoiseBots::h3::HandleOrder,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "role",   TortoiseBots::h3::HandleRole,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "lfg",    TortoiseBots::lfg::HandleLfg,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "master", TortoiseBots::h3::HandleMaster, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "party",  TortoiseBots::h3::HandleParty,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "onyxia", TortoiseBots::onyxia::HandleCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -1923,4 +1925,5 @@ void AddSC_tortoisebots()
     TortoiseBots::autogear::AddScripts();   // PlayerScript::OnCommand -> `.autogear`
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)
+    TortoiseBots::lfg::RegisterScripts();           // #160: the dungeon-finder fill tick (inert while off)
 }

@@ -293,6 +293,12 @@ float BotXpRate()
     return g_configReady ? sPlayerbotAIConfig.playerbotsXPrate : 1.0f;
 }
 
+uint32 DuelMinimumLevel()
+{
+    // The member carries no in-class default; before the config is read the key's own default applies.
+    return g_configReady ? sPlayerbotAIConfig.botAcceptDuelMinimumLevel : 10;
+}
+
 std::string ServerBotsJson()
 {
     if (!g_configReady)
@@ -802,6 +808,7 @@ bool ConfigReady() { return false; }
 std::string ServerBotsJson() { return {}; }
 std::string ServerDiagnosticsJson() { return {}; }
 float BotXpRate() { return 1.0f; }
+uint32 DuelMinimumLevel() { return 10; }
 bool RunAction(Player*, char const*, char const*) { return false; }
 void DumpActionCounts() {}
 }
