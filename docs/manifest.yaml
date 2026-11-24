@@ -175,11 +175,11 @@ nodes:
   - id: server-settings-party
     path: server/settings/party.md
     category: server
-    summary: Configuration settings for player-owned bots, alt-bots, follow behavior, summoning, and party loot.
+    summary: Configuration settings for owned bots, alt level sync, follow behaviour and formations, maintenance, autogear, party loot and quest sync.
   - id: server-settings-hiring
     path: server/settings/hiring.md
     category: server
-    summary: Configuration settings for hiring bot companions, gear tiers, contracts, and recruiter world buffs.
+    summary: Mercenary hiring, hire prices, gear tiers and recruiter world buffs are not part of the WoW Forever build; bots come from the bot pool or from a player's own characters.
   - id: server-settings-class-behaviour
     path: server/settings/class-behaviour.md
     category: server
@@ -191,7 +191,7 @@ nodes:
   - id: server-settings-combat
     path: server/settings/combat.md
     category: server
-    summary: Configuration thresholds for health, mana, engagement distances, casting pacing, pull rules, and strategy rotation.
+    summary: Configuration thresholds for health, mana, engagement distances, casting pacing, pull rules, and open-world PvP for bot AI.
   - id: server-settings-world-population
     path: server/settings/world-population.md
     category: server
@@ -211,11 +211,11 @@ nodes:
   - id: server-settings-performance
     path: server/settings/performance.md
     category: server
-    summary: Configuration settings for AI time budgets, activity throttling, world tick targets, and core server tuning for large bot populations.
+    summary: Configuration settings for AI time budgets, activity throttling, the world tick target, and core server tuning for large bot populations.
   - id: server-settings-logging
     path: server/settings/logging.md
     category: server
-    summary: Configuration settings for module diagnostic log levels, CSV event logs, per-bot action logs, action counts, and retention.
+    summary: Configuration settings for the module's log category, bot log file, CSV event logs, per-bot action logs, action counts, healer and boss diagnostics, and run traces.
   - id: server-admin-commands
     path: server/admin-commands.md
     category: server
