@@ -1,0 +1,135 @@
+#include "host/TbAutoSkillSpells.h"
+
+#include "DB2Stores.h"
+#include "DB2Structure.h"
+#include "Log.h"
+#include "Player.h"
+#include "SharedDefines.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
+
+#include <vector>
+
+namespace tbhost
+{
+namespace skillspells
+{
+namespace
+{
+
+// The same class thresholds the legacy factory applies for Dual Wield: its
+// SkillRaceClassInfo row is forced to MinLevel 1 in the data (the client shows
+// the trainer row at every level), so the gate cannot come from the store.
+constexpr std::uint32_t kDualWieldSpell = 674;
+
+std::uint32_t DualWieldLevelForClass(std::uint8_t playerClass)
+{
+    switch (playerClass)
+    {
+    case CLASS_WARRIOR:
+    case CLASS_ROGUE:
+        return 10;
+    case CLASS_HUNTER:
+        return 20;
+    default:
+        return 0;   // the class cannot train Dual Wield at all
+    }
+}
+
+// True for the spells this pass owns: the equip/combat flags the core reads,
+// and the weapon "Shoot" abilities (a bow without Shoot Bow never pulls).
+bool RewardedAbility(SkillLineAbilityEntry const* ability, SpellInfo const* spell)
+{
+    if (spell->HasEffect(SPELL_EFFECT_DUAL_WIELD) || spell->HasEffect(SPELL_EFFECT_BLOCK) ||
+        spell->HasEffect(SPELL_EFFECT_PARRY))
+        return true;
+    if (spell->HasEffect(SPELL_EFFECT_WEAPON_DAMAGE))
+        return true;
+    if (!spell->HasEffect(SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL))
+        return false;
+    // Effect 17 is shared with melee abilities (Heroic Strike, pet Cleave): a
+    // row only counts for a weapon skill line, never for a class line.
+    SkillLineEntry const* skillLine = sSkillLineStore.LookupEntry(ability->SkillLine);
+    return skillLine && skillLine->CategoryID == SKILL_CATEGORY_WEAPON;
+}
+
+// Every skill-line ability this pass could ever teach, built once: the table
+// is static for the run and the per-bot pass only filters it.
+std::vector<SkillLineAbilityEntry const*> const& RewardedRows()
+{
+    static std::vector<SkillLineAbilityEntry const*> const rows = []()
+    {
+        std::vector<SkillLineAbilityEntry const*> out;
+        for (std::uint32_t id = 0; id < sSkillLineAbilityStore.GetNumRows(); ++id)
+        {
+            SkillLineAbilityEntry const* ability = sSkillLineAbilityStore.LookupEntry(id);
+            if (!ability || ability->Spell <= 0)
+                continue;
+            SpellInfo const* spell = sSpellMgr->GetSpellInfo(std::uint32_t(ability->Spell), DIFFICULTY_NONE);
+            if (!spell || !RewardedAbility(ability, spell))
+                continue;
+            out.push_back(ability);
+        }
+        return out;
+    }();
+    return rows;
+}
+
+} // namespace
+
+std::uint32_t Sync(Player* bot, char const* why)
+{
+    if (!bot)
+        return 0;
+
+    std::uint32_t const classMask = bot->GetClassMask();
+    Races const race = Races(bot->GetRace());
+    std::uint32_t const level = bot->GetLevel();
+    std::uint32_t const dualWieldLevel = DualWieldLevelForClass(bot->GetClass());
+    std::uint32_t taught = 0;
+
+    for (SkillLineAbilityEntry const* ability : RewardedRows())
+    {
+        // Only a skill the bot already owns: the seed decides which weapon
+        // skills a bot has, exactly as the legacy pass leaves it.
+        std::uint32_t const skillValue = bot->GetPureSkillValue(ability->SkillLine);
+        if (!skillValue || skillValue < std::uint32_t(ability->MinSkillLineRank))
+            continue;
+        if (ability->ClassMask && !(std::uint32_t(ability->ClassMask) & classMask))
+            continue;
+        if (!ability->RaceMask.IsEmpty() && !ability->RaceMask.HasRace(race))
+            continue;
+
+        SpellInfo const* spell = sSpellMgr->GetSpellInfo(std::uint32_t(ability->Spell), DIFFICULTY_NONE);
+        if (!spell)
+            continue;
+        if (spell->SpellLevel && level < std::uint32_t(spell->SpellLevel))
+            continue;
+
+        bool const dualWield = spell->HasEffect(SPELL_EFFECT_DUAL_WIELD);
+        if (dualWield && dualWieldLevel && level < dualWieldLevel)
+            continue;
+
+        if (!bot->HasSpell(spell->Id))
+        {
+            bot->LearnSpell(spell->Id, false);
+            ++taught;
+        }
+        // The flags are per session (Player::m_canDualWield and friends are
+        // never saved), so a spell already in the book still needs them set.
+        if (dualWield)
+            bot->SetCanDualWield(true);
+        if (spell->HasEffect(SPELL_EFFECT_BLOCK))
+            bot->SetCanBlock(true);
+        if (spell->HasEffect(SPELL_EFFECT_PARRY))
+            bot->SetCanParry(true);
+    }
+
+    if (taught)
+        TC_LOG_INFO("tortoisebots", "skill spells: {} learned {} skill-rewarded abilit{} at level {} on {}",
+            bot->GetName(), taught, taught == 1 ? "y" : "ies", level, why ? why : "sync");
+    return taught;
+}
+
+} // namespace skillspells
+} // namespace tbhost

@@ -27,6 +27,7 @@
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostGuildOrderAccess.h"
 #include "host/TbHostGuildOrderDisenchant.h"
+#include "host/TbHostFishing.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
 #include "runtime/DecisionCapture.h"
 #include "runtime/RunTrace.h"
@@ -84,6 +85,7 @@
 #include "host/TbEngineBrain.h"
 #include "host/TbSpellDelayPure.h"
 #include "host/TbAutoTrain.h"
+#include "host/TbAutoSkillSpells.h"
 #include "host/TbClassQuestSpells.h"
 #include "host/TbTalents.h"
 #include "host/TbAutoProfs.h"
@@ -511,9 +513,17 @@ public:
             TortoiseBots::p11::EnsureShamanStarterTotems(player);
             // The /pvp preference of the flagged share of free bots: a streamless session cannot send CMSG_SET_PVP.
             tbhost::worldpvp::OnBotLogin(player);
+            // A bot that went offline (or died) mid-fishing errand logs back in
+            // with the pole in hand and would fight with a tool.
+            tbhost::fishing::RepairPoleInHand(player);
 #endif
             // A bot's first login after its creation, and every later one, catches up on the class-quest spells its level earns.
             tbhost::autotrain::Sync(player, "login");
+            // Abilities the world grants through skill values (Dual Wield, Block,
+            // Parry, the weapon "Shoot" spells): the core's own pass only runs when
+            // a skill value is written, so a seeded bot can own the skill without
+            // the spell and the core then refuses the off hand.
+            tbhost::skillspells::Sync(player, "login");
             TortoiseBots::questspells::Sync(player, "login");
             TortoiseBots::talents::Sync(player, "login");
             TortoiseBots::autoprofs::Sync(player, "login");
@@ -530,6 +540,7 @@ public:
         if (BotMgr::Instance().IsBot(player->GetGUID()))
         {
             tbhost::autotrain::Sync(player, "level");
+            tbhost::skillspells::Sync(player, "level");
             TortoiseBots::questspells::Sync(player, "level");
             TortoiseBots::talents::Sync(player, "level");
             TortoiseBots::autoprofs::Sync(player, "level");
