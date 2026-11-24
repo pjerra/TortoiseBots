@@ -18,7 +18,7 @@ relates_to:
 
 # Class AI & Roles Overview
 
-Bots cover all nine Vanilla classes. Each bot reads its spent talent points, picks the matching spec strategy, and fights in that spec's style.
+Bots cover all nine Vanilla classes. Each bot is assigned a spec for its class and spends its talent points along that spec's preset build, then fights in that spec's style.
 
 ## Supported Roles & Classes
 
@@ -29,7 +29,7 @@ Bots cover all nine Vanilla classes. Each bot reads its spent talent points, pic
 | **[Hunter](hunter.md)** | - | - | - | BM, MM, Survival | Freezing Trap, Scare Beast | None (Scatter Shot snares) |
 | **[Rogue](rogue.md)** | - | - | All Specs | - | Sap, Blind, Gouge | Kick |
 | **[Priest](priest.md)** | - | Holy, Disc | - | Shadow | Shackle Undead, Psychic Scream (PvP and close range only) | Silence (Shadow) |
-| **[Shaman](shaman.md)** | Tank (experimental) | Resto | Enhancement | Elemental | None | Earth Shock |
+| **[Shaman](shaman.md)** | - | Resto | Enhancement | Elemental | None | Earth Shock |
 | **[Mage](mage.md)** | - | - | - | All Specs | Polymorph | Counterspell |
 | **[Warlock](warlock.md)** | - | - | - | All Specs | Fear, Banish | Spell Lock (Felhunter) |
 | **[Druid](druid.md)** | Bear | Resto | Cat | Balance | Entangling Roots, Hibernate | Bash |
@@ -43,9 +43,8 @@ The bot counts spent talent points in each of its three class trees. The tree wi
 Players can use [`.bot role <Name|self>`](../play/commands/roster-and-hiring.md#bot-role) to override the result.
 Without an override, role detection uses:
 - Party composition, stance or form, and tanking gear.
-- A shaman needs a shield, *Rockbiter Weapon*, and *Totemic Alignment* or *Spirit Armor*.
-- A bot that rolled the tank build counts as a tank from its talents alone — see [Shaman tank](shaman.md#class-settings).
-- A detected shaman tank fights alongside a warrior, paladin, or druid tank instead of standing down.
+- A feral druid plays Bear only when given the tank role; otherwise it plays Cat.
+- The shaman tank spec is Not on WoW Forever yet, so no shaman is detected as a tank from its build.
 
 ---
 
@@ -92,7 +91,7 @@ Healing specs get `offdps` by default (Discipline and Holy priests, Restoration 
 
 Damage rows sit at the lowest priority, so any firing heal outbids them. Solo or far from the group, the healer fights like a normal bot.
 
-What each class casts: priests use *Shadow Word: Pain*, *Holy Fire*, *Smite*, *Starshards*, *Mind Blast* (*Holy Nova* into packed melee, wand when mana is spent); druids leave Tree of Life Form for *Moonfire*, *Wrath*, *Starfire*; shamans use *Flame Shock* and *Lightning Bolt* (*Chain Lightning* into packs); paladins use *Hammer of Wrath* on dying targets, *Holy Shock*, *Judgement* and *Exorcism* on Undead or Demon targets (*Consecration* into packed melee). See the class pages for details.
+What each class casts: priests use *Shadow Word: Pain*, *Holy Fire*, *Smite*, *Starshards*, *Mind Blast* (*Holy Nova* into packed melee, wand when mana is spent); druids cast *Moonfire*, *Wrath*, *Starfire*; shamans use *Flame Shock* and *Lightning Bolt* (*Chain Lightning* into packs); paladins use *Hammer of Wrath* on dying targets, *Holy Shock*, *Judgement* and *Exorcism* on Undead or Demon targets (*Consecration* into packed melee). See the class pages for details.
 
 ### DPS Off-Healing (`offheal`)
 
@@ -114,7 +113,7 @@ Per bot, use [`.bot behavior <bot|party|raid> offheal|offdps <on|off>`](../play/
 - `/w <BotName> co +offheal` or `/w <BotName> co -offdps` (`co ?` lists active combat strategies).
 - `.bot strategy -offdps @heal` for one bot, a role, or the party.
 - Changes are saved per bot.
-- A spec change (`.bot role <bot> <spec>`, the addon's role buttons, or a talent respec) sets the new spec's default again: a healer spec gets `offdps` and loses `offheal`, a damage spec the other way round, a tank spec neither. The priest `hybrid` spec keeps its own `offdps`.
+- A spec change (`.bot role <bot> <spec>`, the addon's role buttons, or a talent respec) sets the new spec's default again: a healer spec gets `offdps` and loses `offheal`, a damage spec the other way round, a tank spec neither.
 - Server admins change the default for new bots with [`AiPlayerbot.EnableOffSpecStrategies`](../server/settings/class-behaviour.md#aiplayerbotenableoffspecstrategies) (`0` leaves the off-spec kit off and a spec change turns both off; players can still toggle it per bot).
 
 ### Spell Downranking

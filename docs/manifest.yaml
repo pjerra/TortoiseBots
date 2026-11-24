@@ -37,7 +37,7 @@ nodes:
   - id: classes-warrior
     path: classes/warrior.md
     category: classes
-    summary: Complete guide to Warrior bot AI, stance dancing, tanking rotations, melee DPS, shouts, and Turtle WoW custom abilities.
+    summary: Complete guide to Warrior bot AI, stance dancing, tanking rotations, melee DPS, shouts, and class abilities.
   - id: classes-paladin
     path: classes/paladin.md
     category: classes
@@ -53,11 +53,11 @@ nodes:
   - id: classes-priest
     path: classes/priest.md
     category: classes
-    summary: Complete guide to Priest bot AI, healing ladders, Power Word Shield rules, threat drops, Shadow DPS, and Turtle WoW custom spells.
+    summary: Complete guide to Priest bot AI, healing ladders, Power Word Shield rules, threat drops, Shadow DPS, and class abilities.
   - id: classes-shaman
     path: classes/shaman.md
     category: classes
-    summary: Complete guide to Shaman bot AI, totem sets, weapon imbues, chain heals, shocks, and Turtle WoW custom abilities.
+    summary: Complete guide to Shaman bot AI, totem sets, weapon imbues, chain heals, shocks, and class abilities.
   - id: classes-mage
     path: classes/mage.md
     category: classes
@@ -65,11 +65,11 @@ nodes:
   - id: classes-warlock
     path: classes/warlock.md
     category: classes
-    summary: Complete guide to Warlock bot AI, DoT spreading, demon summoning, Soul Shard economy, Life Tap, and custom Turtle abilities.
+    summary: Complete guide to Warlock bot AI, DoT spreading, demon summoning, Soul Shard economy, Life Tap, and class abilities.
   - id: classes-druid
     path: classes/druid.md
     category: classes
-    summary: Complete guide to Druid bot AI, shapeshifting forms, tanking, healing, DPS rotations, and Turtle WoW custom abilities.
+    summary: Complete guide to Druid bot AI, shapeshifting forms, tanking, healing, DPS rotations, and the Forever class spell kit.
 
   # Play
   - id: play-glossary
