@@ -14,14 +14,14 @@ Technical documentation, architecture invariants, strategy engine details, host 
 
 | Document | Topic |
 | :--- | :--- |
-| [Architecture & Invariants](architecture.md) | Module boundaries, core isolation invariants, and design rules. |
+| [Architecture & Invariants](architecture.md) | Module boundaries, core isolation invariants, bot sessions, and world-thread rules. |
 | [Guild Supply Chain](guild-supply.md) | Supply ladder, guild bank withdrawals, needitems recovery, and sub-orders between guild bots. |
 | [Strategy Engine](strategy-engine.md) | Autonomous decision loop, triggers, actions, multipliers, and tick scheduling. |
 | [Bot Mechanics & Internals](bot-mechanics.md) | Deep bot mechanics, targeting rules, threat handling, and internal technical edge cases. |
 | [Donor Hierarchy & Lineage](donor-hierarchy.md) | Codebase lineage, porting priorities, and behavior harvesting principles. |
-| [Host API & Integration Boundary](host-api.md) | Host seam contracts, headless sessions, lifecycle hooks, and packet bridge. |
-| [Licensing Audit & Provenance](licensing-audit.md) | Donor licensing verification, GPL compatibility, and release gates. |
-| [Guild Supply Chain](guild-supply.md) | How guild orders use the guild bank as the crafting store. |
+| [Host API & Integration Boundary](host-api.md) | Script hooks, bot-session lifecycle, the addon/chat entry points, and host services. |
+| [Licensing Audit & Provenance](licensing-audit.md) | Donor licensing verification, compatibility with the core's licence, and release gates. |
+| [Reference data](data/README.md) | Capability and donor tables used for auditing the build. |
 
 ## Contribution Guidelines & Tools
 
