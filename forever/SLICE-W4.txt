@@ -388,3 +388,16 @@ ai/playerbot/strategy/values/MountValues.cpp
 # the homebind teleport through the D4 pair.
 ai/playerbot/strategy/triggers/StuckTriggers.cpp
 ai/playerbot/strategy/actions/UnstuckAction.cpp
+
+# TBF #147 (free-bot rpg, package A): the rpg brain - pick an NPC/object, walk to it, and run the rpg verbs (accept,
+# turn in, sell, buy, repair, train through the host town seam). The Turtle-only parts (trainer tables, taxi packet
+# fields, duel/social members, gossip menu probes) go through the new TbCompat_Life pair; unported services answer
+# "not there" through forever/src/slice/SliceLinkStubs.cpp (fishing order, downtime window, petitions) and the host
+# camp stub (no camp spots).
+ai/playerbot/strategy/actions/RpgAction.cpp
+ai/playerbot/strategy/actions/RpgSubActions.cpp
+ai/playerbot/strategy/actions/ChooseRpgTargetAction.cpp
+ai/playerbot/strategy/actions/MoveToRpgTargetAction.cpp
+ai/playerbot/strategy/generic/RpgStrategy.cpp
+ai/playerbot/strategy/values/PossibleRpgTargetsValue.cpp
+ai/playerbot/strategy/triggers/RpgTriggers.cpp

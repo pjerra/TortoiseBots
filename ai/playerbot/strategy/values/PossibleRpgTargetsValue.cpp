@@ -8,6 +8,7 @@
 #include "Maps/CellImpl.h"
 #include "NearestUnitsValue.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatW1.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -39,8 +40,7 @@ PossibleRpgTargetsValue::PossibleRpgTargetsValue(PlayerbotAI* ai, float range) :
 void PossibleRpgTargetsValue::FindUnits(std::list<Unit*> &targets)
 {
     AnyUnitInObjectRangeCheck u_check(bot, range);
-    UnitListSearcher<AnyUnitInObjectRangeCheck> searcher(targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, range);
+    VisitUnitsCompat(bot, targets, u_check, range);
 }
 
 bool PossibleRpgTargetsValue::AcceptUnit(Unit* unit)
@@ -53,12 +53,12 @@ bool PossibleRpgTargetsValue::AcceptUnit(Unit* unit)
     if (sServerFacade.IsHostileTo(unit, bot) || dynamic_cast<Player*>(unit))
         return false;
 
-	if (unit->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_SPIRITHEALER))
+	if (UnitHasNpcFlagW1Compat(unit, UNIT_NPC_FLAG_SPIRITHEALER))
 		return false;
 
     for (std::vector<uint32>::iterator i = allowedNpcFlags.begin(); i != allowedNpcFlags.end(); ++i)
     {
-		if (unit->HasFlag(UNIT_NPC_FLAGS, *i)) return true;
+		if (UnitHasNpcFlagW1Compat(unit, *i)) return true;
     }
 
     if (urand(1, 100) < 25 && sServerFacade.IsFriendlyTo(unit, bot))

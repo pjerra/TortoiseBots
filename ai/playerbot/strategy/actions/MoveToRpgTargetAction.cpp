@@ -9,6 +9,7 @@
 #include "playerbot/strategy/values/FreeMoveValues.h"
 #include "playerbot/strategy/values/FishValues.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TbCompatRIDE.h"
 
 using namespace ai;
 
@@ -148,7 +149,7 @@ bool MoveToRpgTargetAction::Execute(Event& event)
     }
 
 	if (sPlayerbotAIConfig.RandombotsWalkingRPG)
-        if (!bot->GetTerrain()->IsOutdoors(bot->getPositionX(), bot->getPositionY(), bot->getPositionZ()))
+        if (!IsOutdoorsCompat(bot))
             bot->m_movementInfo.AddMovementFlag(MOVEFLAG_WALK_MODE);
 
     float angle;
@@ -158,7 +159,7 @@ bool MoveToRpgTargetAction::Execute(Event& event)
     {
         if (!unit || !IsMovingCompat(unit))
             angle = GetAngleCompat(wo, bot) + (M_PI * irand(-25, 25) / 100.0); //Closest 45 degrees towards the target
-        else if (!unit->HasInArc(bot))
+        else if (!HasInArcCompat(unit, bot, float(M_PI)))
             angle = wo->getOrientation() + (M_PI * irand(-10, 10) / 100.0); //20 degrees infront of target (leading it's movement)
         else
             angle = GetAngleCompat(wo, bot); //Current approuch angle.

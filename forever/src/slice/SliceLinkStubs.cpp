@@ -50,7 +50,9 @@
 #include "playerbot/strategy/values/BudgetValues.h"
 #include "../../../runtime/GuildOrderStore.h"
 #include "../../../runtime/GuildOrderAccess.h"
+#include "playerbot/strategy/actions/GuildCreateActions.h"
 #include "playerbot/strategy/actions/GuildOrderBuyAction.h"
+#include "../../../runtime/DowntimeService.h"
 #include "playerbot/strategy/triggers/RpgTriggers.h"
 #include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/UseMeetingStoneAction.h"
@@ -445,9 +447,19 @@ bool TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid) { return false; 
 #include "playerbot/TravelMgr.h"
 namespace ai
 {
-// TrainerValues.cpp (its spell map scans the 1.12 trainer templates) is not in the slice; these three are its plain helpers.
+// TrainerValues.cpp (its spell map scans the 1.12 trainer templates) is not in the slice; these are its plain helpers.
 uint32 TrainerSpellPrice(TrainerSpell const* tSpell, float discountMod) { return uint32(floor(tSpell->spellCost * discountMod)); }
 bool TrainerTrainsForFree(PlayerbotAI* ai) { return sPlayerbotAIConfig.autoTrainSpells == "free" || ai->HasCheat(BotCheatMask::gold); }
+// The visit's green-row gate. On ForeverCore the visit asks the host seam instead (TrainerAction checks
+// UsesForeverTrainerCompat and CanTeachTrainerSpellForeverCompat), so this body is only reached on a core without the
+// seam: no row is teachable then, which keeps the visit from paying for one.
+bool TrainerSpellLearnableNow(Player* bot, TrainerSpell const* tSpell)
+{
+    (void)bot;
+    (void)tSpell;
+    NoteMisc();
+    return false;
+}
 uint32 TrainerSpendableMoney(PlayerbotAI* ai, TrainerType type)
 {
     if (TrainerTrainsForFree(ai))
@@ -490,8 +502,12 @@ bool AuctionReentryAllowed(uint32_t, uint32_t) { NotePool(); return true; }
 
 namespace ai
 {
-bool RpgTrainTrigger::IsTrainerOf(CreatureInfo const*, Player*) { NoteMisc(); return false; }
-bool RpgTrainTrigger::TeachesAffordableSpell(PlayerbotAI*, GuidPosition, Player*) { NoteMisc(); return false; }
+// FishValues.cpp (the fishing order session) is not in the slice: no order fishes, so the rpg walk never stands down for
+// one. Owner: ai/playerbot/strategy/values/FishValues.cpp.
+bool IsOrderFishing(PlayerbotAI*) { NoteMisc(); return false; }
+// GuildCreateActions.cpp (the charter errands) is not in the slice: no petition can be bought. Owner:
+// ai/playerbot/strategy/actions/GuildCreateActions.cpp.
+bool BuyPetitionAction::canBuyPetition(Player*) { NoteMisc(); return false; }
 Unit* GuildOrderAuctioneerNear(PlayerbotAI*, Player*) { NotePool(); return nullptr; }
 uint32 OrderMailboxItems(Player*, uint32) { NotePool(); return 0; }
 std::vector<GuildOrderZoneSlice> GuildOrderZonesFor(int32_t) { NotePool(); return {}; }
@@ -506,6 +522,13 @@ TortoiseBots::GuildOrders::SourcePlan PlanGuildOrderSources(Player*, uint32_t, T
     return plan;
 }
 void AdvanceGuildOrderAfterAuction(PlayerbotAI*, Player*, TortoiseBots::GuildOrders::OrderRecord const&, TortoiseBots::GuildOrders::OrderReason) { NotePool(); }
+}
+
+// DowntimeService (runtime/DowntimeService.cpp) is not in the slice: no errand window is ever open, so the rpg quest
+// verbs stay on (the same answer a server without `.tb downtime` gives).
+namespace TortoiseBots
+{
+bool DowntimeService::IsDowntimeActive(PlayerbotAI*) { NoteMisc(); return false; }
 }
 
 // RandomBotFacade (runtime/PlayerbotRuntimeFacade.cpp): no per-bot value store and no pinned-bot set.
