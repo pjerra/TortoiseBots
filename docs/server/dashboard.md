@@ -35,7 +35,7 @@ While `TortoiseBots.Dashboard.Enable = 0` nothing is built or sent.
 
 ## Module settings
 
-All keys live in `modules/tortoise_bots.conf`:
+All keys live in `worldserver.conf.d/tortoisebots.conf`:
 
 | Key | Default | Meaning |
 | :--- | :---: | :--- |
@@ -178,7 +178,7 @@ Selected REST endpoints (login required, same GM rank):
 - `GET /api/v1/armory/bots`, `/api/v1/armory/bot/{guid}`
 - `GET /api/v1/commanders`, `/api/v1/dungeons`, `/api/v1/raids`
 - `GET /api/v1/dungeon-runs`, `/api/v1/dungeon-runs/<map>/runs`
-- `GET /api/v1/activity`, `/activity/loot`, `/activity/quests`
+- `GET /api/v1/activity`, `/api/v1/activity/loot`, `/api/v1/activity/quests`
 - `GET /api/v1/auctions`
 - `WS /api/v1/stream`
 

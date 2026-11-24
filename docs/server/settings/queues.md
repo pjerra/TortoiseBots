@@ -37,25 +37,25 @@ For what the bots do, see [Dungeon & battleground queues](../../world/queues.md)
 
 ### `AiPlayerbot.RandomBotLftEnabled`
 Enables the dungeon-party fill.
-**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** not needed
+**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
 The fill only answers a player who queues with `.bot lfg join`; it never queues a bot on its own. With the key at `0` the queue refuses joins and no bot is grouped.
 
 ### `AiPlayerbot.RandomBotLftUpdateInterval`
 Milliseconds between fill passes.
-**Default:** `15000` · **Values:** 5000 to 60000 (a value outside is clamped) · **Restart:** not needed
+**Default:** `15000` · **Values:** 5000 to 60000 (a value outside is clamped) · **Restart:** needed
 
 Each pass tops up every waiting player by at most the per-pass budget below. The pass also runs at once when a player queues.
 
 ### `AiPlayerbot.RandomBotLftMaxFillsPerInterval`
 Most bots the fill groups per pass.
-**Default:** `1` · **Values:** 0 to 5 (a larger value is read as 5) · **Restart:** not needed
+**Default:** `1` · **Values:** 0 to 5 (a larger value is read as 5) · **Restart:** needed
 
 `0` keeps the queue running but groups nobody.
 
 ### `AiPlayerbot.RandomBotLftAllowRoleBorrow`
 Lets the fill pull a bot into a role its own spec does not cover.
-**Default:** `0` · **Values:** `0` strict, `1` allow borrowing · **Restart:** not needed
+**Default:** `0` · **Values:** `0` strict, `1` allow borrowing · **Restart:** needed
 
 At `0` a bot fills only a slot its spec covers. At `1` a missing tank may be a warrior, protection paladin or druid, and a missing healer a paladin, priest, shaman or druid; the bot is rebuilt into that role's kit and gets its own kit back when the party ends. Only the bot's own spec is a natural fit either way.
 
@@ -124,4 +124,4 @@ These keys appear in the Turtle version's config, and the Forever template does 
 | `AiPlayerbot.RandomBotBgQueueInterval` | Cadence of the old autonomous seeder. |
 | `AiPlayerbot.RandomBotBgMaxQueuePerInterval` | Budget of the old autonomous seeder. |
 | `AiPlayerbot.WsgFlagRoles` | The old split of a Warsong Gulch team into attackers, defenders and midfielders. No battleground objective rows exist here. |
-| `AiPlayerbot.HireAllowPvP` | The old switch for hired companions in battlegrounds. Companions now queue and enter with their owner's group, and leave with it. |
+| `AiPlayerbot.HireAllowPvP` | The old switch for hired companions in battlegrounds. No bot is hired on this build, so it changes nothing. |

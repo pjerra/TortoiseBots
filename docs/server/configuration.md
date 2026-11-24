@@ -65,14 +65,14 @@ Every setting is documented in a settings page:
 | Settings Category | Configuration File | What It Covers |
 | :--- | :--- | :--- |
 | [Party & quality-of-life](settings/party.md) | `aiplayerbot.conf` | Owned bot management, follow catching up, pack holds, and party loot. |
-| [Mercenary hiring & recruiters](settings/hiring.md) | `aiplayerbot.conf` | Companion hiring costs, raid composition presets, gear tiers, and world buffs. |
+| [Mercenary hiring & recruiters](settings/hiring.md) | `aiplayerbot.conf` | Not on WoW Forever yet: no bot can be hired, so these settings change nothing. |
 | [Class behaviour](settings/class-behaviour.md) | `aiplayerbot.conf` | Class-specific AI rules for hunters, paladins, rogues, warlocks, and warriors. |
-| [Dungeons & raids](settings/dungeons-raids.md) | `aiplayerbot.conf` | Creature aura hazard avoidance, bomb dispersal, hazard evasion, and custom raid tactics. |
+| [Dungeons & raids](settings/dungeons-raids.md) | `aiplayerbot.conf` | Creature aura hazards, crowd control, bomb runout, raid reactions, and the fight monitor. |
 | [Combat & reaction thresholds](settings/combat.md) | `aiplayerbot.conf` | Health and mana lines, follow distances, casting pacing, and commanded pulls. |
 | [World population & immersion](settings/world-population.md) | `aiplayerbot.conf` + `tortoisebots.conf` | Pool sizing, wander limits, greetings, guilds, and gear upkeep. |
 | [Economy & auction house](settings/economy.md) | `aiplayerbot.conf` | The bot-run Auction House market, vendor trips, mounts and gear upkeep. |
 | [Guild orders](settings/guild-orders.md) | `tortoisebots.conf` | The shared bot rank and guild bank access. |
-| [Dungeon finder & battlegrounds](settings/queues.md) | `aiplayerbot.conf` | Looking for Turtles (LFT) autofill and battleground queues. |
+| [Dungeon finder & battlegrounds](settings/queues.md) | `aiplayerbot.conf` + `tortoisebots.conf` | Dungeon-party fill (`.bot lfg`) and battleground queues. |
 | [Performance & tick budget](settings/performance.md) | `aiplayerbot.conf` + `worldserver.conf` | Per-tick AI turn limits and self-tuning tick controllers. |
 | [Diagnostic logging](settings/logging.md) | `aiplayerbot.conf` + `tortoisebots.conf` | Module log levels, telemetry streams, CSV logs, and per-bot action log rotation. |
 

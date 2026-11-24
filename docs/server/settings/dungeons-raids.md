@@ -23,21 +23,25 @@ Every value is read when the bot engine starts, so a change needs a server resta
 | Setting | Default | What it does |
 | :--- | :---: | :--- |
 | [`AiPlayerbot.AvoidCreatureAuras`](#aiplayerbotavoidcreatureauras) | `1` | Bots keep out of permanent damaging creature auras and hazardous monsters. |
+| [`AiPlayerbot.BombRunoutDistance`](#aiplayerbotbombrunoutdistance) | `30` | Yards a bomb carrier must be clear of the group before its debuff may be cured. |
 | [`AiPlayerbot.BotGossipNpcs`](#aiplayerbotbotgossipnpcs) | *(empty)* | Allowlist of NPCs a commanded bot may talk to for its gossip order. |
 | [`AiPlayerbot.CombatMonitor`](#aiplayerbotcombatmonitor) | `0` | Per-fight combat numbers of every bound group for the dashboard. |
 | [`AiPlayerbot.CombatTimeline`](#aiplayerbotcombattimeline) | `0` | The boss timeline in each fight record: health, target changes and watched auras. |
 | [`AiPlayerbot.DungeonRunAuraGatedTargets`](#aiplayerbotdungeonrunauragatedtargets) | `0` | Bots without a row's aura leave the unit that needs it alone. |
+| [`AiPlayerbot.DungeonRunAutoCc`](#aiplayerbotdungeonrunautocc) | `0` | A crowd-control mark is not cast on a unit the party has dotted. |
 | [`AiPlayerbot.DungeonRunCarrierHold`](#aiplayerbotdungeonruncarrierhold) | `0` | A cursed bot keeps its own Shade instead of switching to the raid's focus. |
 | [`AiPlayerbot.DungeonRunCharmYield`](#aiplayerbotdungeonruncharmyield) | `0` | A charmed bot stops playing, and the party leaves charmed members alone. |
 | [`AiPlayerbot.DungeonRunCureIgnoresThreat`](#aiplayerbotdungeonruncureignoresthreat) | `0` | Party cures and dispels are not held back by the damage threat limit. |
 | [`AiPlayerbot.DungeonRunFightForward`](#aiplayerbotdungeonrunfightforward) | `1` | After a won fight the next pack close by is pulled from where the tank stands. |
 | [`AiPlayerbot.DungeonRunLightRest`](#aiplayerbotdungeonrunlightrest) | `1` | Before a small pull the party rests to light lines instead of the full ones. |
+| [`AiPlayerbot.DungeonRunLinkedDeath`](#aiplayerbotdungeonrunlinkeddeath) | `0` | The run leader treats a "die together" group of boss units as one fight. |
 | [`AiPlayerbot.DungeonRunMaxMinutes`](#aiplayerbotdungeonrunmaxminutes) | `180` | Time limit of a run (`0` = none). |
 | [`AiPlayerbot.DungeonRunNearWipeStop`](#aiplayerbotdungeonrunnearwipestop) | `2` | Near wipes within the window that pause a run once the fight is over. |
 | [`AiPlayerbot.DungeonRunNearWipeStopMinutes`](#aiplayerbotdungeonrunnearwipestopminutes) | `10` | The near-wipe stop's window, in minutes of running time. |
 | [`AiPlayerbot.DungeonRunNearWipeStopParty`](#aiplayerbotdungeonrunnearwipestopparty) | `0` | `1`: a party run gets the near-wipe stop too; `0`: it never happens. |
 | [`AiPlayerbot.DungeonRunPackClearMarginYd`](#aiplayerbotdungeonrunpackclearmarginyd) | `10` | The band around a pull step's radius in which a living unit still counts. |
 | [`AiPlayerbot.DungeonRunPackClearRepulls`](#aiplayerbotdungeonrunpackclearrepulls) | `3` | Residue pulls a pull step may send before it pauses for a human. |
+| [`AiPlayerbot.DungeonRunPlaceUnstick`](#aiplayerbotdungeonrunplaceunstick) | `0` | A bot whose path is cut off is put beside its master instead of staying stuck. |
 | [`AiPlayerbot.DungeonRunPlayerLed`](#aiplayerbotdungeonrunplayerled) | `1` | Lets a player who leads his own party start a player-led run. |
 | [`AiPlayerbot.DungeonRunPlayerLedAwayMinutes`](#aiplayerbotdungeonrunplayerledawayminutes) | `10` | How long the leading player may be away before the run stops. |
 | [`AiPlayerbot.DungeonRunPlayerLedPullYd`](#aiplayerbotdungeonrunplayerledpullyd) | `40` | How close he stands to a pack or boss for the run to pull it. |
@@ -47,6 +51,8 @@ Every value is read when the bot engine starts, so a change needs a server resta
 | [`AiPlayerbot.DungeonRunThreatSuccessorNotHolder`](#aiplayerbotdungeonrunthreatsuccessornotholder) | `0` | The threat line is drawn against the tank the boss is not hitting. |
 | [`AiPlayerbot.DungeonRunThreatSuccessorStrict`](#aiplayerbotdungeonrunthreatsuccessorstrict) | `0` | The white-damage stop on the threat line holds until the bot drops well below it. |
 | [`AiPlayerbot.DungeonRunWalkBackAfterWonFight`](#aiplayerbotdungeonrunwalkbackafterwonfight) | `0` | `1`: after a won fight the party walks back to the stand (the old way). |
+| [`AiPlayerbot.RaidReactions`](#aiplayerbotraidreactions) | `0` | Every bot reacts to raid hazards: traps, bombs, dragon breath, spread and Four Horsemen marks. |
+| [`AiPlayerbot.RaidTankHealerAssist`](#aiplayerbotraidtankhealerassist) | `0` | A second healer on a tank helps injured raid members while the tank is safe. |
 | [`AiPlayerbot.RangedReachHoverTarget`](#aiplayerbotrangedreachhovertarget) | `0` | A ranged damage dealer closes under a hovering boss inside a dungeon. |
 
 ## Settings
@@ -71,6 +77,17 @@ Two creatures are listed:
 - An explicit attack order on that creature is never refused and never set aside.
 
 Off: bots treat the creatures like any other mob.
+
+</details>
+
+### `AiPlayerbot.BombRunoutDistance`
+How far a bomb carrier must be from the group before its bomb debuff may be cured.
+**Default:** `30` · **Values:** yards · **Restart:** needed
+
+<details>
+<summary>How it works in detail</summary>
+
+Some debuffs drop a damaging cloud where they end (Mutating Injection in Naxxramas). Before a cure removes one, the party waits until its carrier stands at least this many yards from the nearest group member, so the cloud lands away from the group. A boss-tactic `clear` row that names its own distance overrides this value for that fight.
 
 </details>
 
@@ -126,7 +143,7 @@ Needs [`AiPlayerbot.CombatMonitor`](#aiplayerbotcombatmonitor). The fight record
 - `victims`: one row per change of the boss's target, with the unit and whether it was a tank, healer, damage dealer, a player, a pet or nobody; at most 400 rows.
 - `auras`: an apply or a remove of a watched aura on a bot of the group; at most 1000 rows.
 
-Past a cap the oldest row is dropped. The watched spells are the rows of the world table `ai_combat_aura_watch` (read once at startup), never spell ids in code. The shipped rows are Zul'Gurub's Mark of Arlokk, Delusions of Jin'do, Banish, Poisonous Blood, Cause Insanity, Corrupted Blood, Hex and Brain Wash; more auras are added with a database update.
+Past a cap the oldest row is dropped. The watched spells are the rows of the world table `ai_combat_aura_watch` (read once at startup), never spell ids in code. The Forever build ships no rows for that table, so on a stock database the timeline records no aura rows and the module logs one warning at startup; add rows to watch auras.
 
 </details>
 
@@ -146,6 +163,19 @@ Some creatures take damage only from a player who carries a certain aura (Jin'do
 - a healer weighs a group member that such a unit is hitting higher
 
 Off: bots target it like any other creature and their damage is wasted.
+
+</details>
+
+### `AiPlayerbot.DungeonRunAutoCc`
+A crowd-control mark is not cast on a unit the party has already dotted.
+**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+
+<details>
+<summary>How it works in detail</summary>
+
+With this on, a bot assigned to crowd-control a unit skips the cast while the group's damage-over-time effects are on it: their ticks would break the hold the moment it lands. The mark stays assigned; only the cast waits. Fear and banish are exempt, because damage does not break them.
+
+Off: a marked unit is controlled even when the party has dotted it.
 
 </details>
 
@@ -218,6 +248,19 @@ The light lines are 60% health, 35% healer mana and 25% mana, up to 75/60/45. Be
 
 </details>
 
+### `AiPlayerbot.DungeonRunLinkedDeath`
+The run leader treats a "die together" group of boss units as one fight.
+**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+
+<details>
+<summary>How it works in detail</summary>
+
+With this on, the run leader reads the linked-death groups from the world database's boss-tactic rows. It reports the group's units together by health, records which of them fall and when, and never sends a straggler pull at one member alone: the group is fought together.
+
+The Forever SQL creates the boss-tactic table but ships no rows for it, so on a stock database there is nothing to group. Other boss-tactic rows still do nothing here; see [Not on WoW Forever yet](#not-on-wow-forever-yet).
+
+</details>
+
 ### `AiPlayerbot.DungeonRunMaxMinutes`
 How long a run may last before it ends by itself.
 **Default:** `180` · **Values:** minutes; `0` = no limit · **Restart:** needed
@@ -268,6 +311,17 @@ How many residue pulls a pull step may send before it pauses for a human.
 **Default:** `3` · **Values:** `1`-`10` pulls · **Restart:** needed
 
 Only read while [`AiPlayerbot.DungeonRunPackClearMarginYd`](#aiplayerbotdungeonrunpackclearmarginyd) is above `0`.
+
+### `AiPlayerbot.DungeonRunPlaceUnstick`
+Puts a bot whose path is cut off beside its master instead of leaving it stuck.
+**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+
+<details>
+<summary>How it works in detail</summary>
+
+In a dungeon or raid, a bot whose moves have failed to start for 10 seconds is teleported beside its master, keeping its combat state and its pet. Off: the bot keeps failing those moves.
+
+</details>
 
 ### `AiPlayerbot.DungeonRunPlayerLed`
 Lets a player who leads his own party start a player-led run.
@@ -360,6 +414,36 @@ A bot whose auto-attack, Shoot or Auto Shot was stopped on the threat line does 
 Whether the run walks the party back to the guard's stand point after every guarded fight.
 **Default:** `0` · **Values:** `0` no walk back once the step's pack is cleared, `1` the old walk back · **Restart:** needed
 
+### `AiPlayerbot.RaidReactions`
+Adds the raid survival reactions to every bot.
+**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+
+<details>
+<summary>How it works in detail</summary>
+
+With this on, every bot's reaction engine gets the raid rows at emergency priority:
+
+- step out of an environmental hazard (a brazier and the like), in or out of combat;
+- run a bomb debuff clear of the raid;
+- flank a dragon's breath attack;
+- spread out when the raid must not stack;
+- rotate away from a Four Horsemen mark at three stacks.
+
+Off: the engine has no reaction rows, as before.
+
+</details>
+
+### `AiPlayerbot.RaidTankHealerAssist`
+Lets a second healer on a tank help the raid while that tank is safe.
+**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+
+<details>
+<summary>How it works in detail</summary>
+
+A bound raid's layout can put two or more healers on one tank. Only the tank's first healer stays on it; with this on, a second seat may heal a raid member it can see and reach who is below 70% health, while the tank is alive, off the boss and at 90% health or more after the damage it is taking. A player who edits the tank's focus list keeps the tank healer but loses this assist.
+
+</details>
+
 ### `AiPlayerbot.RangedReachHoverTarget`
 A ranged damage dealer closing on a hovering boss inside a dungeon walks under it instead of standing still out of range.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
@@ -377,10 +461,13 @@ One `BossReachHover` row per bot per 5 seconds goes to `bot_events.csv` when tha
 
 These settings exist in the configuration file but do nothing on the WoW Forever build:
 
-- **Per-boss tactics rows** from the `ai_boss_tactic` table (interrupt, kill first, stay behind, spread, tank post, seek, burn mana, ranged only, use object, tank swap, add crew, gate hold, heal reserve, avoid cast, pull gate, linked death), and their keys: `DungeonTactics`, `EnableCustomRaidTactics`, `DungeonRunBossSpread`, `DungeonRunBossSpreadSlots`, `DungeonRunBossProtectionPotion`, `DungeonRunBurnMana`, `DungeonRunRangedOnly`, `DungeonRunAvoidCastAll`, `DungeonRunHealReserve`, `DungeonRunAddCrew`, `DungeonRunGateHold`, `DungeonRunKillFirstGrid`, `DungeonRunUseObject`, `DungeonRunTankSwap`, `DungeonRunTankPost` (with its `HoldSpot`, `Leash`, `OwnsSubject`, `OwnsUnit`, `Main`, `KeepsUnit`, `Taunts`, `Walks`, `Waits` and `Healers` keys), `DungeonRunPullGate`, `DungeonRunTauntAfterSkipsMain`, `DungeonRunAuraTactics`, `DungeonRunLinkedDeath` (the "die together" damage rule), `DungeonRunSeekAura`, `DungeonRunSeekPullCycle`, `DungeonRunSeekSonMeet` (with `MeetTakeReach`, `MeetPrePlace`, `MeetPrePlaceLate`, `MeetPrePlaceHold`, `ShotWaitsReceiver`, `MeetNoHeal` and `TakenSonThreatCap`), `DungeonRunSeekTakeEdge`, `DungeonRunSeekNearestTake`, `DungeonRunSeekNearestTakeReach`, `DungeonRunSeekVictimRelief`, `DungeonRunSeekWalkoutFocus`, `DungeonRunSeekWalkoutHoldCombat`, `DungeonRunSeekWalkoutFaceCast`, `DungeonRunSeekWalkoutStandLog`, `DungeonRunSeekWalkoutStandSight`, `DungeonRunSeekSiphonClock`, `DungeonRunSeekCycleRoll`, `DungeonRunThreatResetWindow`, `DungeonRunCarrierStrike`, `DungeonRunCarrierScan`, `DungeonRunShadeHealerCover`, `DungeonRunImmuneBossVictimEscape`, `FankrissSwapStacks`, `PatchwerkOpeningDelay`, `OnyxiaWhelpsAndEggs`, `BossTacticsKeepsEngagedBoss`, `DungeonRunFactJudgeCharmedLead`. **Not on WoW Forever yet.**
+- **Boss tactics (general):** the per-boss rows of the `ai_boss_tactic` table (interrupt, kill first, stay behind, spread, tank post, burn mana, ranged only, use object, tank swap, add crew, gate hold, heal reserve, avoid cast, pull gate) do nothing for bots, and so do their keys: `DungeonTactics`, `EnableCustomRaidTactics`, `DungeonRunBossSpread`, `DungeonRunBossSpreadSlots`, `DungeonRunBossProtectionPotion`, `DungeonRunBurnMana`, `DungeonRunRangedOnly`, `DungeonRunAvoidCastAll`, `DungeonRunHealReserve`, `DungeonRunAddCrew`, `DungeonRunGateHold`, `DungeonRunKillFirstGrid`, `DungeonRunUseObject`, `DungeonRunTankSwap`, `DungeonRunTankPost` (with its `HoldSpot`, `Leash`, `OwnsSubject`, `OwnsUnit`, `Main`, `KeepsUnit`, `Taunts`, `Walks`, `Waits` and `Healers` keys), `DungeonRunPullGate`, `DungeonRunTauntAfterSkipsMain`, `DungeonRunAuraTactics`. **Not on WoW Forever yet.**
+- **Boss tactics (seek and Hakkar):** `DungeonRunSeekAura`, `DungeonRunSeekPullCycle`, `DungeonRunSeekSonMeet` (with `MeetTakeReach`, `MeetPrePlace`, `MeetPrePlaceLate`, `MeetPrePlaceHold`, `ShotWaitsReceiver`, `MeetNoHeal` and `TakenSonThreatCap`), `DungeonRunSeekTakeEdge`, `DungeonRunSeekNearestTake`, `DungeonRunSeekNearestTakeReach`, `DungeonRunSeekVictimRelief`, `DungeonRunSeekWalkoutFocus`, `DungeonRunSeekWalkoutHoldCombat`, `DungeonRunSeekWalkoutFaceCast`, `DungeonRunSeekWalkoutStandLog`, `DungeonRunSeekWalkoutStandSight`, `DungeonRunSeekSiphonClock`, `DungeonRunSeekCycleRoll`. **Not on WoW Forever yet.**
+- **Boss tactics (threat, carrier and encounter extras):** `DungeonRunThreatResetWindow`, `DungeonRunCarrierStrike`, `DungeonRunCarrierScan`, `DungeonRunShadeHealerCover`, `DungeonRunImmuneBossVictimEscape`, `FankrissSwapStacks`, `PatchwerkOpeningDelay`, `OnyxiaWhelpsAndEggs`, `BossTacticsKeepsEngagedBoss`, `DungeonRunFactJudgeCharmedLead`. **Not on WoW Forever yet.**
 - **Boss stand seats** from the `ai_boss_stand` table: `BossStandOutranksBreathDodge`, `BossStandEvents`, `BossStandWholeRaid`. **Not on WoW Forever yet.**
-- **Raid runs:** `DungeonRunRaid`, `DungeonRunRaidBossRules`, `DungeonRunRaidHealerGuard`, `RaidHealerSeatsByClass`, `RaidTankHealerAssist`. **Not on WoW Forever yet.**
+- **Raid runs:** `DungeonRunRaid`, `DungeonRunRaidBossRules`, `DungeonRunRaidHealerGuard`, `RaidHealerSeatsByClass`. **Not on WoW Forever yet.**
 - **Bot LFG groups:** `BotLfgGroups`, `BotLfgChat`, `BotLfgFillAfterMinutes`, `BotLfgGroupsPer100Bots`, `BotLfgMaxGroups`, `BotLfgOnlyWithPlayersOnline`. **Not on WoW Forever yet.**
-- **The run leader's own switches:** `DungeonSelfClear`, `DungeonRunAggroEstimate`, `DungeonRunAggroCeiling`, `DungeonRunAggroRingYd`, `DungeonRunAggroWalkRing`, `DungeonRunAutoCc`, `DungeonRunAutoCcAbove`, `DungeonRunAutoCcRisky`, `DungeonRunStragglerPull`, `DungeonRunRespawnNest`, `DungeonRunTotemFocus`, `DungeonRunPackFocusSparesTacticUnits`, `DungeonRunPullStand`, `DungeonRunStandClearance`, `DungeonRunStandDiscipline`, `DungeonRunStandPullPreCc`, `DungeonRunRezHold`, `DungeonRunLootFfa`, `DungeonRunGiveItems`, `DungeonRunBotKeysForPlayers`, `DungeonRunWalkBackRescue`, `DungeonRunDryWalk`, `RunTeleportReturnYd`, `DungeonReviveHoldYd`, `DungeonRunPlaceUnstick`. **Not on WoW Forever yet.**
-- **Other combat extras:** `BombRunoutDistance`, `HazardEvasionDistance`, `RaidReactions`, `ReactionHealCastGuardPct`, `AirborneWandYieldsToNukes`, `HoverCastHoldsSpread`, `SpreadRangedMinRange`, `RaidEntryByCommander`. **Not on WoW Forever yet.**
+- **Run leader: aggro and pulls:** `DungeonSelfClear`, `DungeonRunAggroEstimate`, `DungeonRunAggroCeiling`, `DungeonRunAggroRingYd`, `DungeonRunAggroWalkRing`, `DungeonRunAutoCcAbove`, `DungeonRunAutoCcRisky`, `DungeonRunStragglerPull`, `DungeonRunRespawnNest`, `DungeonRunTotemFocus`, `DungeonRunPackFocusSparesTacticUnits`, `DungeonRunPullStand`, `DungeonRunStandClearance`, `DungeonRunStandDiscipline`, `DungeonRunStandPullPreCc`. **Not on WoW Forever yet.**
+- **Run leader: loot, death and recovery:** `DungeonRunRezHold`, `DungeonRunLootFfa`, `DungeonRunGiveItems`, `DungeonRunBotKeysForPlayers`, `DungeonRunWalkBackRescue`, `DungeonRunDryWalk`, `RunTeleportReturnYd`, `DungeonReviveHoldYd`. **Not on WoW Forever yet.**
+- **Other combat extras:** `HazardEvasionDistance`, `ReactionHealCastGuardPct`, `AirborneWandYieldsToNukes`, `HoverCastHoldsSpread`, `SpreadRangedMinRange`, `RaidEntryByCommander`. **Not on WoW Forever yet.**
 - **Scripted area triggers for bots** (`BotAreaTriggers`), including a run's own trigger steps: the script never runs. **Not on WoW Forever yet.**

@@ -15,7 +15,7 @@ relates_to:
 
 On the Forever build the world's bot population is the module's own pool, configured in `tortoisebots.conf`. The Turtle version's random-bot population keys (`AiPlayerbot.MinRandomBots` and its neighbours) were never ported and are not read here.
 
-Free bots only act on their own when the engine is on: `TortoiseBots.Enable = 1`, the pool enabled and started, and `TortoiseBots.Slice.EngineByDefault = 1` (or `.tb engine <bot> on`). See [Living world & autonomous bots](../../world/living-world.md#before-anything-moves).
+Free pool bots run the bot engine automatically once `TortoiseBots.Enable = 1` and the pool is enabled and started; they do not need `TortoiseBots.Slice.EngineByDefault = 1` or `.tb engine <bot> on`. A player's own bot (`.bot add`) runs it too. Only a bot a GameMaster logs in by hand stays on the simple follow-and-assist behaviour unless that switch is on or `.tb engine <bot> on` is used. See [Living world & autonomous bots](../../world/living-world.md#before-anything-moves).
 
 ## Population: the pool
 
@@ -106,6 +106,12 @@ Keeps bots from walking single file along the same line. Instances and very shor
 ### `AiPlayerbot.HuntRares`
 Lets a free bot go for a living rare creature of its level within sight.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
+
+### `AiPlayerbot.AllowRepairedTaxiPaths`
+Lets a bot board the two taxi paths whose data needs repair.
+**Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+
+Bots do fly taxi routes. Two paths in the shipped flight data are incomplete (paths 274 and 355: missing node data). At `0` a bot refuses to board a flight that uses either path; at `1` it may fly them, which assumes the core has repaired that data.
 
 ### `AiPlayerbot.StuckTravelTeleport`
 Lets a stuck masterless bot skip the rest of a trip.
@@ -219,7 +225,7 @@ Allows PvP rank items in generated or looted gear.
 Hunter and warlock pets train themselves on every level-up.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
-Pool bots and hired companions only; your own alts keep what you taught them.
+Applies to every bot the module trains, pool and owned alike; there are no hired companions on this build, and `AiPlayerbot.PetAutoTrainAlts` does nothing.
 
 ### `AiPlayerbot.AutoTrainSpells`
 What a bot does at a class trainer.
@@ -263,232 +269,82 @@ These switch the host-side life of free bots. `.reload config` re-reads them.
 
 ## Keys the Forever build does not act on
 
-The generated [key census](../config-keys.md) lists every advertised key and whether a compiled part of the build reads it. The keys below are shipped in the Forever template or were carried over from the Turtle version, but nothing acts on them here, so setting one changes nothing. They are grouped so a reader coming from the Turtle docs finds what replaced them.
-
-### `AiPlayerbot.MinRandomBots` / `MaxRandomBots`
-Do nothing. Population is the pool: `TortoiseBots.Pool.TargetOnline` and `TortoiseBots.Pool.MaxCharacters` above.
-
-### `AiPlayerbot.RandomBotAutologin`
-Does nothing. The pool scheduler logs bots in; start it with `.tb pool start`.
-
-### `AiPlayerbot.RandomBotLoginWithPlayer`
-Does nothing. The pool schedule owns logins.
-
-### `AiPlayerbot.RandomBotLoginAtStartup`
-Does nothing. The pool schedule owns logins.
-
-### `AiPlayerbot.RandomBotAutoCreate`
-Does nothing. Pool characters are made by `.tb pool create` and the pool's refill.
-
-### `AiPlayerbot.RandomBotPoolReset`
-Does nothing. The reset is `TortoiseBots.Pool.Reset`, read only at world startup.
-
-### `AiPlayerbot.RandomBotAccountPrefix`
-Does nothing. The pool creates its own accounts (the `TBPOOL<nnnn>` pattern).
-
-### `AiPlayerbot.PinnedBots`
-Does nothing. No rotation table reads it.
-
-### `AiPlayerbot.RandomBotStartLevelMin` / `RandomBotStartLevelMax`
-Do nothing. Pool characters are created at level 1 and level up by playing.
-
-### `AiPlayerbot.LevelLadder`
-Keeps its line in the template but nothing acts on it: the dashboard only reports its value. There is no level ladder on this build.
-
-### `AiPlayerbot.LevelLadderBandSize`
-Does nothing. See `LevelLadder`.
-
-### `AiPlayerbot.LevelLadderMaxLevelShare`
-Does nothing. See `LevelLadder`.
-
-### `AiPlayerbot.LevelLadderLogMinutes`
-Does nothing. See `LevelLadder`.
-
-### `AiPlayerbot.RandomBotLineage`
-Does nothing. There are no lineage alts on this build.
-
-### `AiPlayerbot.LineageLowBandReserve`
-Does nothing. See `RandomBotLineage`.
-
-### `AiPlayerbot.LineagePerHour`
-Does nothing. See `RandomBotLineage`.
-
-### `AiPlayerbot.LineagePoolCeiling`
-Does nothing. See `RandomBotLineage`.
-
-### `AiPlayerbot.LineageJoinParentGuild`
-Does nothing. See `RandomBotLineage`.
-
-### `AiPlayerbot.RandomBotTimedLogout`
-Keeps its line in the template but nothing acts on it: the pool's session lengths decide logouts.
-
-### `AiPlayerbot.MaxRandomBotInWorldTime`
-Does nothing. See `RandomBotTimedLogout`.
-
-### `AiPlayerbot.MinRandomBotRandomizeTime` / `MaxRandomBotRandomizeTime`
-Do nothing. There is no unseeded-gear backstop sweep.
-
-### `AiPlayerbot.RandomBotStallRelogMinutes`
-Does nothing. There is no experience-stall relog.
-
-### `AiPlayerbot.RandomBotMaxLevel`
-Does nothing. The gear tables are capped by `RandomGearMaxLevel`.
-
-### `AiPlayerbot.minEnchantingBotLevel`
-Does nothing. Gear enchanting comes from the profession upkeep (`TortoiseBots.World.EnchantGear`), not from a seed roll.
-
-### `AiPlayerbot.EnableRandomTeleports`
-Does nothing. New pool characters are not scattered; they start at their race's start position.
-
-### `AiPlayerbot.RandomBotEvenStartZones`
-Does nothing. The pool's character composition decides race and start zone.
-
-### `AiPlayerbot.RandomBotStartZoneWeights`
-Does nothing. See `RandomBotEvenStartZones`.
-
-### `AiPlayerbot.RandomBotFactionRatio`
-Does nothing. Pool composition balances the factions.
-
-### `AiPlayerbot.RelocateHopelessDeaths`
-Does nothing.
-
-### `AiPlayerbot.AbandonedInstanceGraceSec`
-Does nothing. Free-bot instance entry is capped by `TortoiseBots.Free.MaxPerMap.*` instead.
-
-### `AiPlayerbot.AmmoStacksNonHunter`
-Does nothing. There is no ammo kit on this build.
-
-### `AiPlayerbot.RandomBotInvitePlayer`
-Does nothing. The engine's own invite row is not part of the build; bots form quest parties through `TortoiseBots.World.GroupQuests`.
-
-### `AiPlayerbot.RandomBotGroupNearby`
-Does nothing. Same reason as `RandomBotInvitePlayer`.
-
-### `AiPlayerbot.RandomBotGuildNearby`
-Does nothing. Guild membership runs through `TortoiseBots.World.Guilds`.
-
-### `AiPlayerbot.RandomBotFormGuild`
-Does nothing. Founding guilds is `TortoiseBots.World.GuildForming`.
-
-### `AiPlayerbot.GuildMaxBotLimit`
-Does nothing. The 1000-member line is built in.
-
-### `AiPlayerbot.GuildOrderBotRank`
-Does nothing. The guild-order bot rank is `TortoiseBots.World.GuildOrderBotRank`.
-
-### `AiPlayerbot.ProfessionsGrowWithLevel`
-Does nothing. `TortoiseBots.AutoProfessions` grants the professions.
-
-### `AiPlayerbot.BotProfessionSpecializations`
-Does nothing.
-
-### `AiPlayerbot.RandomBotShowHelmet` / `RandomBotShowCloak`
-Do nothing. Helmet and cloak visibility is not changed.
-
-### `AiPlayerbot.PoolBotTradeMode`
-Does nothing. A stranger can never trade with a pool bot; there is no mode key.
-
-### `AiPlayerbot.TradeActionExcludedPrefixes`
-Does nothing. Chat addon prefixes cannot open a trade window because no trade window is driven from chat.
-
-### `AiPlayerbot.TurtleMountAtLevel`
-Keeps its line in the template but nothing acts on it: the mount seeding it configured is not part of this build. Bots buy mounts at 40 and 60.
-
-### `AiPlayerbot.LevelUpMounts`
-Keeps its line in the template but nothing acts on it. Mounts come from the capital errand, not from a level-up grant.
-
-### `AiPlayerbot.AllowRepairedTaxiPaths`
-Does nothing in practice: bots make no flight plans on this build.
-
-### `AiPlayerbot.BotInstantFlight`
-Does nothing in practice: bots make no flight plans on this build.
-
-### `AiPlayerbot.UseWanderAsDefaultFollowStrategy`
-Does nothing. The wander strategy is not part of the build.
-
-### `AiPlayerbot.WanderMinDistance`
-Keeps its line in the template but only the `wander` strategy reads it, and that strategy is not part of the build.
-
-### `AiPlayerbot.WanderMaxDistance`
-Does nothing here. See `WanderMinDistance`.
-
-### `AiPlayerbot.AutoLearnQuestSpells`
-Keeps its line in the template but nothing acts on it. Class-quest spells are `TortoiseBots.ClassQuestSpells`.
-
-### `AiPlayerbot.AutoLearnQuestSpellsAlts`
-Does nothing. See `AutoLearnQuestSpells`.
-
-### `AiPlayerbot.AutoLearnTrainerSpells`
-Keeps its line in the template but nothing acts on it. Class spells are `TortoiseBots.AutoLearnOnLevel`.
-
-### `AiPlayerbot.AutoLearnDroppedSpells`
-Does nothing.
-
-### `AiPlayerbot.PetAutoTrainAlts`
-Does nothing. Pet training covers pool bots and hires only.
-
-### `AiPlayerbot.RandomGearUpgradeEnabled`
-Does nothing. There is no seed-time gear roll; use `PoolGearTopUpOnLevel` or `.bot autogear`.
-
-### `AiPlayerbot.RandomGearProgression`
-Keeps its line in the template but nothing acts on it.
-
-### `AiPlayerbot.RandomGearMaxSourceTier`
-Does nothing. There is no seed-time gear roll to restrict.
-
-### `AiPlayerbot.RandomGearSeedEpicChance`
-Does nothing. There is no seed-time gear roll.
-
-### `AiPlayerbot.AutoPickTalents`
-Does nothing. Talents are `TortoiseBots.AutoTalentsOnLevel`.
-
-### `AiPlayerbot.XPRate`
-Keeps its line in the template but nothing acts on it: the experience bonus action is not part of the build. Bots level at the server's own rate.
-
-### `AiPlayerbot.RndBotCheats`
-Does nothing. The cheat mask is compiled as a stub that always answers "no cheats", so no bot receives a repair, breath or item cheat.
-
-### `AiPlayerbot.CampEnabled`
-Keeps its line in the template but nothing acts on it: the camp action is not part of the build. The "stay at an inn hub" leisure trip still exists.
-
-### `AiPlayerbot.CampChancePct`
-Does nothing. See `CampEnabled`.
-
-### `AiPlayerbot.CampNightChancePct`
-Does nothing. See `CampEnabled`.
-
-### `AiPlayerbot.CampMinLevel`
-Does nothing. See `CampEnabled`.
-
-### `AiPlayerbot.CampSitDurationSec`
-Does nothing. See `CampEnabled`.
-
-### `AiPlayerbot.CampKeepRestedXp`
-Does nothing. See `CampEnabled`.
-
-### `AiPlayerbot.CampJoinChancePct`
-Does nothing. See `CampEnabled`.
-
-### `AiPlayerbot.CampJoinMinSec`
-Does nothing. See `CampEnabled`.
-
-### `AiPlayerbot.CampJoinMaxSec`
-Does nothing. See `CampEnabled`.
-
-### `AiPlayerbot.CampGreetChancePct`
-Does nothing. See `CampEnabled`.
-
-### `AiPlayerbot.CampGreetCooldownSec`
-Does nothing. See `CampEnabled`.
-
-### `AiPlayerbot.RandomBotNonCombatStrategies`
-Does nothing. A free bot's kit is built by the engine, not from a config string.
-
-### `AiPlayerbot.RandomBotCombatStrategies`
-Does nothing. See `RandomBotNonCombatStrategies`.
-
-### `AiPlayerbot.CombatStrategies`
-Does nothing. The dashboard reports the value; no engine reads it.
-
-### `AiPlayerbot.AllowIsolatedCustomStartingZones`
-Keeps bots out of three isolated custom starting zones from the Turtle data. No Forever zone carries those ids, so it changes nothing here.
+The generated [key census](../config-keys.md) lists every advertised key and whether a compiled part of the build reads it. The keys below are shipped in the Forever template or were carried over from the Turtle version, but nothing acts on them here, so setting one changes nothing. The table names what to use instead.
+
+| Key | Why it does nothing / what to use instead |
+| :--- | :--- |
+| `AiPlayerbot.MinRandomBots` / `MaxRandomBots` | Population is the pool: `TortoiseBots.Pool.TargetOnline` and `TortoiseBots.Pool.MaxCharacters` above. |
+| `AiPlayerbot.RandomBotAutologin` | The pool scheduler logs bots in; start it with `.tb pool start`. |
+| `AiPlayerbot.RandomBotLoginWithPlayer` | The pool schedule owns logins. |
+| `AiPlayerbot.RandomBotLoginAtStartup` | The pool schedule owns logins. |
+| `AiPlayerbot.RandomBotAutoCreate` | Pool characters are made by `.tb pool create` and the pool's refill. |
+| `AiPlayerbot.RandomBotPoolReset` | The reset is `TortoiseBots.Pool.Reset`, read only at world startup. |
+| `AiPlayerbot.RandomBotAccountPrefix` | The pool creates its own accounts (the `TBPOOL<nnnn>` pattern). |
+| `AiPlayerbot.PinnedBots` | No rotation table reads it. |
+| `AiPlayerbot.RandomBotStartLevelMin` / `RandomBotStartLevelMax` | Pool characters are created at level 1 and level up by playing. |
+| `AiPlayerbot.LevelLadder` | Nothing acts on it; the dashboard only reports its value. There is no level ladder on this build. |
+| `AiPlayerbot.LevelLadderBandSize` | See `LevelLadder`. |
+| `AiPlayerbot.LevelLadderMaxLevelShare` | See `LevelLadder`. |
+| `AiPlayerbot.LevelLadderLogMinutes` | See `LevelLadder`. |
+| `AiPlayerbot.RandomBotLineage` | There are no lineage alts on this build. |
+| `AiPlayerbot.LineageLowBandReserve` | See `RandomBotLineage`. |
+| `AiPlayerbot.LineagePerHour` | See `RandomBotLineage`. |
+| `AiPlayerbot.LineagePoolCeiling` | See `RandomBotLineage`. |
+| `AiPlayerbot.LineageJoinParentGuild` | See `RandomBotLineage`. |
+| `AiPlayerbot.RandomBotTimedLogout` | Nothing acts on it; the pool's session lengths decide logouts. |
+| `AiPlayerbot.MaxRandomBotInWorldTime` | See `RandomBotTimedLogout`. |
+| `AiPlayerbot.MinRandomBotRandomizeTime` / `MaxRandomBotRandomizeTime` | There is no unseeded-gear backstop sweep. |
+| `AiPlayerbot.RandomBotStallRelogMinutes` | There is no experience-stall relog. |
+| `AiPlayerbot.RandomBotMaxLevel` | The gear tables are capped by `RandomGearMaxLevel`. |
+| `AiPlayerbot.minEnchantingBotLevel` | Gear enchanting comes from the profession upkeep (`TortoiseBots.World.EnchantGear`), not from a seed roll. |
+| `AiPlayerbot.EnableRandomTeleports` | New pool characters are not scattered; they start at their race's start position. |
+| `AiPlayerbot.RandomBotEvenStartZones` | The pool's character composition decides race and start zone. |
+| `AiPlayerbot.RandomBotStartZoneWeights` | See `RandomBotEvenStartZones`. |
+| `AiPlayerbot.RandomBotFactionRatio` | Pool composition balances the factions. |
+| `AiPlayerbot.RelocateHopelessDeaths` | Does nothing. |
+| `AiPlayerbot.AbandonedInstanceGraceSec` | Free-bot instance entry is capped by `TortoiseBots.Free.MaxPerMap.*` instead. |
+| `AiPlayerbot.AmmoStacksNonHunter` | There is no ammo kit on this build. |
+| `AiPlayerbot.RandomBotInvitePlayer` | The engine's own invite row is not part of the build; bots form quest parties through `TortoiseBots.World.GroupQuests`. |
+| `AiPlayerbot.RandomBotGroupNearby` | Same reason as `RandomBotInvitePlayer`. |
+| `AiPlayerbot.RandomBotGuildNearby` | Guild membership runs through `TortoiseBots.World.Guilds`. |
+| `AiPlayerbot.RandomBotFormGuild` | Founding guilds is `TortoiseBots.World.GuildForming`. |
+| `AiPlayerbot.GuildMaxBotLimit` | The 1000-member line is built in. |
+| `AiPlayerbot.GuildOrderBotRank` | The guild-order bot rank is `TortoiseBots.World.GuildOrderBotRank`. |
+| `AiPlayerbot.ProfessionsGrowWithLevel` | `TortoiseBots.AutoProfessions` grants the professions. |
+| `AiPlayerbot.BotProfessionSpecializations` | Does nothing. |
+| `AiPlayerbot.RandomBotShowHelmet` / `RandomBotShowCloak` | Helmet and cloak visibility is not changed. |
+| `AiPlayerbot.PoolBotTradeMode` | A stranger can never trade with a pool bot; there is no mode key. |
+| `AiPlayerbot.TradeActionExcludedPrefixes` | Chat addon prefixes cannot open a trade window because no trade window is driven from chat. |
+| `AiPlayerbot.TurtleMountAtLevel` | Nothing acts on it; the mount seeding it configured is not part of this build. Bots buy mounts at 40 and 60. |
+| `AiPlayerbot.LevelUpMounts` | Mounts come from the capital errand, not from a level-up grant. |
+| `AiPlayerbot.BotInstantFlight` | The instant-arrival shortcut it switched on is not implemented; a bot flies the real route. |
+| `AiPlayerbot.UseWanderAsDefaultFollowStrategy` | The wander strategy is not part of the build. |
+| `AiPlayerbot.WanderMinDistance` | Only the `wander` strategy reads it, and that strategy is not part of the build. |
+| `AiPlayerbot.WanderMaxDistance` | See `WanderMinDistance`. |
+| `AiPlayerbot.AutoLearnQuestSpells` | Class-quest spells are `TortoiseBots.ClassQuestSpells`. |
+| `AiPlayerbot.AutoLearnQuestSpellsAlts` | See `AutoLearnQuestSpells`. |
+| `AiPlayerbot.AutoLearnTrainerSpells` | Class spells are `TortoiseBots.AutoLearnOnLevel`. |
+| `AiPlayerbot.AutoLearnDroppedSpells` | Does nothing. |
+| `AiPlayerbot.PetAutoTrainAlts` | See `PetAutoTrain`: pet training covers every bot the module trains. |
+| `AiPlayerbot.RandomGearUpgradeEnabled` | There is no seed-time gear roll; use `PoolGearTopUpOnLevel` or `.bot autogear`. |
+| `AiPlayerbot.RandomGearProgression` | Nothing acts on it. |
+| `AiPlayerbot.RandomGearMaxSourceTier` | There is no seed-time gear roll to restrict. |
+| `AiPlayerbot.RandomGearSeedEpicChance` | There is no seed-time gear roll. |
+| `AiPlayerbot.AutoPickTalents` | Talents are `TortoiseBots.AutoTalentsOnLevel`. |
+| `AiPlayerbot.XPRate` | Nothing acts on it: the experience bonus action is not part of the build. Bots level at the server's own rate. |
+| `AiPlayerbot.RndBotCheats` | The cheat mask is compiled as a stub that always answers "no cheats", so no bot receives a repair, breath or item cheat. |
+| `AiPlayerbot.CampEnabled` | Nothing acts on it: the camp action is not part of the build. The "stay at an inn hub" leisure trip still exists. |
+| `AiPlayerbot.CampChancePct` | See `CampEnabled`. |
+| `AiPlayerbot.CampNightChancePct` | See `CampEnabled`. |
+| `AiPlayerbot.CampMinLevel` | See `CampEnabled`. |
+| `AiPlayerbot.CampSitDurationSec` | See `CampEnabled`. |
+| `AiPlayerbot.CampKeepRestedXp` | See `CampEnabled`. |
+| `AiPlayerbot.CampJoinChancePct` | See `CampEnabled`. |
+| `AiPlayerbot.CampJoinMinSec` | See `CampEnabled`. |
+| `AiPlayerbot.CampJoinMaxSec` | See `CampEnabled`. |
+| `AiPlayerbot.CampGreetChancePct` | See `CampEnabled`. |
+| `AiPlayerbot.CampGreetCooldownSec` | See `CampEnabled`. |
+| `AiPlayerbot.RandomBotNonCombatStrategies` | A free bot's kit is built by the engine, not from a config string. |
+| `AiPlayerbot.RandomBotCombatStrategies` | See `RandomBotNonCombatStrategies`. |
+| `AiPlayerbot.CombatStrategies` | The dashboard reports the value; no engine reads it. |
+| `AiPlayerbot.AllowIsolatedCustomStartingZones` | Keeps bots out of three isolated custom starting zones from the Turtle data. No Forever zone carries those ids, so it changes nothing here. |

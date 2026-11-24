@@ -66,10 +66,10 @@ The install writes the module's templates and never overwrites a live file:
 
 | File | Installed from | Read by |
 | :--- | :--- | :--- |
-| `modules/tortoise_bots.conf` (created once) | `forever/conf/tortoisebots.conf.dist` | The module itself (`TortoiseBots.*` keys: enable, pool, battleground, dashboard, automation, player commands). |
+| `worldserver.conf.d/tortoisebots.conf` (rename the installed `.dist`) | `forever/conf/tortoisebots.conf.dist` | The module itself (`TortoiseBots.*` keys: enable, pool, battleground, dashboard, automation, player commands). |
 | `aiplayerbot.conf` | `forever/conf/aiplayerbot.conf.dist`, only in a `TORTOISEBOTS_SLICE1` build | The legacy engine, at engine start, from **the same folder as `worldserver.conf`**. The installed `.dist` is a template; the deployment copies it next to `worldserver.conf` as `aiplayerbot.conf`. |
 
-- Set `TortoiseBots.Enable = 1` in `modules/tortoise_bots.conf`. The shipped default is `0`: the module loads, its commands refuse and nothing ticks.
+- Set `TortoiseBots.Enable = 1` in `worldserver.conf.d/tortoisebots.conf`. The shipped default is `0`: the module loads, its commands refuse and nothing ticks.
 - The engine's `aiplayerbot.conf` is read through the engine's own config reader, not the core's. If it is missing, the server logs `TortoiseBots: engine configuration not loaded (...)` and the next engine start tries again.
 - `TortoiseBots.Pool.Enable = 0`, `TortoiseBots.Bg.Enable = 0` and `AiPlayerbot.RunTrace.Enabled = 0` are off by default because they are big features; see [Bot pool](bot-pool.md), [Queues](../world/queues.md) and [Run trace](run-trace.md).
 
@@ -102,7 +102,7 @@ mysql -u USER -p world < forever/sql/world/2026_11_20_00_tortoisebots_plans.sql
 mysql -u USER -p characters < forever/sql/characters/2026_11_20_01_tb_pool.sql
 ```
 
-The SQL files name their database in their statements, so they can also be piped into a client already connected to the server.
+Most SQL files do not name their database in their statements, so always pipe each file into the right database (`world` or `characters`). Only the travel-node and zone-level files name `world` themselves.
 
 **Self-created tables.** Several character tables are also created by the module itself the first time the feature is enabled, when the database user may create tables: the pool tables, the commander binding, the guild bot rank, the disenchant queue and the AI store. That path is for a server whose user may not. A missing table disables that feature with one logged line; it never aborts the server.
 
@@ -132,5 +132,5 @@ There is no release semver in the module itself: the build identifies itself as 
    cmake --build build -j"$(nproc)"
    cmake --install build
    ```
-3. Copy any new SQL and restart. Your `modules/tortoise_bots.conf` and `aiplayerbot.conf` are kept; merge new keys from the `.dist` templates by hand.
+3. Copy any new SQL and restart. Your `worldserver.conf.d/tortoisebots.conf` and `aiplayerbot.conf` are kept; merge new keys from the `.dist` templates by hand.
 4. Check `.tb unported` if you want to know which engine services the new build still lacks.
