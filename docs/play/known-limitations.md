@@ -29,7 +29,7 @@ TortoiseBots on **WoW Forever** is a port of the Turtle WoW module. The bot engi
 | Claiming a pool bot into your guild as your own companion | A free bot can accept a guild invite, but it keeps its own life and is not yours to order with `.bot`. |
 | Boss and raid tactics (per-boss interrupts, positioning, add rules, Fankriss/Patchwerk roles) | Fight the encounter with your own calls. `AiPlayerbot.RaidReactions` is off and the boss-tactic tables are not loaded. |
 | Turtle custom raids, dungeons, spells and races | None of that content exists on the Forever client. |
-| Autonomous long-distance travel and the travel network | Bots stay in the area they know. A server admin can order one flight (`fly`) or boat ride (`ride`). |
+| Travel destinations outside the reduced set (trainer, auction house, mailbox, boss, gathering node) | Bots travel for grind spots, towns, vendors, repairs and leaving an outgrown zone; walk or fly to the other NPCs yourself. |
 | Camp spots and Traveler's Tents | None. The camp tables are not loaded. |
 | The separate offline auction-house seller (`AiPlayerbot.AhBot.*`) | The organic bot market and its settings still exist. |
 | Pool lineages and adopting old bot accounts | The Forever pool creates its own characters and resets only its own rows. |
