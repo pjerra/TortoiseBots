@@ -46,6 +46,16 @@ struct RunEvent
 // party, an evading mob) must not keep a run the owner stopped alive for good. After it the stop takes effect and the run record says so (`why=`).
 constexpr uint32 kStopPendingMaxMs = 90000;
 
+// One place the run summary reports besides counts: milliseconds since the run started, the position, and the role
+// ("" when it was not known). At most kMaxSummarySpots of each list are kept.
+struct RunSpot
+{
+    uint32 tMs = 0;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    std::string role;
+};
+constexpr size_t kMaxSummarySpots = 200;
+
 struct RunRec
 {
     ObjectGuid leader;
@@ -68,6 +78,10 @@ struct RunRec
     // The state of each plan boss the run KNOWS: entry -> dead. Only the S6 glue sets an entry (from the boss creature it read), so an entry that was
     // never read is not in the map and the `boss=` list does not name it: a boss is never reported alive by default.
     std::map<uint32, bool> bossDead;
+    // When each boss was first read dead, in ms since the run started (the summary's killed_at_s), and where the
+    // party fell (the summary's wipe and death spots).
+    std::map<uint32, uint32> bossKilledMs;
+    std::vector<RunSpot> wipeSpots, deathSpots;
 
     // ---- S6 (package C6): what the tick keeps between its 1 Hz runs. Plain data and guids only: no Player, Unit or Map pointer is kept across ticks. ----
     // A member's host master and whether it was commanded (`.tb master`) before the run bound it to the tank (decision D1); `.tb run stop` and the end of the

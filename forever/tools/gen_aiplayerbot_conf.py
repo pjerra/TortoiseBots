@@ -18,7 +18,9 @@ The build definition, read on every run (CMakeLists.txt):
 - :39 drops the slice and TbHost files from that glob, :55 (slice ON) drops the option-OFF stub TbH3Off.cpp, and that
   same `else` branch compiles forever/src/slice/*.cpp and forever/src/host/TbHost*.cpp (:113-114);
 - :85-111 appends every path of forever/SLICE-W4.txt except TB_SLICE_REPLACED (:93-95);
-- :121 adds runtime/CombatMonitorService.cpp;
+- the slice block adds runtime/CombatMonitorService.cpp and the run-trace/why-trace runtime sources
+  (runtime/RunTrace.cpp, runtime/RunTraceWriter.cpp, runtime/WhyTrace.cpp) and the decision capture
+  (runtime/DecisionCapture.cpp, runtime/DecisionCaptureFiles.cpp);
 - :179 ships this config when TORTOISEBOTS_SLICE1 is ON, the build analysed here (the option's default is OFF at :43).
 Headers are compiled through the units that include them, so the file set is closed over local `#include "..."` using
 the include directories at :60-63, :139-149 and the preinclude at :86.
@@ -202,6 +204,8 @@ def compiled_sources():
     for pattern in re.findall(r"\$\{CMAKE_CURRENT_SOURCE_DIR\}/([^\"\s]+)", new_globs):
         sources.update(os.path.join(ROOT, p) for p in glob.glob(os.path.join(ROOT, pattern)))
     sources.add(os.path.join(ROOT, "runtime", "CombatMonitorService.cpp"))
+    for trace_source in ("RunTrace.cpp", "RunTraceWriter.cpp", "WhyTrace.cpp", "DecisionCapture.cpp", "DecisionCaptureFiles.cpp"):
+        sources.add(os.path.join(ROOT, "runtime", trace_source))
 
     include_dirs = [""]  # the repository root is a PUBLIC include directory (CMakeLists.txt:60-61)
     for block in re.findall(r"target_include_directories\(tortoisebots(?:\s+PUBLIC|\s+PRIVATE)?(.*?)\)",

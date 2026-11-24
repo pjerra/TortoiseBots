@@ -13,6 +13,7 @@
 #include "host/cmd/TbPlace.h"
 #include "host/cmd/TbCmdFeeds.h"
 #include "host/cmd/TbCmdCombat.h"
+#include "host/cmd/TbCmdTrace.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
 #include "host/TbPet.h"
@@ -26,6 +27,9 @@
 #include "host/TbHostGuildOrderAccess.h"
 #include "host/TbHostGuildOrderDisenchant.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
+#include "runtime/DecisionCapture.h"
+#include "runtime/RunTrace.h"
+#include "runtime/WhyTrace.h"
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunHooks.h"
 #include "host/run/TbRunLiquid.h"
@@ -328,6 +332,7 @@ public:
             if (BotMgr::Instance().Enabled())
             {
                 LoadEngineConfig();
+                TortoiseBots::RunTraceService::Instance().Initialize();   // mark summaries the last server never finalised
                 TortoiseBots::gear::InitGearIndex();
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
@@ -393,11 +398,19 @@ public:
         TortoiseBots::place::Update();          // #15: the minimap-ping timeouts and the walk back of a placed bot that lost its slot
         TortoiseBots::cmd::UpdateFeeds(diff);   // P4: the live position report (TortoiseBots.Commander.PosMs, 100 ms)
         TortoiseBots::cmd::combat::Update(diff);   // P5: the fight monitor's 1 Hz sample, 250 ms cast poll and COMBAT_FIGHT/EVENTS
+        TortoiseBots::RunTraceService::Instance().Update(diff);   // run trace: the frame, the end poll, listener detach
+        TortoiseBots::WhyTraceService::Instance().Update(diff);   // why trace: the timeout, a bot gone, strategy lines
+        TortoiseBots::DecisionCaptureService::Instance().Update();   // decision capture: reap finished segment writers
 #endif
     }
 
     void OnShutdown() override
     {
+#ifdef TORTOISEBOTS_SLICE1
+        TortoiseBots::RunTraceService::Instance().Shutdown();
+        TortoiseBots::WhyTraceService::Instance().Shutdown();
+        TortoiseBots::DecisionCaptureService::Instance().Shutdown();
+#endif
         // Save and remove every bot while the world is still up.
         BotMgr::Instance().LogoutAll("server shutdown");
         BotMgr::Instance().Update(0);
@@ -605,6 +618,8 @@ public:
             { "gm",     TortoiseBots::h4::HandleGm,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "plan",   TortoiseBots::run::HandlePlan,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "run",    TortoiseBots::run::HandleRun,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "trace",  TortoiseBots::trace::HandleTrace, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // run trace (runtime/RunTrace.cpp)
+            { "why",    TortoiseBots::trace::HandleWhy,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },     // one bot's AI decisions (runtime/WhyTrace.cpp)
             { "cc",       TortoiseBots::h8::HandleCc,       rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: crowd-control mark of one bot
             { "strategy", TortoiseBots::h8::HandleStrategy, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: `.tb strategy <bot|role:...> co|nc +name,-name,~name | <bot> reset` (SETUP)
             { "pet",      TortoiseBots::p11::HandlePet,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P11: `.tb pet <bot> give|call|dismiss|show|order ...` (host/TbPet.cpp)

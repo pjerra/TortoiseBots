@@ -115,6 +115,22 @@ if(TORTOISEBOTS_SLICE1)
 
   target_sources(tortoisebots PRIVATE ${TB_SLICE_LEGACY} ${TB_SLICE_NEW})
 
+  # The run trace and the why trace: the shared Turtle runtime sources (docs/server/run-trace.md, docs/server/
+  # why-trace.md); the host glue is forever/src/host/cmd/TbCmdTrace.cpp. They read the engine and the core, so they get
+  # the legacy files' preinclude.
+  set(TB_SLICE_TRACE_RUNTIME
+    ${CMAKE_CURRENT_SOURCE_DIR}/runtime/RunTrace.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/runtime/RunTraceWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/runtime/WhyTrace.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/runtime/DecisionCapture.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/runtime/DecisionCaptureFiles.cpp)
+  target_sources(tortoisebots PRIVATE ${TB_SLICE_TRACE_RUNTIME})
+  if(MSVC)
+    set_source_files_properties(${TB_SLICE_TRACE_RUNTIME} PROPERTIES COMPILE_OPTIONS "/FI${TB_SLICE_PREINCLUDE}")
+  else()
+    set_source_files_properties(${TB_SLICE_TRACE_RUNTIME} PROPERTIES COMPILE_OPTIONS "-include;${TB_SLICE_PREINCLUDE}")
+  endif()
+
   # The fight monitor's shared runtime TU (the Turtle file; its one world read and its two log lines go through ai/playerbot/TbCompatC5.h).
   # Only this build registers its scripts and feeds it (forever/src/host/cmd/TbCmdCombat.cpp); the option-OFF build has neither. It reads the
   # engine's config and logs through the legacy proxy, so it gets the legacy files' preinclude.
