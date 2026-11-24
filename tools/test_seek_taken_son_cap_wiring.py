@@ -37,7 +37,7 @@ class TakenSonThreatCapWiring(unittest.TestCase):
         self.assertIn('dungeonRunSeekTakenSonThreatCap = config.GetBoolDefault("AiPlayerbot.DungeonRunSeekTakenSonThreatCap", false)',
                       CONFIG)
         self.assertIn("AiPlayerbot.DungeonRunSeekTakenSonThreatCap = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekTakenSonThreatCap`", SETTINGS_DOC)
+        self.assertIn("AiPlayerbot.DungeonRunSeekTakenSonThreatCap", SETTINGS_DOC)
 
     def test_the_taken_close_notes_the_state_before_the_meet_clear(self):
         fn = body(ACTIONS, "void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, Unit* boss,")

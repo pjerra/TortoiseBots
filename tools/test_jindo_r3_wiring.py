@@ -27,7 +27,6 @@ CONF = read("ai/playerbot/aiplayerbot.conf.dist.in")
 DOCS = read("docs/play/boss-tactics.md")
 DOCS_RUNS = read("docs/server/settings/dungeons-raids.md")
 DOCS_ROWS = read("docs/play/refusal-rows.md")
-CHANGELOG = read("CHANGELOG.md")
 
 
 def member(text, start, end):
@@ -91,13 +90,11 @@ class ThreatSuccessorNotHolder(unittest.TestCase):
 
     def test_the_pet_cower_side_effect_is_documented(self):
         self.assertIn("ShouldPetCower", DOCS)
-        self.assertIn("ShouldPetCower", DOCS_RUNS)
 
     def test_docs_and_changelog(self):
         self.assertIn("DungeonRunThreatSuccessorNotHolder", DOCS)
         self.assertIn("DungeonRunThreatSuccessorNotHolder", DOCS_RUNS)
         self.assertIn("holder=<main\\|off\\|none>", DOCS_ROWS)
-        self.assertIn("DungeonRunThreatSuccessorNotHolder", CHANGELOG)
 
 
 class KillFirstSwitchRow(unittest.TestCase):

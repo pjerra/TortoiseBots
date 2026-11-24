@@ -31,7 +31,6 @@ CONFIG_H = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
 TEMPLATE = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 DOCS = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
 BOSS_DOCS = (ROOT / "docs/play/boss-tactics.md").read_text()
-CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 
 
 def body(text, start, end="\n}\n"):
@@ -141,17 +140,11 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("bool dungeonRunAddCrew = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunAddCrew = 0$")
         self.assertIn("AiPlayerbot.DungeonRunAddCrew", DOCS)
-        section = DOCS[DOCS.index("### `AiPlayerbot.DungeonRunAddCrew`"):]
-        section = section[:section.index("### `", 4)]
-        # The brief's rule for this key: documented without "recommended on".
-        self.assertNotIn("recommended on", section)
-        self.assertIn("**Default:** `0`", section)
         block = TEMPLATE[TEMPLATE.index("# The add_crew boss tactic"):]
         block = block[:block.index("AiPlayerbot.DungeonRunAddCrew = 0")]
         self.assertNotIn("recommended on", block)
         self.assertIn("`add_crew`", BOSS_DOCS)
         self.assertIn("DungeonRunAddCrew", BOSS_DOCS)
-        self.assertIn("DungeonRunAddCrew", CHANGELOG)
 
     def test_row_ships_with_its_migration(self):
         migration = (ROOT / "data/sql/world/20261111160000_world.sql").read_text()

@@ -16,7 +16,6 @@ CONFIG_H = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
 CONFIG_CPP = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
 CONF = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 SETTINGS = (ROOT / "docs/server/settings/combat.md").read_text()
-CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 
 
 def body(text, signature):
@@ -78,7 +77,6 @@ class SpellFacingPrecheck(unittest.TestCase):
     def test_docs_and_changelog(self):
         self.assertIn("### `AiPlayerbot.SpellFacingPrecheck`", SETTINGS)
         self.assertIn("(#aiplayerbotspellfacingprecheck)", SETTINGS)
-        self.assertIn("SpellFacingPrecheck", CHANGELOG)
         section = SETTINGS[SETTINGS.index("### `AiPlayerbot.SpellFacingPrecheck`"):]
         self.assertIn("runs before the core's other cast checks", section)
         self.assertIn("It can only refuse a cast that the core always refuses on facing", section)

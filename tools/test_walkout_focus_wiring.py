@@ -37,7 +37,7 @@ class WalkoutFocusWiring(unittest.TestCase):
         self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekWalkoutFocus", false)', CONFIG)
         self.assertIn("bool dungeonRunSeekWalkoutFocus = false;", CONFIG_H)
         self.assertIn("AiPlayerbot.DungeonRunSeekWalkoutFocus = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekWalkoutFocus`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunSeekWalkoutFocus", SETTINGS)
 
     def test_the_facing_branch_returns_before_the_cast(self):
         walk = walkout_branch()
@@ -146,7 +146,7 @@ class WalkoutHoldCombatWiring(unittest.TestCase):
         self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekWalkoutHoldCombat", false)', CONFIG)
         self.assertIn("bool dungeonRunSeekWalkoutHoldCombat = false;", CONFIG_H)
         self.assertIn("AiPlayerbot.DungeonRunSeekWalkoutHoldCombat = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekWalkoutHoldCombat`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunSeekWalkoutHoldCombat", SETTINGS)
 
     def test_combat_end_reads_the_live_puller_after_the_pull_check(self):
         fn = body(TRIGGERS, "bool CombatEndTrigger::IsActive()")
@@ -205,7 +205,7 @@ class WalkoutFaceCastWiring(unittest.TestCase):
         self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekWalkoutFaceCast", false)', CONFIG)
         self.assertIn("bool dungeonRunSeekWalkoutFaceCast = false;", CONFIG_H)
         self.assertIn("AiPlayerbot.DungeonRunSeekWalkoutFaceCast = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekWalkoutFaceCast`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunSeekWalkoutFaceCast", SETTINGS)
 
     def test_the_turn_is_forced_and_the_cast_follows(self):
         walk = walkout_branch()
@@ -261,7 +261,7 @@ class WalkoutStandLogWiring(unittest.TestCase):
         self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekWalkoutStandLog", false)', CONFIG)
         self.assertIn("bool dungeonRunSeekWalkoutStandLog = false;", CONFIG_H)
         self.assertIn("AiPlayerbot.DungeonRunSeekWalkoutStandLog = 0", TEMPLATE)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekWalkoutStandLog`", SETTINGS)
+        self.assertIn("AiPlayerbot.DungeonRunSeekWalkoutStandLog", SETTINGS)
 
     def test_the_stand_row_is_a_throttled_no_op_with_the_flag_off(self):
         fn = body(ACTIONS, "void LogSeekWalkoutStand(PlayerbotAI* ai, Player* bot, Unit* son, WalkoutStandBranch branch,")

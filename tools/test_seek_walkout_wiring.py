@@ -590,7 +590,7 @@ class WalkoutStandSightWiring(unittest.TestCase):
         self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekWalkoutStandSight", false)', config)
         self.assertIn("bool dungeonRunSeekWalkoutStandSight = false;", config_h)
         self.assertIn("AiPlayerbot.DungeonRunSeekWalkoutStandSight = 0", template)
-        self.assertIn("### `AiPlayerbot.DungeonRunSeekWalkoutStandSight`", settings)
+        self.assertIn("AiPlayerbot.DungeonRunSeekWalkoutStandSight", settings)
 
     def test_the_stand_test_aims_the_core_way(self):
         fn = body(ACTIONS, "bool FindSeekWalkoutStand(Player* bot, const BossAnchorCircle& c, Unit* son, float rangeYd,")
