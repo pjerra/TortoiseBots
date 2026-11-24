@@ -466,7 +466,18 @@ GUILD_KEYS = {
     "trigger": "speak",
     "value": "",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS, LIFE_RPG_KEYS, LIFE_QUEST_KEYS, LIFE_TOWN_KEYS, GUILD_KEYS)
+# TBF #158 (social): greeting. The `emote` strategy's only live row is `new player nearby` -> `greet`; its other rows name
+# the `emote`, `talk` and `mount anim` actions and the `seldom`, `receive text emote` and `receive emote` triggers, which the
+# slice does not register, so the engine skips them (the bot does less, never crashes). `already seen players` is the
+# encounter memory GreetAction reads and writes. GreetAction.cpp and EmoteStrategy.cpp are on the build list
+# (forever/SLICE-W4.txt).
+SOCIAL_KEYS = {
+    "strategy": "emote",
+    "action": "greet",
+    "trigger": "new player nearby",
+    "value": "already seen players",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS, LIFE_RPG_KEYS, LIFE_QUEST_KEYS, LIFE_TOWN_KEYS, GUILD_KEYS, SOCIAL_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

@@ -416,3 +416,8 @@ ai/playerbot/strategy/actions/ServiceNearbyNpcAction.cpp
 # founding drivers are host code (forever/src/host/TbHostGuildJoin.cpp), not a legacy action.
 ai/playerbot/strategy/actions/SayAction.cpp
 runtime/PassingBuffsService.cpp
+# Social greeting: a commanded bot waves at a real player it has not met in the last GreetCooldown. The `emote` strategy
+# carries the `new player nearby` -> `greet` row; its other emote rows name actions the slice does not register and are
+# skipped. The masters/pool split is GreetAction's own (RandomBotGreet gates pool bots).
+ai/playerbot/strategy/actions/GreetAction.cpp
+ai/playerbot/strategy/generic/EmoteStrategy.cpp
