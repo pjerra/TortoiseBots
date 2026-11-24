@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 339 keys, 330 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 366 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 340 keys, 331 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 365 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -526,6 +526,9 @@ AiPlayerbot.AhMarketChanceBuy = 10
 
 # AiPlayerbot.AhMarketBuyValue  (int, PlayerbotAIConfig.cpp:908)
 AiPlayerbot.AhMarketBuyValue = 80
+
+# AiPlayerbot.AhMarketMaxSpendPerBot  (int, PlayerbotAIConfig.cpp:910)
+AiPlayerbot.AhMarketMaxSpendPerBot = 0
 
 # AiPlayerbot.AhMarketVariance  (int, PlayerbotAIConfig.cpp:911)
 AiPlayerbot.AhMarketVariance = 10

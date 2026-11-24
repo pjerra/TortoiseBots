@@ -212,7 +212,8 @@ std::vector<AhListingView> QueryMarketByItemId(Player* bot, Creature const* auct
     return out;
 }
 
-std::vector<AhListingView> QueryMarketByName(Player* bot, Creature const* auctioneer, std::string const& nameSubstr)
+std::vector<AhListingView> QueryMarketByName(Player* bot, Creature const* auctioneer, std::string const& nameSubstr,
+    uint32_t offset)
 {
     std::vector<AhListingView> out;
     if (!bot || !bot->GetSession())
@@ -231,7 +232,7 @@ std::vector<AhListingView> QueryMarketByName(Player* bot, Creature const* auctio
         | AuctionHouseFilterMask::UncommonQuality | AuctionHouseFilterMask::RareQuality | AuctionHouseFilterMask::EpicQuality
         | AuctionHouseFilterMask::LegendaryQuality | AuctionHouseFilterMask::ArtifactQuality;
     house->BuildListBuckets(bucketsResult, bot, wname, 0, MAX_LEVEL, everyQuality,
-        std::nullopt, {}, 0, 0, {});
+        std::nullopt, {}, 0, offset, {});
 
     std::string const lowerSub = LowerAscii(nameSubstr);
     size_t const maxBuckets = std::min<size_t>(bucketsResult.Buckets.size(), 50);

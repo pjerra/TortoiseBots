@@ -3,6 +3,7 @@
 // own zone, then post through the priced seller action (`ah vendor`, AhSellPolicy). No item is created and no
 // auction is written directly: the existing host seam and the core handlers do the work.
 #include "host/TbHostAhMarket.h"
+#include "host/TbHostAhMarketBuy.h"
 
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
@@ -246,6 +247,7 @@ void RunCycle(uint64_t nowMs)
         cycle.nextIndex = 0;
         LogInfo(std::string("[W8] ah-market interval=") + std::to_string(intervalSeconds) +
             " eligible=0 picked=0 posted=0 walking=0 skipped=0");
+        RunBuyStep();
         return;
     }
 
@@ -303,6 +305,8 @@ void RunCycle(uint64_t nowMs)
         " eligible=" + std::to_string(size) + " picked=" + std::to_string(picked) +
         " posted=" + std::to_string(posted) + " walking=" + std::to_string(walking) +
         " skipped=" + std::to_string(skipped));
+
+    RunBuyStep();
 }
 
 bool MarketEnabled()
