@@ -2,11 +2,12 @@
 id: server-settings-dungeons-raids
 title: Dungeon & Raid Settings
 category: server
-summary: Configuration flags for encounter mechanics, hazard avoidance, raid tactics, and creature auras.
-tags: [config, dungeons, raids, tactics, bosses]
+summary: "Settings for the run leader and for bot behaviour in dungeons: pulls and rests, retreats, charmed allies, threat lines, creature auras, the combat monitor and reach."
+tags: [config, dungeons, raids, runs, hazards]
 relates_to:
   - play-dungeons-and-raids
   - play-dungeon-reference
+  - play-dungeon-run-leader
 ---
 
 # Dungeon & Raid Settings
@@ -59,9 +60,15 @@ Keeps bots out of the permanent damage aura of a few creatures.
 
 Two creatures are listed:
 
-Gap-closer abilities such as Charge, Intercept, and Feral Charge verify that the destination landing point is outside the hazard ring before executing. An explicit attack order on that target is never avoided, gap-closer-vetoed, or set aside. Positions are tracked via local proximity scans and periodic grid snapshots.
+| Creature | Where | Keep-out | Tanks |
+| :--- | :--- | :---: | :--- |
+| Creeping Sludge | Maraudon | 8 yards | may stand inside while fighting |
+| Living Poison | Naxxramas | 10 yards | no exception (one hit is lethal) |
 
-When set to `0`, bots treat hazardous creatures like standard mobs, chasing into melee range without avoiding dangerous proximity auras.
+- Bots step out of the ring, and a path or a landing point keeps 1 yard more, so a bot does not walk back to the rim.
+- Gap-closer abilities (Charge, Intercept, Feral Charge and the like) refuse a landing point inside the ring.
+- A bot held outside the creature for 3 seconds sets it aside for 30 seconds and fights something else.
+- An explicit attack order on that creature is never refused and never set aside.
 
 Off: bots treat the creatures like any other mob.
 
@@ -162,7 +169,10 @@ A bot a creature charms stops playing, and the party leaves a charmed member alo
 <details>
 <summary>How it works in detail</summary>
 
-**Aura-gated targets:** the `needs_aura` kind (see [Boss Tactics](../../play/boss-tactics.md#kinds)): `boss_entry` is the unit and `spell` the aura it takes damage from. A bot without the aura does no damage to it, so with this key on the target picks, boss-tactic taunts and the run's guard leave it out, and an explicit attack order on it is refused.
+- A bot charmed by a creature (Hakkar's Cause Insanity) skips its whole update: the charmer drives it.
+- No attack, pet attack, interrupt or spell lands on a charmed group member, and an attack order on one is refused.
+- Pets are set passive while a charmed member is up, and their stance is restored when the charm ends.
+- A charm cast by a player keeps the old behaviour.
 
 Off: bots play as before.
 
@@ -188,7 +198,10 @@ After a won fight the run pulls the next pack close by from where the tank stand
 
 The next pull may come from the tank's position when:
 
-</details>
+- the pack's point is within 30 yards of the tank,
+- the steps between are plain moves (no exact point, no launch step, no direct move), at most 4 of them,
+- the pack is not an ambush and was not left uncleared,
+- and the straight line to it passes no other living pack.
 
 Off: each pull starts from its own stand in the plan.
 
@@ -354,7 +367,7 @@ A ranged damage dealer closing on a hovering boss inside a dungeon walks under i
 <details>
 <summary>How it works in detail</summary>
 
-</details>
+A hostile that stands at least 8 yards above the floor under it counts as hovering (Onyxia in the air). A ranged damage dealer walks the path to the floor under it and stops where its spell reaches the target, counted from the floor point. Tanks, melee and healers keep the normal approach.
 
 One `BossReachHover` row per bot per 5 seconds goes to `bot_events.csv` when that log is on.
 
