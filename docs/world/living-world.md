@@ -24,7 +24,7 @@ Three switches decide whether a bot lives on its own:
 2. `TortoiseBots.Pool.Enable = 1` and `.tb pool start` — the pool creates characters and keeps them in the world. The schedule never starts by itself, and the online target is `0` until it is set (`.tb pool population low|high|<n>`).
 3. The real bot engine on the bot: `TortoiseBots.Slice.EngineByDefault = 1`, or `.tb engine <bot> on` for one bot. Without it a logged-in bot only follows and assists.
 
-A bot is "free" when it has no master and no group: that is the pool bot this page is about. Your alts and hired companions follow you instead.
+A bot is "free" when it has no master and no group: that is the pool bot this page is about. Your alts follow you instead.
 
 ## The free bot's day
 
@@ -113,11 +113,11 @@ Pool characters are created at level 1 and level up by playing. There is no leve
 | **Class spells** on login and on every level-up, free | `TortoiseBots.AutoLearnOnLevel` (on) |
 | **Talent points** spent on login and level-up following a premade build (never a reset) | `TortoiseBots.AutoTalentsOnLevel` (on) |
 | **Class-quest spells** (stances, forms, totems, pets, racials) when the running world has the quest | `TortoiseBots.ClassQuestSpells` (off) |
-| **First Aid and Cooking**, then at level 5 a class-sensible pair of primary professions | `TortoiseBots.AutoProfessions` (on) |
+| **At level 5, a class-sensible pair of primary professions plus First Aid and Cooking** | `TortoiseBots.AutoProfessions` (on) |
 | **Profession tools** (pick, knife, hammer, spanner, rod, pole) in a free bag slot | `TortoiseBots.AutoTools` (on) |
 | **Food and water** fitting the bot's level, on login and level-up | `TortoiseBots.AutoFood` (on) |
 | **A starter hunter pet** at level 10, with its pet spells | `TortoiseBots.AutoHunterPet` (on) |
-| **Pet skills** on every level-up for pool bots and hires | [`AiPlayerbot.PetAutoTrain`](../server/settings/world-population.md#aiplayerbotpetautotrain) (on) |
+| **Pet skills** on every level-up for pool bots and your own bots | [`AiPlayerbot.PetAutoTrain`](../server/settings/world-population.md#aiplayerbotpetautotrain) (on) |
 
 <a id="field-kits--equipment-upkeep"></a>
 <a id="gear-evaluation--upgrades"></a>
@@ -133,7 +133,7 @@ Bots keep what they find and equip what is better:
 <a id="mount-rules"></a>
 ## Mounts
 
-A bot does not receive a mount at a fixed level. A free bot learns riding and buys its own mount from a capital vendor once it reaches level 40 (and the faster one at 60) during a capital errand; the money comes from its own purse. With [`AiPlayerbot.RandomBotShopMounts`](../server/settings/world-population.md#aiplayerbotrandombotshopmounts) on, only the bot's own race's vendor mounts are used.
+A bot does not receive a mount at a fixed level. A free bot learns riding and buys its own mount from a capital vendor once it reaches level 40 (and the faster one at 60) during a capital errand; the money comes from its own purse. The capital mount errand always buys from the bot's own race's vendor mounts; [`AiPlayerbot.RandomBotShopMounts`](../server/settings/world-population.md#aiplayerbotrandombotshopmounts) (off by default) affects only the AI's mount-list check.
 
 ## Sustenance & resting
 
@@ -150,4 +150,4 @@ Bots keep themselves going between fights:
 - Flight paths and boat travel for free bots; they walk.
 - The Turtle starting kit (bags, quivers, ammo pouches, thrown-weapon seeding) and the seed-time gear roll.
 - Camping sessions with a tent; the "stay at an inn hub" leisure trip exists, the camp kit does not.
-- Free bots using the auction house directly; the auction-house service is described in [Bot economy](economy.md).
+- Offline AHBot stocking and buying; online free bots use the auction house directly when `TortoiseBots.World.Auction = 1` (see [Bot economy](economy.md)).
