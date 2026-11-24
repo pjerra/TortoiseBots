@@ -145,15 +145,15 @@ nodes:
   - id: world-living-world
     path: world/living-world.md
     category: world
-    summary: How autonomous bots roam the world, level up, travel, gather, and manage their gear.
+    summary: How free pool bots roam the world on their own, level up, travel, quest, fish, rest and buy their gear.
   - id: world-social
     path: world/social.md
     category: world
-    summary: How bots greet players, form groups, create autonomous guilds, and trade items.
+    summary: How pool bots greet players, buff them, group for shared quests, join and run guilds, and trade with their owner.
   - id: world-queues
     path: world/queues.md
     category: world
-    summary: How bots participate in Looking for Turtles dungeon matchmaking and PvP battlegrounds.
+    summary: How pool bots fill a player's dungeon party through the module's own queue and play Warsong Gulch and Arathi Basin.
   - id: world-economy
     path: world/economy.md
     category: world
@@ -195,7 +195,7 @@ nodes:
   - id: server-settings-world-population
     path: server/settings/world-population.md
     category: server
-    summary: Configuration settings for random bot population, level seeding, wandering, lifecycle, and social interactions.
+    summary: The module's bot pool settings, the immersion keys the Forever build acts on, and the keys that do nothing here.
   - id: server-settings-economy
     path: server/settings/economy.md
     category: server
@@ -207,7 +207,7 @@ nodes:
   - id: server-settings-queues
     path: server/settings/queues.md
     category: server
-    summary: Configuration settings for Looking for Turtles (LFT) dungeon autofill and battleground auto-queue systems.
+    summary: Settings for the module's dungeon-party fill and the Warsong Gulch / Arathi Basin bot round.
   - id: server-settings-performance
     path: server/settings/performance.md
     category: server
