@@ -316,7 +316,7 @@ bool ReadGuildOutsiders(std::string const& filter, PoolScope const& scope, std::
 {
     out.clear();
     QueryResult result = CharacterQueryGuardedCompat(
-        "SELECT gm.`guid`, c.`account`, c.`name`, g.`name`, g.`leaderguid`" + std::string(kGuildJoins) +
+        "SELECT gm.`guid`, c.`account`, c.`name` AS `member_name`, g.`name` AS `guild_name`, g.`leaderguid`" + std::string(kGuildJoins) +
         " WHERE " + filter + OutsideClause(scope));
     if (!result)
         return false;
