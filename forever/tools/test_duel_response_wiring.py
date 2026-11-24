@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wiring pins for a bot answering a duel challenge (TBF #163 P1).
+"""Wiring pins for a bot answering a duel challenge.
 
 The bot session receives no duel packet, so the host reads the core's own Player::duel state: the accept/decline
 answer is sent for every bot on every pass (not only a free bot with capital errands on), and the bot attacks its

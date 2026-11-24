@@ -1,4 +1,4 @@
-// Ticket #160 (the fill half): the dungeon-finder fill, its `.tb lfg` command and, for the player surface, `.bot lfg`.
+// the dungeon-finder fill, its `.tb lfg` command and, for the player surface, `.bot lfg`.
 //
 // The queue is the module's own: ForeverCore's dungeon finder cannot be reached from the 1.60 client (LFGHandler.cpp
 // answers the dungeon list empty) and its role data admits no damage spec, so a port on sLFGMgr is a core project. The

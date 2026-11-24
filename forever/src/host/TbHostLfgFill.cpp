@@ -1,4 +1,4 @@
-// Ticket #160 (the fill half): the module-owned dungeon-finder queue and its fill, see host/TbHostLfgFill.h.
+// the module-owned dungeon-finder queue and its fill, see host/TbHostLfgFill.h.
 //
 // The pass is TortoiseBots' LFT fill cadence (runtime/LftBotFillService.cpp:594-596,653,946): one timer clamped to
 // 5-60 s, and at most AiPlayerbot.RandomBotLftMaxFillsPerInterval bots per pass. A bot is picked by the pure policy,

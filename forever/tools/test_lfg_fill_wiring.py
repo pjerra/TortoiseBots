@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wiring pins for the dungeon-finder fill (ticket #160, the fill half).
+"""Wiring pins for the dungeon-finder fill.
 
 The core calls cannot run without a server, so these pin the shape of the live side; the decisions themselves are tested
 standalone by forever/tools/test_lfg_fill_policy.cpp. Each assertion fails on the source before the fill:

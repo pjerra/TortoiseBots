@@ -1,4 +1,4 @@
-// Ticket #160 (the fill half): the decisions of the dungeon-finder fill, with no core type and no engine header, so
+// the decisions of the dungeon-finder fill, with no core type and no engine header, so
 // forever/tools/test_lfg_fill_policy.cpp runs them standalone.
 //
 // The fill takes free (masterless) host bots one at a time and groups them with the player who queued, until the party
