@@ -112,7 +112,6 @@ enum class BoxPhase : std::uint8_t
     Locking,       // cast Pick Lock (or skip the cast when the box is unlocked)
     AwaitLockCast, // the cast is running; check the lock flag
     Opening,       // CMSG_OPEN_ITEM and the item loot window
-    Done,
 };
 
 enum class PickPhase : std::uint8_t
@@ -752,13 +751,9 @@ void TickBox(Player* bot, BotState& st)
                     AbortBox(bot, st, "bags-full");
                 return;
             }
-            st.boxPhase = BoxPhase::Done;
             FinishBox(bot, st);
             return;
         }
-        case BoxPhase::Done:
-            EndBox(st);
-            return;
     }
 }
 
@@ -1218,8 +1213,9 @@ bool StartLockboxMail(Player* bot, BotState& st, Item* box)
         LogSkip(st, bot, "postage");
         return false;
     }
-    TC_LOG_INFO("tortoisebots", "[W7] lockbox-mail-pick bot={} item={} guid={} skill={} req={} rogue={} online={}",
-        bot->GetName(), box->GetEntry(), box->GetGUID().GetCounter(), bot->GetSkillValue(SKILL_LOCKPICKING),
+    TC_LOG_INFO("tortoisebots", "[W7] lockbox-mail-pick bot={} item={} guid={} gate={} skill={} req={} rogue={} online={}",
+        bot->GetName(), box->GetEntry(), box->GetGUID().GetCounter(),
+        LockboxGateToken(ClassifyBox(bot, box)), bot->GetSkillValue(SKILL_LOCKPICKING),
         lock.requiredSkill, rogue->name, rogue->online ? 1 : 0);
     MailPayload payload;
     payload.recipient = rogue->name;
