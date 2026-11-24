@@ -651,6 +651,15 @@ inline void PlayTextEmoteCompat(Player* bot, uint32 emote, uint32 variant, Objec
     bot->GetSession()->HandleTextEmoteOpcode(data);
 }
 
+inline void MountSpecialAnimCompat(Player* bot)
+{
+    WorldPacket data;
+    bot->GetSession()->HandleMountSpecialAnimOpcode(data);
+}
+
+inline uint32 TextEmoteAnimIdCompat(EmotesTextEntry const* em) { return em->textid; }
+inline uint32 TextEmoteRowIdCompat(EmotesTextEntry const* em) { return em->Id; }
+
 inline Unit* UnitInMapCompat(Map* map, ObjectGuid const& guid) { return map->GetUnit(guid); }
 inline Creature* AnyTypeCreatureInMapCompat(Map* map, ObjectGuid const& guid) { return map->GetAnyTypeCreature(guid); }
 inline WorldObject* WorldObjectInMapCompat(Map* map, ObjectGuid const& guid) { return map->GetWorldObject(guid); }

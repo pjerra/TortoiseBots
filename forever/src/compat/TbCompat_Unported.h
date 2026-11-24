@@ -28,6 +28,7 @@
 #ifndef TB_UNPORTED_TABLE_ONLY
 #include "CinematicMgr.h"       // EndCinematicIfWatchingCompat (a core type: the table-only includers do not need it)
 #include "InstanceLockMgr.h"    // CanEnterAreaCompat (InstanceLock, MapDb2Entries)
+#include "MiscPackets.h"        // WorldPackets::Misc::MountSpecial (MountSpecialAnimCompat; TbCompat_D4.h pulls the same header)
 #endif
 
 namespace tbcompat
@@ -679,6 +680,19 @@ inline void PlayTextEmoteCompat(Player* bot, uint32 emote, uint32 /*variant*/, O
     packet.SoundIndex = -1;
     bot->GetSession()->HandleTextEmoteOpcode(packet);
 }
+
+// PROPER: the mount-special animation a rider triggers (T: CMSG_MOUNTSPECIAL_ANIM with an empty body; F: the handler takes a typed
+// packet and broadcasts SMSG_SPECIAL_MOUNT_ANIM to the set). The bot's own key press is the packet CTextEmote-style call: no sound or
+// visual kits, so the client plays its default animation.
+inline void MountSpecialAnimCompat(Player* bot)
+{
+    WorldPackets::Misc::MountSpecial packet{ WorldPacket(CMSG_MOUNT_SPECIAL_ANIM) };
+    bot->GetSession()->HandleMountSpecialAnimOpcode(packet);
+}
+
+// The template row a text emote plays (T EmotesTextEntry::textid, F DB2 EmoteID) and the row's own id (T .Id, F .ID).
+inline uint32 TextEmoteAnimIdCompat(EmotesTextEntry const* em) { return em->EmoteID; }
+inline uint32 TextEmoteRowIdCompat(EmotesTextEntry const* em) { return em->ID; }
 
 // Unit and object lookups in a map by guid (T Map::GetUnit / GetAnyTypeCreature / GetWorldObject). PROPER: F's Map finds creatures,
 // game objects and players by guid; the type switch is the guid's own.

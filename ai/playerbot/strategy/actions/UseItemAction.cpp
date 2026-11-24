@@ -1281,7 +1281,9 @@ bool UseHearthStoneAction::isUseful()
 
 bool UseRandomRecipeAction::isUseful()
 {
-   return !bot->IsInCombat() && !bot->InBattleGround();
+    // The slice adds the maintenance strategy to every bot, while TB only adds it without a real
+    // player master; a commanded bot must not learn the recipes its player wanted to sell.
+   return !ai->HasRealPlayerMaster() && !bot->IsInCombat() && !bot->InBattleGround();
 }
 
 bool UseRandomRecipeAction::Execute(Event& event)
@@ -1384,6 +1386,8 @@ bool UseRandomQuestItemAction::Execute(Event& event)
         if (proto->StartQuest)
         {
             Quest const* qInfo = sObjectMgr.GetQuestTemplate(proto->StartQuest);
+            if (!qInfo)
+                continue;
             if (bot->CanTakeQuest(qInfo, false))
             {
                 item = questItem;

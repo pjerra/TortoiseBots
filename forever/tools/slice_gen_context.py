@@ -188,15 +188,30 @@ SLICE9_KEYS = {
 # W6a (package E6): auto-equip upgrades for every bot (`equipment audit` 300 s + `item push result` bag-generation poll); commanded bots self-equip iff ClaimedBotSelfEquip.
 # Pool gear top-up rides the same `equipment audit` row (PoolGearTopUpAction.cpp, AiPlayerbot.PoolGearTopUpOnLevel): its gear pass is
 # the host's W6b gear index, so only a masterless pool bot with the knob on does anything.
-# Other keys named by MaintenanceStrategy.cpp (`clean quest log`, `use random recipe`, `open random item`, `disenchant random item`,
-# `enchant random item`, `smart destroy item`, `use random quest item`, `auto share quest`, `auto complete quest`)
-# stay unregistered and are skipped by the engine.
+# `use random recipe` and `use random quest item` are R3A_KEYS; `open random item` and `auto complete quest` stay out (see
+# R3A_KEYS and the note above W2_KEYS).
+# `disenchant random item` / `enchant random item` stay out on purpose: TbHostProfessionUpkeep already does both for the bots the
+# design gives the upkeep to (free bots, gated by TortoiseBots.World.Disenchant / .EnchantGear), while the slice gives `maintenance`
+# to every bot, so the legacy rows would also dismantle a commanded player's loot and spend its reagents outside those switches (TB
+# adds maintenance only to a bot without a live master; their isUseful has no master gate). The enchant row would also need
+# `has reagents for` (CraftValues.cpp, not on the list) before it could score a spell at all.
 W6_KEYS = {
     "strategy": "maintenance",
     "action": "equip upgrades, pool gear top up",
     "trigger": "equipment audit, item push result",
     "value": "",
 }
+# Two more keys the compiled strategies fire stay out for a proved reason, not by oversight.
+# `auto complete quest` (AutoCompleteQuestAction.cpp): its completing list holds only the placeholder quest 0, so it can act only
+# through the `quest` cheat, and no bot can hold that cheat here (CheatAction::GetCheatMask is the slice stub that answers 0; the
+# per-bot SetCheat lives in the uncompiled CheatAction.cpp). The quest objective credits it calls (the flat ReqItemId/
+# ReqCreatureOrGOId arrays, CastedCreatureOrGO, KilledMonster(CreatureInfo*)) are not ForeverCore APIs either; the debug quest
+# command's Forever stub says the same. A creator registered for it would do nothing on this build.
+# `check mail` (CheckMailAction.cpp): its guild branch takes mail straight into the bags with no mailbox, but every compiled mail
+# take and send goes through the core's session handlers, which require an interactable mailbox (WorldSession::CanOpenMailBox,
+# MailHandler.cpp:34). It would also take the disenchant and lockbox service mail the host chains own (TbHostGuildOrderDisenchant's
+# IsDisenchantServiceMail, TbHostThievery's IsLockboxServiceMail) and delete returned mail behind the core's back. Mail reading and
+# delivery stay with `mail` at a mailbox (W2) and the rpg/travel mail rows.
 # W2 (D): vendor, repair, trainer, mail read (actions + budget values).
 W2_KEYS = {
     "strategy": "",
@@ -474,16 +489,39 @@ GUILD_KEYS = {
     "trigger": "speak",
     "value": "",
 }
-# TBF #158 (social): greeting. The `emote` strategy's only live row is `new player nearby` -> `greet`; its other rows name
-# the `emote`, `talk` and `mount anim` actions and the `seldom`, `receive text emote` and `receive emote` triggers, which the
-# slice does not register, so the engine skips them (the bot does less, never crashes). `already seen players` is the
-# encounter memory GreetAction reads and writes. GreetAction.cpp and EmoteStrategy.cpp are on the build list
-# (forever/SLICE-W4.txt).
+# TBF #158 (social): greeting. `new player nearby` -> `greet`; the strategy's own emote and mount-animation rows are the
+# separate EMOTE_KEYS group below. `already seen players` is the encounter memory GreetAction reads and writes.
+# GreetAction.cpp and EmoteStrategy.cpp are on the build list (forever/SLICE-W4.txt).
 SOCIAL_KEYS = {
     "strategy": "emote",
     "action": "greet",
     "trigger": "new player nearby",
     "value": "already seen players",
+}
+# Round 3 of the unregistered-key audit: the item-use rows the maintenance strategy and the class AoE kits name. The
+# maintenance rows are gated to masterless bots inside the actions, as TB's factory only adds the strategy without a real
+# player master. `open random item` stays out: opening a bag item is unported on Forever (OpenItemCompat), so it could not work.
+R3A_KEYS = {
+    "strategy": "",
+    "action": "use random recipe, use random quest item, throw grenade, oil of immolation",
+    "trigger": "",
+    "value": "",
+}
+# TBF #209 round 3 (emote): the two rows of the emote strategy that need no packet. A masterless bot's `random` row plays
+# one emote at a real player within AiPlayerbot.TooCloseDistance (EmoteAction::GetTarget skips bots, so an audience of bots
+# means no emote) and `last emote` keeps TB's 5-25 second cooldown between them; a `random` row plays the mount-special
+# animation of a mounted, still bot. A commanded bot keeps TB's quiet gate (it gets neither the emote nor the talk row).
+# Left out on purpose: `seldom` -> `talk` (idle chatter) and
+# `receive text emote` / `receive emote` -> `emote`. The two receive triggers exist in the full build, but the Forever
+# slice registers no legacy packet handler table (RegisterPacketHandlersCompat) and polls only the three loot and quest
+# events (PollPacketEventCompat), so no emote packet ever reaches a trigger and the rows could not fire. `talk target` is
+# the book the compiled TalkAction writes; registered so that action never reads a missing ObjectGuid, even though no row
+# creates it.
+EMOTE_KEYS = {
+    "strategy": "",
+    "action": "emote, mount anim",
+    "trigger": "",
+    "value": "last emote, talk target",
 }
 # Duels: TB's duel strategy (strategy/generic/DuelStrategy.cpp, strategy/generic/DuelStrategy.h): the bot takes
 # its duel opponent as the target (`attack duel opponent` reads `duel target`, registered since slice 1) and the class kit
@@ -517,7 +555,7 @@ BG2_KEYS = {
     "trigger": "",
     "value": "enemy flag carrier, team flag carrier",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS, LIFE_RPG_KEYS, LIFE_QUEST_KEYS, LIFE_TOWN_KEYS, GUILD_KEYS, SOCIAL_KEYS, DUEL_KEYS, WPVP_KEYS, BG2_KEYS)
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS, LIFE_RPG_KEYS, LIFE_QUEST_KEYS, LIFE_TOWN_KEYS, GUILD_KEYS, SOCIAL_KEYS, R3A_KEYS, EMOTE_KEYS, DUEL_KEYS, WPVP_KEYS, BG2_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")
