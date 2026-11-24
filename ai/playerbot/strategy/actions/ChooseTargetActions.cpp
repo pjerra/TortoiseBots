@@ -552,13 +552,17 @@ bool SelectNewTargetAction::Execute(Event& event)
             }
         }
 
-        // Let the dps/tank assist pick a target to attack
-        if (ai->HasStrategy("dps assist", BotState::BOT_STATE_NON_COMBAT))
+        // Let the dps/tank assist pick a target to attack. Both assist strategies define combat
+        // triggers only (DpsAssistStrategy / TankAssistStrategy), so asking the non-combat engine
+        // here never found one: the action cleared the target and returned, and a bot in combat
+        // with a live attacker (an add after the target died, the gray mob it was ordered to
+        // attack) stood targetless for as long as the attacker lived.
+        if (ai->HasStrategy("dps assist", BotState::BOT_STATE_COMBAT))
         {
             moreAttackers = true;
             return ai->DoSpecificAction("dps assist", event, true);
         }
-        else if (ai->HasStrategy("tank assist", BotState::BOT_STATE_NON_COMBAT))
+        else if (ai->HasStrategy("tank assist", BotState::BOT_STATE_COMBAT))
         {
             moreAttackers = true;
             return ai->DoSpecificAction("tank assist", event, true);

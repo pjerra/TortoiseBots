@@ -51,6 +51,12 @@ bool TakeCaught(Player* bot);
 void CancelErrand(Player const* bot);
 void ClearErrand(ObjectGuid const& botGuid);
 
+// A pole left in the main hand after fishing (an errand that ended, or a
+// logout while one held it) makes the bot fight with a tool: put the best
+// carried melee weapon back. False when the hand is not a pole or nothing
+// equippable is carried. Idempotent.
+bool RepairPoleInHand(Player* bot);
+
 // True when a fishing order can be executed at all on this build.
 bool HostAvailable();
 

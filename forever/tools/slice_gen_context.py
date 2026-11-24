@@ -186,12 +186,14 @@ SLICE9_KEYS = {
     "value": "active rolls, seen need rolls, item usage, skip go loot list",
 }
 # W6a (package E6): auto-equip upgrades for every bot (`equipment audit` 300 s + `item push result` bag-generation poll); commanded bots self-equip iff ClaimedBotSelfEquip.
+# Pool gear top-up rides the same `equipment audit` row (PoolGearTopUpAction.cpp, AiPlayerbot.PoolGearTopUpOnLevel): its gear pass is
+# the host's W6b gear index, so only a masterless pool bot with the knob on does anything.
 # Other keys named by MaintenanceStrategy.cpp (`clean quest log`, `use random recipe`, `open random item`, `disenchant random item`,
-# `enchant random item`, `smart destroy item`, `pool gear top up`, `use random quest item`, `auto share quest`, `auto complete quest`)
+# `enchant random item`, `smart destroy item`, `use random quest item`, `auto share quest`, `auto complete quest`)
 # stay unregistered and are skipped by the engine.
 W6_KEYS = {
     "strategy": "maintenance",
-    "action": "equip upgrades",
+    "action": "equip upgrades, pool gear top up",
     "trigger": "equipment audit, item push result",
     "value": "",
 }
