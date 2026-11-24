@@ -20,7 +20,7 @@ categories:
   world:
     description: "Living world systems: bot lifecycles, leveling, economy, and PvP/dungeon queues."
   classes:
-    description: "Deep-dive documentation for all 9 playable classes, specs, and Turtle WoW content."
+    description: "Deep-dive documentation for all 9 playable classes, specs and shared behavior on WoW Forever."
   server:
     description: "Installation, server configuration, settings reference, pool management, and observability."
   developers:
@@ -33,7 +33,7 @@ nodes:
   - id: classes-overview
     path: classes/overview.md
     category: classes
-    summary: Summary of the nine Vanilla classes, spec detection, combat roles, and shared behaviors in TortoiseBots.
+    summary: Summary of the nine Classic classes, spec detection, combat roles, and shared behaviors in TortoiseBots.
   - id: classes-warrior
     path: classes/warrior.md
     category: classes
@@ -75,15 +75,15 @@ nodes:
   - id: play-glossary
     path: play/glossary.md
     category: play
-    summary: Short explanations of abbreviations and TortoiseBots terms.
+    summary: Short explanations of abbreviations and TortoiseBots terms used across the WoW Forever documentation.
   - id: play-getting-started
     path: play/getting-started.md
     category: play
-    summary: How to set up your client, spawn companion bots from your own account, hire mercenaries, and adventure together.
+    summary: How to log your own characters in as bots on WoW Forever, order them, and meet the free bots.
   - id: play-features
     path: play/features.md
     category: play
-    summary: Comprehensive catalog of bot features, default states, configuration toggles, and engine limits.
+    summary: Catalog of what the WoW Forever build does, with its player commands, engine, pool, guild orders, market, queues, switches and defaults.
   - id: play-commands
     path: play/commands/README.md
     category: play
@@ -119,7 +119,7 @@ nodes:
   - id: play-dungeons-and-raids
     path: play/dungeons-and-raids.md
     category: play
-    summary: Field manual for clearing 5-player dungeons and raids with companion bots, covering corner pulling, CC discipline, boss tactics, wipe recovery, and loot rules.
+    summary: How companion bots fight in WoW Forever instances, including pulling, crowd control, interrupts, hazards, wipe recovery, loot and the GameMaster run leader.
   - id: play-dungeon-reference
     path: play/dungeon-reference.md
     category: play
@@ -139,7 +139,7 @@ nodes:
   - id: play-known-limitations
     path: play/known-limitations.md
     category: play
-    summary: Authoritative list of current engine boundaries, blocked features, explicit non-goals, and gameplay quirks.
+    summary: What the WoW Forever build does not do yet, which Turtle WoW features are absent, and the timers and quirks to expect.
 
   # World
   - id: world-living-world
@@ -163,7 +163,7 @@ nodes:
   - id: server-install
     path: server/install.md
     category: server
-    summary: How to build, compile, and configure TortoiseBots natively with the Tortoise WoW core, and verify your running build version.
+    summary: How to build, install and update TortoiseBots for WoW Forever (ForeverCore), including configuration and database delivery.
   - id: server-configuration
     path: server/configuration.md
     category: server
@@ -219,23 +219,23 @@ nodes:
   - id: server-admin-commands
     path: server/admin-commands.md
     category: server
-    summary: GameMaster and server console commands for managing the bot pool, synthetic auction house, and server state.
+    summary: The .tb GameMaster and server console commands for the bot pool, dungeon fill, battlegrounds, guild orders, runs and diagnostics.
   - id: server-bot-pool
     path: server/bot-pool.md
     category: server
-    summary: How the managed pool registry works, adopting legacy accounts, and safely resetting autonomous pool characters.
+    summary: How the WoW Forever pool creates its accounts and characters, keeps a target online, prunes failed rows and resets at startup.
   - id: server-dashboard
     path: server/dashboard.md
     category: server
-    summary: Setup, architecture, Prometheus metrics, and feature guide for the real-time bot observability service.
+    summary: How the WoW Forever build feeds the optional web dashboard, the module settings behind it, and what its tabs and APIs show.
   - id: server-run-trace
     path: server/run-trace.md
     category: server
-    summary: Record what a party of bots did during one run as a bt-trace v1 JSONL file plus a per-run summary, and score it offline.
+    summary: The .tb trace recorder for a party's run as a bt-trace v1 JSONL file plus a summary, scored offline.
   - id: server-decision-capture
     path: server/decision-capture.md
     category: server
-    summary: Record every run-leader decision with the facts behind it, cut a live failure into a replay fixture, and keep it as a regression test.
+    summary: The opt-in run-leader decision recorder, the tb-decision-capture format, and the replay fixture workflow.
 
   # Developers
   - id: developers
