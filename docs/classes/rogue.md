@@ -55,18 +55,16 @@ When enabled via configuration, rogues in 5-man dungeons use the same threat-dro
 
 ---
 
-## Turtle WoW custom spells
+## Custom abilities
 
-- **Surprise Attack:** Combo-building strike integrated into the Combat rotation.
-- **Noxious Assault:** Assassination talent providing attack power and instant main-hand/off-hand poison delivery.
-- **Envenom:** Finisher consuming Deadly Poison stacks for burst damage with an attack speed bonus.
-- **Shadow of Death & Mark for Death:** Subtlety talents enhancing banked burst detonation and party attack power.
+- **Death Mark:** learned by the Subtlety preset; the bot does not cast it yet.
+- **Surprise Attack, Noxious Assault, Envenom, Shadow of Death and Mark for Death:** Not on WoW Forever yet.
 
 ---
 
 ## Utility & interrupts
 
-- **Poisons:** Automatically applies poisons based on context: raid and generic combat use Instant Poison (main hand) and Deadly Poison (off hand); general PvE uses Instant Poison on both hands; PvP uses Mind Poison (main hand) and Crippling Poison (off hand). Gated by poison item required level and stock. [`.bot choice <bot> poison_mh|poison_oh <instant|deadly|crippling|mind|wound|auto>`](../play/commands/bot-panel.md#bot-choice) orders the poison per hand; every automatic poison row for that hand then stands down, so the two never overwrite each other. Without the poison item (and without the item cheat) the rogue keeps what the weapon carries.
+- **Poisons:** Automatically applies poisons based on context: raid and generic combat use Instant Poison (main hand) and Deadly Poison (off hand); general PvE uses Instant Poison on both hands; PvP uses Crippling Poison (off hand). Gated by poison item required level and stock. [`.bot choice <bot> poison_mh|poison_oh <instant|deadly|crippling|wound|auto>`](../play/commands/bot-panel.md#bot-choice) orders the poison per hand; every automatic poison row for that hand then stands down, so the two never overwrite each other. Without the poison item (and without the item cheat) the rogue keeps what the weapon carries. *Mind Poison* is Not on WoW Forever yet.
 - **Interrupts:** Casts *Kick* immediately to lock out enemy spell casts. Uses *Kidney Shot* as a stun fallback. With `AiPlayerbot.InterruptIgnoresThreat = 1` (recommended) *Kick* also goes out while the rogue is over the threat back-off line, which otherwise holds it, as long as the Kick would not pull the caster off the tank (under 110 % of the tank's threat on it).
 - **Self-Defense CC:** Uses *Gouge* at medium health (50–70%) and *Blind* at critical health (below 20%) to disorient attackers. *Gouge* only works while the target faces the rogue; with `AiPlayerbot.SpellFacingPrecheck = 1` (recommended) a rogue behind its target skips it instead of trying it over and over.
 - **Hold Ground Opt-In:** When [PoolMeleeHoldGround](../server/settings/performance.md#aiplayerbotpoolmeleeholdground) is enabled, pool rogues stand their ground using *Evasion* and *Vanish* rather than fleeing when low on health.
@@ -75,20 +73,20 @@ When enabled via configuration, rogues in 5-man dungeons use the same threat-dro
 
 ## Talent builds
 
-Bots learn pre-set talent orders at 5-level checkpoints (levels 10–60):
+Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
-| Spec Name | Config ID | Role | 60 Allocation | Key Signatures & Synergies |
-| :--- | :--- | :--- | :--- | :--- |
-| **Combat** | `4.0` | Melee DPS | `20 / 31 / 0` | Dual Wield Spec, Blade Rush, Adrenaline Rush, Hack and Slash, Lethality dip. |
-| **Assassination** | `4.1` | Melee DPS | `40 / 11 / 0` | Cold Blood, Seal Fate, Noxious Assault, Envenom, Vigor, Precision dip. |
-| **Subtlety** | `4.2` | Melee DPS | `10 / 0 / 41` | Hemorrhage, Preparation, Mark for Death, Honor Among Thieves, Assassination dip. |
+| Spec Name | Role | 60 Points (Assassination / Combat / Subtlety) | Key Talents |
+| :--- | :--- | :--- | :--- |
+| **Combat** | Melee DPS | `15 / 36 / 0` | Adrenaline Rush, Blade Flurry, Hack and Slash, Flash of Steel, Riposte. |
+| **Assassination** | Melee DPS | `41 / 10 / 0` | Cold Blood, Seal Fate, Mutilate, Vile Poisons, Improved Kidney Shot. |
+| **Subtlety** | Melee DPS | `15 / 0 / 36` | Hemorrhage, Preparation, Death Mark, Boot Knife, Premeditation. |
 
 <details>
-<summary>Leveling milestones and progression rationale</summary>
+<summary>Leveling order</summary>
 
-- **Combat (`4.0`):** Early levels build hit and crit (*Opportunity*, *Precision*, *Improved Backstab*), then *Dual Wield Specialization* (30), *Surprise Attack*, *Hack and Slash*, *Blade Rush* (35), and *Adrenaline Rush* (40), with a deep Assassination dip (*Malice*, *Ruthlessness*, *Murder*, *Relentless Strikes*, *Lethality*).
-- **Assassination (`4.1`):** Early levels build crit and poison damage (*Malice*, *Ruthlessness*, *Murder*, *Relentless Strikes*, *Lethality*), then *Cold Blood* (35), *Envenom* (40), *Seal Fate* (45), and *Noxious Assault* (50), with a Combat dip (*Opportunity*, *Improved Backstab*, *Precision*).
-- **Subtlety (`4.2`):** Early levels build stealth and control (*Camouflage*, *Initiative*, *Ghostly Strike*, *Hemorrhage* at 30), then *Preparation* (35), *Shadow of Death*, *Mark for Death* (45), and *Honor Among Thieves*, with a 10-point Assassination dip (*Malice*, *Ruthlessness*, *Murder*).
+- **Combat:** Lightning Reflexes, Precision, Deflection, Riposte, Endurance, Improved Sprint, Weapon Expertise, Aggression, Flawless Execution, Dual Wield Specialization, Blade Flurry, Hack and Slash, Flash of Steel, Adrenaline Rush and Coup de Grace; the last 15 points go to Assassination (Malice, Ruthlessness, Improved Slice and Dice, Lethality, Vigor).
+- **Assassination:** Malice, Ruthlessness, Improved Slice and Dice, Lethality, Vigor, Vile Poisons, Cold Blood, Improved Poisons, Venom, Relentless Strikes, Improved Kidney Shot, Seal Fate, Mutilate, Remorseless Attacks and Improved Gouge; the last 10 points go to Combat (Efficient Strikes, Coup de Grace, Precision, Deflection).
+- **Subtlety:** Opportunity, Improved Ambush, Dirty Deeds, Premeditation, Serrated Blades, Initiative, Elusiveness, Ghostly Strike, Setup, Preparation, Hemorrhage, Heightened Senses, Camouflage, Boot Knife, Death Mark, Master of Deception and Dirty Tricks; the last 15 points go to Assassination (Malice, Ruthlessness, Improved Slice and Dice, Lethality, Vigor).
 
 </details>
 
