@@ -41,12 +41,6 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 
-// The legacy manager header (RandomItemMgr -> GuidPosition -> WorldPosition)
-// needs the compat shim in front of it; core headers stay above it, as in the
-// other host files that include a legacy manager.
-#include "compat/botpch_forever.h"
-#include "playerbot/RandomItemMgr.h"
-
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -174,13 +168,6 @@ uint32_t EnchantIdOfSpell(uint32_t spellId)
         if (effect.Effect == SPELL_EFFECT_ENCHANT_ITEM && effect.MiscValue > 0)
             return uint32_t(effect.MiscValue);
     return 0;
-}
-
-uint32_t EnchantWeight(uint8_t playerClass, uint8_t spec, uint32_t enchantId)
-{
-    if (!enchantId)
-        return 0;
-    return sRandomItemMgr.CalculateEnchantWeight(playerClass, spec, enchantId);
 }
 
 bool GrantItem(Player* bot, uint32_t itemId)
@@ -400,8 +387,6 @@ struct EnchantChoice
 EnchantChoice FindEnchant(Player* bot, BotState& st)
 {
     EnchantChoice best;
-    uint8_t const playerClass = bot->GetClass();
-    uint8_t const spec = uint8_t(sRandomItemMgr.GetPlayerSpecId(bot));
 
     for (EnchantEntry const& entry : Catalogue())
     {
@@ -411,7 +396,7 @@ EnchantChoice FindEnchant(Player* bot, BotState& st)
         if (!spell)
             continue;
         uint32_t const enchantId = EnchantIdOfSpell(entry.spellId);
-        uint32_t const newWeight = EnchantWeight(playerClass, spec, enchantId);
+        uint32_t const newWeight = EnchantWeightFor(bot, enchantId);
         if (!enchantId || !newWeight)
             continue;
 
@@ -432,7 +417,7 @@ EnchantChoice FindEnchant(Player* bot, BotState& st)
             }
             if (!item->IsFitToSpellRequirements(spell))
                 continue;
-            uint32_t const current = EnchantWeight(playerClass, spec, item->GetEnchantmentId(PERM_ENCHANTMENT_SLOT));
+            uint32_t const current = EnchantWeightFor(bot, item->GetEnchantmentId(PERM_ENCHANTMENT_SLOT));
             if (newWeight <= current)
                 continue;
             if (!bestItem || current < bestCurrent)

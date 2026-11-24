@@ -15,6 +15,7 @@ import unittest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 MUTATE = False
 HOST = "forever/src/host/TbHostProfessionUpkeep.cpp"
+WEIGHT = "forever/src/host/TbHostProfessionUpkeepWeight.cpp"
 HDR = "forever/src/host/TbHostProfessionUpkeep.h"
 POLICY = "ai/playerbot/policy/profession/EnchantUpkeepPolicy.h"
 BOTMGR = "forever/src/TbBotMgr.cpp"
@@ -38,13 +39,13 @@ def botmgr_text():
 
 class TestEnchantUpkeepWiring(unittest.TestCase):
     def test_host_files_exist_and_are_slice_host_files(self):
-        for rel in (HOST, HDR, POLICY):
+        for rel in (HOST, WEIGHT, HDR, POLICY):
             self.assertTrue(os.path.exists(os.path.join(ROOT, rel)), rel)
         # forever/src/host/TbHost*.cpp is the slice-only glob; a new host file
         # needs no CMake edit.
         self.assertIn("host/TbHost*.cpp", read("CMakeLists.txt"))
         hdr = read(HDR)
-        for symbol in ("TickProfessionUpkeep", "HasActiveUpkeepCast", "ForgetProfessionUpkeep"):
+        for symbol in ("TickProfessionUpkeep", "HasActiveUpkeepCast", "ForgetProfessionUpkeep", "EnchantWeightFor"):
             self.assertIn(symbol, hdr, symbol)
 
     def test_switches_default_to_the_ported_behaviour(self):
@@ -81,7 +82,13 @@ class TestEnchantUpkeepWiring(unittest.TestCase):
         self.assertNotIn("ItemDisenchantIdCompat", host)
         # Enchant: fit and weight are the core's and the catalogue's.
         self.assertIn("IsFitToSpellRequirements(spell)", host)
-        self.assertIn("CalculateEnchantWeight", host)
+        self.assertIn("EnchantWeightFor(bot, enchantId)", host)
+        # The legacy weight manager needs the compat shim, so its call is the
+        # only thing in its own TU; the tick file keeps the core macros.
+        weight = read(WEIGHT)
+        self.assertIn("CalculateEnchantWeight", weight)
+        self.assertIn('#include "compat/botpch_forever.h"', weight)
+        self.assertNotIn("botpch_forever.h", host)
         self.assertIn("GetEnchantmentId(PERM_ENCHANTMENT_SLOT)", host)
         # Only a known spell is cast (the legacy action's own rule); the kit
         # grants the recipes and the rod the profession needs.
