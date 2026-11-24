@@ -138,7 +138,7 @@ A 20-bot Zul'Gurub tick in a fight is about 20 member facts and up to 30 unit fa
 
 ## Pulling a capture
 
-- **Dashboard** (when configured with a decisions folder): `GET /api/v1/decisions?commander=<name>&since=<RFC3339>&until=<RFC3339>` lists the captures, and `GET /api/v1/decisions/<id>/<file>` serves `index.json` or a segment, behind the usual login.
+- **From disk**: read the capture directly from `<LogsDir>/decisions/<captureId>/` (the folder `AiPlayerbot.DecisionCapture.Dir` sets). The dashboard serves no decision captures yet.
 - **External driver**: a walk copies its own character's captures into `<out>/decisions/<id>/`, or pulls them for a walk that died early.
 
 ## A failure becomes a fixture
