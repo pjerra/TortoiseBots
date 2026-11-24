@@ -33,7 +33,7 @@ Filling is demand-driven: with nobody waiting in the queue, no bot is grouped. T
 - A party is one tank, one healer and three damage dealers. Your own chosen role takes its slot, so a solo damage dealer gets a tank, a healer and two other damage bots.
 - Bots come from the free pool of **your faction**: masterless, ungrouped, alive, level 10 or more, standing in the world, not in a battleground or its queue, not teleporting, not on a flight and not in combat.
 - A bot fills a role its own spec covers: a tanking spec for the tank slot, a healing spec for the healer slot, anything for damage. With [`AiPlayerbot.RandomBotLftAllowRoleBorrow`](../server/settings/queues.md#aiplayerbotrandombotlftallowroleborrow) on, any class that has the kit may be pulled into a missing role instead.
-- The bot joins through the core's own invite and accept, wears the group's role bit, and is rebuilt into the role's kit (the same rebuild `.bot role` runs). When the party breaks up or you leave the queue, its role and group are cleared again.
+- The bot joins through the core's own invite and accept, wears the group's role bit, and is rebuilt into the role's kit (the same rebuild `.tb role` runs). When the party breaks up or you leave the queue, its role and group are cleared again.
 
 The fill never teleports anyone: the party walks to the instance portal. To bring a straggler, use [`.bot summon`](../play/commands/roster-and-hiring.md#bot-summon).
 
@@ -55,7 +55,7 @@ Bot objective play is not there yet: a bot in a match fights the players who att
 <a id="battlegrounds-with-your-own-party-bots"></a>
 ## Joining a battleground with your own bots
 
-Your own bots (alts, hired companions) queue the normal way through the battlemaster's **Join as Group**: the core queues every member of your party. In a match they follow you and fight alongside you, and they leave with you. The fill never queues these bots itself, but a party bot inside a match counts toward `TortoiseBots.Bg.MaxBots`.
+Your own bots (alts) queue the normal way through the battlemaster's **Join as Group**: the core queues every member of your party. In a match they follow you and fight alongside you, and they leave with you. The fill never queues these bots itself, but a party bot inside a match counts toward `TortoiseBots.Bg.MaxBots`.
 
 <a id="autonomous-bot-only-matches"></a>
 ## Not on WoW Forever yet
