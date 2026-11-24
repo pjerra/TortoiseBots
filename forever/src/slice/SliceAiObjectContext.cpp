@@ -76,6 +76,7 @@
 #include "playerbot/strategy/actions/TrainerAction.h"
 #include "playerbot/strategy/actions/TravelAction.h"
 #include "playerbot/strategy/actions/UnequipAction.h"
+#include "playerbot/strategy/actions/UnstuckAction.h"
 #include "playerbot/strategy/actions/UseConsumableAction.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/actions/UseTrinketAction.h"
@@ -128,6 +129,7 @@
 #include "playerbot/strategy/triggers/PullTriggers.h"
 #include "playerbot/strategy/triggers/RangeTriggers.h"
 #include "playerbot/strategy/triggers/RtiTriggers.h"
+#include "playerbot/strategy/triggers/StuckTriggers.h"
 #include "playerbot/strategy/triggers/WorldPacketTrigger.h"
 #include "playerbot/strategy/values/ActiveSpellValue.h"
 #include "playerbot/strategy/values/AlwaysLootListValue.h"
@@ -336,7 +338,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (103 of its keys)
+    // the registry of ActionContext (106 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -445,10 +447,13 @@ namespace slice
             creators["request quest travel target"] = [](PlayerbotAI* ai) { return new RequestQuestTravelTargetAction(ai); };
             creators["reset travel target"] = [](PlayerbotAI* ai) { return new ResetTargetAction(ai); };
             creators["move to travel target"] = [](PlayerbotAI* ai) { return new MoveToTravelTargetAction(ai); };
+            creators["unstuck"] = [](PlayerbotAI* ai) { return new UnstuckAction(ai); };
+            creators["reset"] = [](PlayerbotAI* ai) { return new ResetAction(ai); };
+            creators["hearthstone"] = [](PlayerbotAI* ai) { return new UseHearthStoneAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (67 of its keys)
+    // the registry of ChatActionContext (68 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -521,6 +526,7 @@ namespace slice
             creators["cdebug"] = [](PlayerbotAI* ai) { return new DebugAction(ai); };
             creators["log"] = [](PlayerbotAI* ai) { return new LogLevelAction(ai); };
             creators["set value"] = [](PlayerbotAI* ai) { return new SetValueAction(ai); };
+            creators["repop"] = [](PlayerbotAI* ai) { return new RepopAction(ai); };
         }
     };
 
@@ -547,7 +553,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (140 of its keys)
+    // the registry of TriggerContext (144 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -693,6 +699,10 @@ namespace slice
             creators["should pull"] = [](PlayerbotAI* ai) { return new ShouldPullTrigger(ai); };
             creators["collision"] = [](PlayerbotAI* ai) { return new CollisionTrigger(ai); };
             creators["sit"] = [](PlayerbotAI* ai) { return new SitTrigger(ai); };
+            creators["move stuck"] = [](PlayerbotAI* ai) { return new MoveStuckTrigger(ai); };
+            creators["move long stuck"] = [](PlayerbotAI* ai) { return new MoveLongStuckTrigger(ai); };
+            creators["combat stuck"] = [](PlayerbotAI* ai) { return new CombatStuckTrigger(ai); };
+            creators["combat long stuck"] = [](PlayerbotAI* ai) { return new CombatLongStuckTrigger(ai); };
         }
     };
 
@@ -793,7 +803,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (235 of its keys)
+    // the registry of ValueContext (238 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -1034,11 +1044,14 @@ namespace slice
             creators["should travel named"] = [](PlayerbotAI* ai) { return new ShouldTravelNamedValue(ai); };
             creators["should leave outgrown zone"] = [](PlayerbotAI* ai) { return new ShouldLeaveOutgrownZoneValue(ai); };
             creators["vendor trip needed"] = [](PlayerbotAI* ai) { return new VendorTripNeededValue(ai); };
+            creators["distance moved since"] = [](PlayerbotAI* ai) { return new DistanceMovedSinceValue(ai); };
+            creators["money"] = [](PlayerbotAI* ai) { return new MoneyValue(ai); };
+            creators["home bind"] = [](PlayerbotAI* ai) { return new HomeBindValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 75, kActions = 184, kTriggers = 219, kValues = 235;
+    constexpr unsigned kStrategies = 75, kActions = 188, kTriggers = 223, kValues = 238;
 }
 }
 

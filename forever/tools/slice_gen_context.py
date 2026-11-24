@@ -139,8 +139,8 @@ SLICE11_KEYS = {
 # actions and triggers of the open-world dead kit, and the graveyard values. Left out of the free kit on purpose (each one does less, spec
 # section 1.3): `rpg`, `tfish`, `maintenance`, `attack tagged`, `start duel`, `group`, `guild` (the collision keys are in
 # COLLISION_KEYS, which a player can add, still not part of the free kit); the travel keys are TRAVEL_KEYS below and `travel`
-# is in the free kit; `need for quest` (false), `enemy flag carrier`; the repop, self resurrect, unstuck and battleground
-# reset actions and the `falling far` / `move long stuck` / `val::gt32::*` triggers (the host's five-minute rescue replaces them).
+# is in the free kit; `need for quest` (false), `enemy flag carrier`; the self resurrect and battleground reset actions and
+# the `falling far` / `val::gt32::*` triggers (the host's ghost rescue covers the first; the stuck triggers are STUCK_KEYS).
 W1_KEYS = {
     "strategy": "grind",
     "action": "attack anything, avoid elite, idle wander, find corpse, revive from corpse, spirit healer",
@@ -406,7 +406,20 @@ TRAVEL_KEYS = {
     "value": "travel target active, travel target ready, no active travel destinations, need travel purpose, "
              "should travel named, should leave outgrown zone, vendor trip needed",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS)
+# Stuck rescue: the 5-minute move reset and the 15-minute hearthstone -> repop -> teleport chain, the combat-stuck
+# give-up and the four triggers that fire them (MaintenanceStrategy, ClassStrategy, CombatStrategy, DeadStrategy). `repop` is
+# the DeadStrategy action for the same trigger; `travel target active` and `no active travel destinations` are the travel-target
+# keep/retire state UnstuckAction reads and writes (WP-2's TRAVEL_KEYS also name them; _join registers each once). Values:
+# `distance moved since` and `time since last change` (S209) time the triggers, `money` is their earning test, `home bind` is
+# the rescue's own location. Left unregistered: `falling far` (the host's ghost rescue covers it), `self resurrect`, `spirit
+# healer`, `find corpse`, `revive from corpse` (their strategies' other rows do less on this core).
+STUCK_KEYS = {
+    "strategy": "",
+    "action": "unstuck, reset, hearthstone, repop",
+    "trigger": "move stuck, move long stuck, combat stuck, combat long stuck",
+    "value": "distance moved since, money, home bind, travel target active, no active travel destinations",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

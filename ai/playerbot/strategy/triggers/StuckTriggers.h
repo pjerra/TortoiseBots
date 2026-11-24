@@ -1,7 +1,7 @@
 #pragma once
 #include "playerbot/strategy/Trigger.h"
 #include "../../runtime/PlayerbotAIStorage.h" // Headless storage shim
-#include <Maps/MoveMap.h>
+#include "playerbot/TbCompatW1.h"
 
 namespace ai
 {
@@ -110,9 +110,6 @@ namespace ai
 
             WorldPosition botPos(bot);
 
-            // Penqle has no GetCurrentCell; use the bot's WorldPosition instead.
-            Cell cell{}; (void)cell;
-
             GridPair grid = botPos.getGridPair();
 
             if (grid.x_coord < 0 || grid.x_coord >= MAX_NUMBER_OF_GRIDS)
@@ -129,8 +126,10 @@ namespace ai
                 return true;
             }
 
-            if (cell.GridX() > 0 && cell.GridY() > 0 && !MMAP::MMapFactory::createOrGetMMapManager()->GetNavMesh(botPos.GetMapId())
-                && !MMAP::MMapFactory::createOrGetMMapManager()->loadMap(botPos.GetMapId(), cell.GridX(), cell.GridY()))
+            // A bot whose map has no navmesh cannot path out (Turtle: GetNavMesh(map) null and loadMap fails).
+            // The map/instance probe is the core pair's (Turtle loads a mesh per map, F per instance; active maps
+            // load theirs at creation), so it asks the same question the original did without loading anything.
+            if (grid.x_coord > 0 && grid.y_coord > 0 && !NavMeshLoadedCompat(botPos.GetMapId(), bot->GetInstanceId()))
             {
                 ai->TellDebug(ai->GetMaster(), "Stuck: In unloaded grid" + std::to_string(grid.x_coord) + "," + std::to_string(grid.y_coord), "debug stuck");
 
@@ -219,9 +218,10 @@ namespace ai
                 return true;
             }
 
-            if (bot->m_duel && bot->m_duel->startTime - time(0) > 15 * MINUTE)
+            time_t const duelStart = DuelStartTimeCompat(bot);
+            if (duelStart && duelStart - time(0) > 15 * MINUTE)
             {
-                ai->TellDebug(ai->GetMaster(), "Stuck: In Duel for " + std::to_string(bot->m_duel->startTime - time(0)) + " seconds.", "debug stuck");
+                ai->TellDebug(ai->GetMaster(), "Stuck: In Duel for " + std::to_string(duelStart - time(0)) + " seconds.", "debug stuck");
 
                 return true;
             }
@@ -278,9 +278,10 @@ namespace ai
                 return true;
             }
 
-            if (bot->m_duel && bot->m_duel->startTime - time(0) > 15 * MINUTE)
+            time_t const duelStart = DuelStartTimeCompat(bot);
+            if (duelStart && duelStart - time(0) > 15 * MINUTE)
             {
-                ai->TellDebug(ai->GetMaster(), "Stuck: In Duel for " + std::to_string(bot->m_duel->startTime - time(0)) + " seconds.", "debug stuck");
+                ai->TellDebug(ai->GetMaster(), "Stuck: In Duel for " + std::to_string(duelStart - time(0)) + " seconds.", "debug stuck");
 
                 return true;
             }
