@@ -946,6 +946,12 @@ std::optional<OrderRecord> FindOrder(uint32_t botGuidLow)
     return it->second;
 }
 
+bool HasOpenOrder(uint32_t botGuidLow)
+{
+    std::optional<OrderRecord> const order = FindOrder(botGuidLow);
+    return order && !order->cancelled && !IsFinished(order->state);
+}
+
 std::vector<OrderRecord> ListOrdersForGuild(uint32_t guildId)
 {
     StoreState& s = State();

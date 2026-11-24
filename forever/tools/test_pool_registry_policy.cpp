@@ -173,6 +173,17 @@ int main()
     CHECK(w::PoolHasRoomForCharacter(9, 10));
     CHECK(!w::PoolHasRoomForCharacter(10, 10));
 
+    // The pool's placement is one character per account: one session per account means a second character of an account
+    // could never be online, so the accounts hold exactly the pool's characters and the cap needs one account per character.
+    CHECK(w::kPoolCharactersPerAccount == 1);
+    CHECK(w::MaxPoolAccounts(22, w::kPoolCharactersPerAccount) == 22);
+    CHECK(w::MaxPoolAccounts(50, w::kPoolCharactersPerAccount) == 50);
+    CHECK(w::MaxPoolAccounts(1, w::kPoolCharactersPerAccount) == 1);
+    CHECK(w::MaxPoolAccounts(0, w::kPoolCharactersPerAccount) == 0);
+    CHECK(w::PoolHasRoomForCharacter(0, w::kPoolCharactersPerAccount));
+    CHECK(!w::PoolHasRoomForCharacter(1, w::kPoolCharactersPerAccount));
+    CHECK(!w::PoolHasRoomForCharacter(10, w::kPoolCharactersPerAccount));
+
     if (g_fail)
         std::printf("test_pool_registry_policy: %d checks, %d FAILED\n", g_checks, g_fail);
     else

@@ -81,7 +81,7 @@ class FreeHost(unittest.TestCase):
         self.assertIn("RequireOwnedBot(handler, guid)", free)
         self.assertIn("std::string const error = BotMgr::Instance().SetFree(guid, word == \"on\");", free)
         self.assertLess(free.index("RequireOwnedBot(handler, guid)"), free.index("BotMgr::Instance().SetFree(guid"))
-        self.assertIn("BotMgr::Instance().Login(GuidByName(name), master, free)", func(SCRIPTS, "static bool HandleLogin("))
+        self.assertIn("BotMgr::Instance().Login(guid, master, free)", func(SCRIPTS, "static bool HandleLogin("))
         self.assertIn("BotMgr::Instance().IsFreeBot(ObjectGuid::Create<HighGuid::Player>(guid))", HOSTBOTS)
 
     def test_the_free_kit_is_the_class_spec_plus_the_world(self):

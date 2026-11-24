@@ -147,22 +147,14 @@ bool ProtectedItem(Player* bot, uint32_t itemId)
         tbhost::guild_orders::DisenchantQueued(bot->GetGUID().GetCounter()), itemId);
 }
 
-// A finished or cancelled order stays in the store until the giver collects it; only an open one keeps the bot busy.
-bool HasOpenOrder(uint32_t botGuidLow)
-{
-    std::optional<TortoiseBots::GuildOrders::OrderRecord> const order = tbhost::guild_orders::FindOrder(botGuidLow);
-    return order && !order->cancelled && !TortoiseBots::GuildOrders::IsFinished(order->state);
-}
-
 bool OtherErrand(Player* bot)
 {
-    uint32_t const botGuidLow = bot->GetGUID().GetCounter();
     return tbhost::prof::HasActiveErrand(bot) ||
         tbhost::errands::HasActiveErrand(bot) ||
         tbhost::guild_mail::HasActiveErrand(bot) ||
         tbhost::guild_orders::HasActiveDisenchantErrand(bot) ||
         tbhost::guild_orders::HasActiveEnchantErrand(bot) ||
-        HasOpenOrder(botGuidLow);
+        tbhost::guild_orders::HasOpenOrder(bot->GetGUID().GetCounter());
 }
 
 // The enchant id the spell applies (SPELL_EFFECT_ENCHANT_ITEM's misc value),

@@ -51,8 +51,9 @@ struct Character
     std::int64_t lastLogout = 0;
 };
 
-// The spec's cap: at most 10 characters per pool account.
-constexpr std::uint32_t kCharactersPerAccount = 10;
+// One character per pool account (world::kPoolCharactersPerAccount): one session per account means a second character on
+// an account could never be online.
+constexpr std::uint32_t kCharactersPerAccount = world::kPoolCharactersPerAccount;
 
 // All account and character rows as the database holds them, with no trust filter: the reconciliation's read.
 struct Rows

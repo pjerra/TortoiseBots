@@ -30,6 +30,8 @@ TortoiseBots.ClassQuestSpells = 0
 #
 #    TortoiseBots.Slice.EngineByDefault
 #        Description: A bot that logs in runs on the real bot engine (PlayerbotAI) instead of the spike's follow/assist.
+#                     A bot that logs in without a master has nothing to follow, so the engine runs it as a free bot
+#                     (grind, food, loot, roll, buff; open-world death and corpse run).
 #                     Only has an effect in a build made with TORTOISEBOTS_SLICE1. `.tb engine <character> on|off`
 #                     changes it for one bot that is already logged in.
 #        Default:     0
@@ -410,13 +412,14 @@ TortoiseBots.Pool.MaxCharacters = 50
 #
 #    TortoiseBots.Pool.TargetOnline
 #        Description: The pool's online target: `.tb pool start` keeps this many pool bots of both factions in the world (0 = the
-#                     schedule runs but logs nobody in; sessions that end still log out). One session per account is the rule
-#                     (the pool puts up to ten characters on an account), so the online count is capped by the number of accounts
+#                     schedule runs but logs nobody in; sessions that end still log out). One session per account is the rule,
+#                     so the pool keeps one character on each account and the online count is capped by the number of accounts
 #                     the pool's characters sit on. A bot that got a master keeps its account for as long as the binding lasts,
-#                     and the pool cannot end it: that account is out of reach, so the pool needs more accounts than the target to
-#                     refill the slot of a bound bot. `.tb pool status` adds `capped by accounts: N` when the target is above the
-#                     accounts left. Logins alternate factions and take the bot offline longest first; a bot that got a master
-#                     leaves the count. A lowered target logs out the newest sessions first, never a dead or fighting bot.
+#                     and the pool cannot end it: that account is out of reach, so the pool needs more characters (and so accounts)
+#                     than the target to refill the slot of a bound bot. `.tb pool status` adds `capped by accounts: N` when
+#                     the target is above the accounts left. Logins alternate factions and take the bot offline longest first;
+#                     a bot that got a master leaves the count. A lowered target logs out the newest sessions first, never a
+#                     dead or fighting bot.
 #                     0 to 5000.
 #                     `.tb pool population <n|low|high>` changes the target at runtime; `.reload config` puts this value back.
 #        Default:     0

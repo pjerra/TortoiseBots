@@ -150,6 +150,20 @@ static void TestBuilderStamps()
     CHECK(Has(lines[4], "\"a\":\"0x10\""));
     CHECK(Has(lines[4], "\"b\":\"0xf130\""));
     CHECK(!Has(lines[4], "\"v\":0")); // zero value omitted
+
+    // An event's own count is "n": "v" is the schema version every record
+    // starts with, and a second "v" key made strict readers read 9 as the
+    // schema version and refuse the whole file.
+    Event loopEv;
+    loopEv.ev = "action_loop";
+    loopEv.a = 0x10;
+    loopEv.v = 9;
+    loopEv.s = "touch of weakness";
+    loopEv.s2 = "IMPOSSIBLE";
+    std::string const loopLine = b.BuildEvent(900, loopEv);
+    CHECK(Has(loopLine, "\"n\":9"));
+    CHECK(loopLine.rfind("\"v\":1") == 1);
+    CHECK(loopLine.find("\"v\":", 2) == std::string::npos);
     CHECK_EQ(lines[5], "{\"v\":1,\"k\":\"action\",\"run\":\"run-1\",\"src\":\"server\",\"t\":1200,\"g\":\"0x10\",\"name\":\"melee\",\"res\":\"FAILED\",\"rel\":1.500}");
     CHECK(Has(lines[6], "\"reason\":\"stop\""));
     CHECK(Has(lines[6], "\"counters\":{\"frames\":0"));
