@@ -100,7 +100,6 @@ void RandomItemMgr::Init()
     BuildTradeCache();
     LoadRandomEnchantments();
     LoadBotEnchantCandidates();
-    LoadBotSpecEnchants();
     BuildRandomItemCache();
 }
 
@@ -3119,46 +3118,6 @@ void RandomItemMgr::LoadBotEnchantCandidates()
     sLog.outString();
 }
 
-void RandomItemMgr::LoadBotSpecEnchants()
-{
-    botSpecEnchants.clear();
-    botSpecEnchantsLoaded = true;
-
-    uint32 count = 0;
-    auto queryResult = WorldDatabase.Query(
-        "SELECT spec_id, slotid, spellid FROM ai_playerbot_spec_enchant");
-    if (queryResult)
-    {
-        do
-        {
-            Field* fields = queryResult->Fetch();
-            uint32 specId = fields[0].GetUInt32();
-            uint8 slotId = fields[1].GetUInt8();
-            uint32 spellId = fields[2].GetUInt32();
-            botSpecEnchants[specId][slotId] = spellId;
-            ++count;
-        } while (queryResult->NextRow());
-
-        if (count)
-            sLog.outString(">> Loaded %u bot spec enchant rows", count);
-    }
-}
-
-bool RandomItemMgr::FindBotSpecEnchant(uint32 specId, uint8 slotId, uint32& spellId)
-{
-    if (!botSpecEnchantsLoaded)
-        LoadBotSpecEnchants();
-
-    auto spec = botSpecEnchants.find(specId);
-    if (spec == botSpecEnchants.end())
-        return false;
-    auto row = spec->second.find(slotId);
-    if (row == spec->second.end())
-        return false;
-    spellId = row->second;
-    return true;
-}
-
 uint32 RandomItemMgr::CalculateProcEnchantWeight(uint8 playerclass, uint8 spec, uint32 enchantId)
 {
     if (!enchantId)
@@ -3265,10 +3224,6 @@ uint32 RandomItemMgr::CalculateProcEnchantWeight(uint8 playerclass, uint8 spec, 
     return weight;
 }
 
-// The only level the armory enchanting sample covers. Below it the per-spec
-// table has nothing to say and the level-gated pool pick stays in charge.
-static constexpr uint32 kBotSpecEnchantLevel = 60;
-
 uint32 RandomItemMgr::CalculateBestBotEnchantId(Player* bot, uint32 specId, Item* item)
 {
     if (!bot || !item)
@@ -3300,35 +3255,29 @@ uint32 RandomItemMgr::CalculateBestBotEnchantId(Player* bot, uint32 specId, Item
     if (!specId || !m_weightScales[specId].info.id)
         return 0;
 
-    struct FittedCandidate
-    {
-        uint32 spellId = 0;
-        uint32 enchantId = 0;
-    };
-    // One candidate row against this item: source-tier cap, level, quality
-    // band and the item-type mask. Returns the enchant spell and the
-    // SpellItemEnchantment id it applies.
-    auto candidateFits = [&](BotEnchantCandidate const& candidate, bool ignorePremium, FittedCandidate& out)
+    uint32 bestSpell = 0;
+    uint32 bestScore = 0;
+    for (auto const& candidate : botEnchantCandidates)
     {
         if (candidate.slotId != equipSlot)
-            return false;
+            continue;
         // Source-tier cap with rep gate (same rules as the gear pool:
         // default tier 0, rep off; roadmap issue #289 unlocks higher).
         if (candidate.tier > 0 || candidate.rep > 0)
-            return false;
+            continue;
         if (candidate.minLevel > level)
-            return false;
-        if (candidate.premium && !ignorePremium && !isEpic)
-            return false;
+            continue;
+        if (candidate.premium && !isEpic)
+            continue;
         if (candidate.minLevel + levelMargin > level)
-            return false;
+            continue;
 
         SpellEntry const* spellInfo = GetSpellEntryCompat(candidate.spellId);
         if (!spellInfo || spellInfo->Effect[0] != SPELL_EFFECT_ENCHANT_ITEM)
-            return false;
+            continue;
         uint32 enchantId = spellInfo->EffectMiscValue[0];
         if (!enchantId)
-            return false;
+            continue;
         // Slot/item-type mask fit: mirrors EnchantItemT's own check so
         // mismatches are skipped silently instead of spamming error logs
         // (e.g. Fiery Weapon onto a shield, scope onto a thrown weapon).
@@ -3339,52 +3288,14 @@ uint32 RandomItemMgr::CalculateBestBotEnchantId(Player* bot, uint32 specId, Item
         bool const minorAgilityCloak = candidate.spellId == 13419 && proto->InventoryType == INVTYPE_CLOAK;
         if (!minorAgilityCloak && spellInfo->EquippedItemClass >= 0 &&
             int32(proto->Class) != spellInfo->EquippedItemClass)
-            return false;
+            continue;
         if (!((1 << proto->SubClass) & spellInfo->EquippedItemSubClassMask) &&
             !((1 << proto->InventoryType) & spellInfo->EquippedItemInventoryTypeMask))
-            return false;
-
-        out.spellId = candidate.spellId;
-        out.enchantId = enchantId;
-        return true;
-    };
-
-    // At 60 the per-spec table owns every slot it names: the common Forever
-    // choice, or deliberately none where players leave the slot empty. It is
-    // the more specific rule, so the premium cap (the generic picker's "epic
-    // items only") does not re-filter it; the level and quality bands do.
-    if (level >= kBotSpecEnchantLevel)
-    {
-        uint32 specSpell = 0;
-        if (FindBotSpecEnchant(specId, equipSlot, specSpell))
-        {
-            if (!specSpell)
-                return 0;
-            for (auto const& candidate : botEnchantCandidates)
-            {
-                if (candidate.spellId != specSpell)
-                    continue;
-                FittedCandidate fitted;
-                if (candidateFits(candidate, true, fitted))
-                    return fitted.spellId;
-            }
-            // The chosen enchant is missing from the pool or does not fit
-            // this item: leave the slot alone rather than pick a different one.
-            return 0;
-        }
-    }
-
-    uint32 bestSpell = 0;
-    uint32 bestScore = 0;
-    for (auto const& candidate : botEnchantCandidates)
-    {
-        FittedCandidate fitted;
-        if (!candidateFits(candidate, false, fitted))
             continue;
 
-        uint32 score = CalculateEnchantWeight(playerclass, specId, fitted.enchantId);
+        uint32 score = CalculateEnchantWeight(playerclass, specId, enchantId);
         if (!score)
-            score = CalculateProcEnchantWeight(playerclass, specId, fitted.enchantId);
+            score = CalculateProcEnchantWeight(playerclass, specId, enchantId);
         // Deterministic tie-break: two candidates can weigh the same
         // (e.g. scopes on a spec with no dps scale, or zero-weight auras).
         // Prefer the higher-min-level row so picks march up the ladder with
@@ -3393,28 +3304,11 @@ uint32 RandomItemMgr::CalculateBestBotEnchantId(Player* bot, uint32 specId, Item
             candidate.minLevel > GetBotEnchantMinLevel(bestSpell, equipSlot)))
         {
             bestScore = score;
-            bestSpell = fitted.spellId;
+            bestSpell = candidate.spellId;
         }
     }
 
     return bestScore ? bestSpell : 0;
-}
-
-bool RandomItemMgr::SpecEnchantGoverns(Player* bot, Item* item)
-{
-    if (!bot || !item)
-        return false;
-    if (bot->GetLevel() < kBotSpecEnchantLevel)
-        return false;
-
-    uint32 specId = GetPlayerSpecId(bot);
-    if (!specId)
-        specId = GetFallbackSpecId(bot->GetClass());
-    if (!specId)
-        return false;
-
-    uint32 spellId = 0;
-    return FindBotSpecEnchant(specId, item->GetSlot(), spellId);
 }
 
 uint8 RandomItemMgr::GetBotEnchantMinLevel(uint32 spellId, uint8 slotId)
