@@ -31,13 +31,13 @@ inline bool IsPassthroughVerb(std::string_view verb)
 {
     std::string const word = Lower(verb);
     return word == "add" || word == "logout" || word == "remove" || word == "summon" || word == "stats" ||
-           word == "who" || word == "maintenance" || word == "autogear";
+           word == "who" || word == "maintenance" || word == "autogear" || word == "hire";
 }
 
 // The advertised TBM:VERBS tokens: one per registered word, sorted. Registering the word advertises the bare verb itself.
 inline std::vector<std::string> PassthroughVerbs()
 {
-    return {"add", "autogear", "logout", "maintenance", "remove", "stats", "summon", "who"};
+    return {"add", "autogear", "hire", "logout", "maintenance", "remove", "stats", "summon", "who"};
 }
 
 // The word the player layer prints for a sent verb (`remove` answers with `logout` lines).

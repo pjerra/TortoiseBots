@@ -324,7 +324,7 @@ std::vector<uint32> BotMgr::BotAccounts() const
     return accounts;
 }
 
-std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool, bool owned)
+std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool, bool owned, bool engine)
 {
     if (!_enabled)
         return "TortoiseBots.Enable is 0";
@@ -390,8 +390,8 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master, bool free
     bot.characterBnet = bot.session->GetBattlenetAccountId();
     bot.wantParty = !master.IsEmpty();
     // A free bot always runs the engine: there is no spike behaviour that grinds, rests and corpse-runs.
-    // An owned bot always runs the engine too: `.bot` orders and chat need it.
-    bot.useEngine = _engineByDefault || free || owned;
+    // An owned bot always runs the engine too: `.bot` orders and chat need it. A hire asks for it explicitly.
+    bot.useEngine = _engineByDefault || free || owned || engine;
     // A bot with no master has nothing to follow, so an engine for it is the free kit (engine::Create refuses a
     // masterless brain without the free flag, and PlayerbotAI's default strategies read the free flag). A login that
     // asks for the engine without naming a master therefore starts a free bot; with the engine off it stands.

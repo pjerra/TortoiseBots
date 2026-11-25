@@ -30,8 +30,9 @@ The `.bot` command is for players only while `TortoiseBots.Player.Commands = 1` 
 | :--- | :--- | :--- | :--- |
 | **Free bot** (pool bot) | A bot that lives in the world: quests, grinds, loots, sells, trains. Pool bots are free bots that the server's pool logs in and out on a schedule. | You don't. One may join your group for a shared quest or fill your dungeon-fill request. | It carries on with its own life. |
 | **Own alt** | A character on your own account, played by the server. | `.bot add <Name>` or the addon's roster. | `.bot logout <Name>` logs it out. |
+| **Hired companion** | A temporary character on a hire account, levelled and geared to your request. | `.bot hire <class> ...` at a recruiter, or anywhere with `AiPlayerbot.HireAnywhere = 1`. | `.bot logout <Name>` ends the hire and deletes it; no fee is returned. |
 
-Hired companions and claimed guild bots from the Turtle WoW build are not on ForeverCore: there is no `.bot hire`, no recruiter, and a guild invite does not make a pool bot yours. See [What bots can do](features.md#not-on-forevercore-yet).
+Claimed guild bots from the Turtle WoW build are not on ForeverCore: a guild invite does not make a pool bot yours. See [What bots can do](features.md#not-on-forevercore-yet).
 
 ## Your first party
 

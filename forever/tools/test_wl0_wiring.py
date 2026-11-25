@@ -541,8 +541,9 @@ class Scheduler(unittest.TestCase):
         self.assertIn("std::vector<uint32> BotAccounts() const;", MGR_H)
         self.assertIn("itr->second.pool", MGR_H)
         # PR #129 (player commands R2) appended `bool owned` for `.bot add`; the pool arguments stay as they were.
+        # The hire piece appended `bool engine` after them.
         self.assertIn("std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false, bool pool = false, "
-                      "bool owned = false);", MGR_H)
+                      "bool owned = false,\n        bool engine = false);", MGR_H)
         login = func(MGR_CPP, "std::string BotMgr::Login(")
         self.assertIn("bot.pool = pool;", login)
         self.assertIn("if (pool && !free)", login)

@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 382 keys, 373 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 324 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 389 keys, 380 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 317 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -686,6 +686,9 @@ AiPlayerbot.RandomBotLftMaxFillsPerInterval = 1
 # AiPlayerbot.RandomBotLftAllowRoleBorrow  (bool, PlayerbotAIConfig.cpp:1010)
 AiPlayerbot.RandomBotLftAllowRoleBorrow = 0
 
+# AiPlayerbot.HireEnabled  (bool, PlayerbotAIConfig.cpp:1014)
+AiPlayerbot.HireEnabled = 1
+
 # AiPlayerbot.HireMinAccountSecurity  (int, PlayerbotAIConfig.cpp:1015)
 AiPlayerbot.HireMinAccountSecurity = 0
 
@@ -697,6 +700,15 @@ AiPlayerbot.HireMaxLevelAboveHirer = 0
 
 # AiPlayerbot.HireFreeMinSecurity  (int, PlayerbotAIConfig.cpp:1027)
 AiPlayerbot.HireFreeMinSecurity = 0
+
+# AiPlayerbot.HireAnywhere  (bool, PlayerbotAIConfig.cpp:1028)
+AiPlayerbot.HireAnywhere = 0
+
+# AiPlayerbot.HireAllowPvP  (bool, PlayerbotAIConfig.cpp:1029)
+AiPlayerbot.HireAllowPvP = 0
+
+# AiPlayerbot.HireCrossFactionNeutralInns  (bool, PlayerbotAIConfig.cpp:1030)
+AiPlayerbot.HireCrossFactionNeutralInns = 0
 
 # AiPlayerbot.HireLoot  (bool, PlayerbotAIConfig.cpp:1031)
 AiPlayerbot.HireLoot = 0
@@ -767,11 +779,20 @@ AiPlayerbot.HireGearTiersEnabled = 1
 # AiPlayerbot.HireGearStartTier  (int, PlayerbotAIConfig.cpp:1098)
 AiPlayerbot.HireGearStartTier = 0
 
+# AiPlayerbot.HireGearUnlockAccountWide  (bool, PlayerbotAIConfig.cpp:1101)
+AiPlayerbot.HireGearUnlockAccountWide = 0
+
 # AiPlayerbot.HireGearOptionalMaps  (string, PlayerbotAIConfig.cpp:1105)
 AiPlayerbot.HireGearOptionalMaps = 
 
 # AiPlayerbot.HireGearTierCostMultipliers  (string, PlayerbotAIConfig.cpp:1107)
 AiPlayerbot.HireGearTierCostMultipliers = 1,1.5,2,3,4,5,6,6
+
+# AiPlayerbot.WorldBuffsEnabled  (bool, PlayerbotAIConfig.cpp:1113)
+AiPlayerbot.WorldBuffsEnabled = 1
+
+# AiPlayerbot.WorldBuffsKeepInRaids  (bool, PlayerbotAIConfig.cpp:1114)
+AiPlayerbot.WorldBuffsKeepInRaids = 0
 
 # AiPlayerbot.WorldBuffsMinLevel  (int, PlayerbotAIConfig.cpp:1115)
 AiPlayerbot.WorldBuffsMinLevel = 60

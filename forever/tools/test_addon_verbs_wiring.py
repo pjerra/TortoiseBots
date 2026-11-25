@@ -15,7 +15,7 @@ SRC = ROOT / "forever" / "src"
 HOST = SRC / "host"
 PLAYER = HOST / "player"
 
-REGISTERED = ["add", "autogear", "logout", "maintenance", "remove", "stats", "summon", "who"]
+REGISTERED = ["add", "autogear", "hire", "logout", "maintenance", "remove", "stats", "summon", "who"]
 NOT_REGISTERED = ["roster", "list", "alts", "action", "invite", "uninvite", "role", "strategy",
                   "formation", "downtime", "command", "cc", "run", "features", "config",
                   "help", "follow", "stay", "attack", "flee"]

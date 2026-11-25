@@ -31,11 +31,16 @@
 #include "RBAC.h"
 #include "ScriptMgr.h"
 #include "SharedDefines.h"
+#include "Util.h"
 #include "WorldSession.h"
 #include "host/TbAddonInfo.h"
 #include "host/TbOrdersApi.h"
 #include "host/TbHostLfgFill.h"
 #include "host/TbAutogear.h"
+#include "host/hire/TbHire.h"
+#include "host/hire/TbHireProvision.h"
+#include "host/hire/TbHireProvisionPure.h"
+#include "runtime/HireLifecycle.h"
 
 #include <algorithm>
 #include <cctype>
@@ -240,7 +245,70 @@ bool HandleHelp(Player* player, Caller const& caller)
     Say(player, "TortoiseBots: help: .bot blessing <bot|party> <warrior|paladin|hunter|rogue|priest|shaman|mage|warlock|druid> <might|wisdom|kings|salvation|sanctuary|light|auto> | player <name> <blessing|auto> | status - a paladin's blessing orders, until logout");
     Say(player, "TortoiseBots: help: .bot choice <bot|party> <aura|aspect|curse|poison_mh|poison_oh|sting|pet> <value|auto> | status - the ordered buff, poison or demon, until logout");
     Say(player, "TortoiseBots: help: .bot service <bot> [portal <spellId> | conjure <food|water|healthstone>] - what a bot can conjure or portal");
+    Say(player, "TortoiseBots: help: .bot hire <class> [race] [male/female] [tank/healer/dps|spec] [tier] [level=<n>] - hire a companion (recruiter unless HireAnywhere)");
     Say(player, "TortoiseBots: help: .bot lfg join <dungeon id> <tank|healer|dps> | status | leave - the dungeon fill for your own character");
+    return true;
+}
+
+// `.bot hire <class> [race] [gender] [role|spec] [tier] [level=<n>]`: the fast path. Without
+// AiPlayerbot.HireAnywhere the provisioner refuses it with the recruiter hint.
+char const* HireStatusWord(hire::Status status)
+{
+    switch (status)
+    {
+        case hire::Status::Ok: return "ok";
+        case hire::Status::Disabled: return "disabled";
+        case hire::Status::NoPermission: return "no-permission";
+        case hire::Status::RecruiterRequired: return "recruiter-required";
+        case hire::Status::InvalidChoice: return "bad-choice";
+        case hire::Status::GroupFull: return "group-full";
+        case hire::Status::CapReached: return "cap";
+        case hire::Status::Poor: return "poor";
+        case hire::Status::TierLocked: return "tier-locked";
+        default: return "failed";
+    }
+}
+
+bool HandleHire(Player* player, std::string_view tail)
+{
+    hire::HireCommandParse const parse = hire::ParseHireCommand(tail, player->GetLevel(), hire::ShamanTankEnabled());
+    if (!parse.ok)
+    {
+        Refuse(player, "hire", parse.errorCode.c_str(), parse.message);
+        return true;
+    }
+    hire::Selection selection;
+    selection.classId = parse.classId;
+    selection.race = parse.race;
+    selection.gender = parse.gender;
+    selection.role = parse.role;
+    selection.specIndex = parse.specIndex;
+    selection.gearTier = parse.gearTier;
+    selection.level = parse.requestedLevel > 255 ? 255 : static_cast<uint8>(parse.requestedLevel);
+    if (!selection.race)
+    {
+        // The hirer's faction's races that can be the class, as the core's own player info says.
+        std::vector<uint8> pool;
+        for (uint32 race = 1; race <= 11; ++race)
+            if (Player::TeamForRace(static_cast<uint8>(race)) == player->GetTeam() &&
+                sObjectMgr->GetPlayerInfo(race, selection.classId))
+                pool.push_back(static_cast<uint8>(race));
+        if (pool.empty())
+        {
+            Refuse(player, "hire", "bad-choice", "No race of your faction can be that class.");
+            return true;
+        }
+        selection.race = pool[urand(0, static_cast<uint32>(pool.size() - 1))];
+    }
+    if (!parse.genderGiven)
+        selection.gender = static_cast<uint8>(urand(0, 1));
+
+    hire::Outcome const outcome = hire::Hire(player, selection, nullptr);
+    if (outcome.status == hire::Status::Ok)
+        Say(player, "TortoiseBots: hire " + outcome.botName + ": ok tier " + std::to_string(selection.gearTier) +
+            ", fee " + std::to_string(outcome.cost) + " copper");
+    else
+        Refuse(player, "hire", HireStatusWord(outcome.status), outcome.message);
     return true;
 }
 
@@ -386,6 +454,14 @@ bool HandleLogout(Player* player, Caller const& caller, OwnerScope const& scope,
     if (verdict != Verdict::Allowed)
     {
         Refuse(player, "logout", CodeOf(verdict), "you may not log that bot out");
+        return true;
+    }
+    // A hire is not a bot that may be parked: logging it out ends the hire and deletes its character,
+    // and no fee is returned (the fee is for the hire that ran).
+    if (HireLifecycle::Instance().IsHired(bot->GetGUID()))
+    {
+        HireLifecycle::Instance().DismissNow(bot->GetGUID(), "dismissed by its owner");
+        Say(player, "TortoiseBots: logout " + bot->GetName() + ": ok dismissed the hire (its character is deleted, no fee is returned)");
         return true;
     }
     if (!BotMgr::Instance().Logout(bot->GetGUID(), "logged out by its owner"))
@@ -769,6 +845,8 @@ bool Dispatch(Player* player, std::string_view rest)
         return HandleSummon(player, caller, scope, AfterFirstWord(rest));
     if (verb == "stats")
         return HandleStats(player, caller, scope, AfterFirstWord(rest));
+    if (verb == "hire")
+        return HandleHire(player, AfterFirstWord(rest));
     if (verb == "lfg")
         return lfg::HandlePlayerLfg(player, AfterFirstWord(rest));
 

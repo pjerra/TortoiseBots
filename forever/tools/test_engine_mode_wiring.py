@@ -38,7 +38,7 @@ def func(text, signature):
 class MasterlessEngine(unittest.TestCase):
     def test_a_masterless_engine_login_is_a_free_bot(self):
         login = func(MGR_CPP, "std::string BotMgr::Login(")
-        engine_on = login.index("bot.useEngine = _engineByDefault || free || owned;")
+        engine_on = login.index("bot.useEngine = _engineByDefault || free || owned || engine;")
         free = login.index("bot.free = true;", engine_on)
         self.assertLess(engine_on, free)
         self.assertIn("if (bot.useEngine && bot.master.IsEmpty())", login[engine_on:free])

@@ -227,7 +227,7 @@ class Wiring(unittest.TestCase):
 
     def test_login_owned_skips_account_rule_only_for_owner(self):
         mgr = read(SRC / "TbBotMgr.cpp")
-        login = function_body(mgr, r"std::string BotMgr::Login\(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool, bool owned\)")
+        login = function_body(mgr, r"std::string BotMgr::Login\(ObjectGuid characterGuid, ObjectGuid master, bool free, bool pool, bool owned, bool engine\)")
         self.assertIn("if (AccountHasBot(accountId))", login)
         # The owner (the master) must be in the world now, with a Battle.net account; fail closed otherwise.
         self.assertIn("ObjectAccessor::FindPlayer(master)", login)
@@ -241,7 +241,7 @@ class Wiring(unittest.TestCase):
         self.assertNotIn("sWorld->FindSession(accountId)", login)
         self.assertIn("bot.owned = owned;", login)
         self.assertIn("bot.ownerBnet = ownerBnet;", login)
-        self.assertIn("bot.useEngine = _engineByDefault || free || owned;", login)
+        self.assertIn("bot.useEngine = _engineByDefault || free || owned || engine;", login)
         hdr = read(SRC / "TbBotMgr.h")
         self.assertIn("bool owned = false", hdr)
         self.assertIn("uint32 ownerBnet = 0;", hdr)

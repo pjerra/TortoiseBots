@@ -43,7 +43,8 @@ The orders the server runs this way are: `attack`, `stop`, `follow`, `stay`, `fl
 | `.bot features` | Lists the server's player-facing switches (the addon's Info window). | [Bot Panel](bot-panel.md) |
 | `.bot who [all]` (also `roster`, `list`) | Lists the bots you may order, one line each; a GM may add `all`. | [Roster and Hiring](roster-and-hiring.md) |
 | `.bot add <name>` | Logs in one of your own characters as a bot; it joins your party. | [Roster and Hiring](roster-and-hiring.md) |
-| `.bot logout <bot>` (also `remove`) | Logs your bot out. | [Roster and Hiring](roster-and-hiring.md) |
+| `.bot logout <bot>` (also `remove`) | Logs your bot out; on a hired companion it dismisses the hire and deletes its character. | [Roster and Hiring](roster-and-hiring.md) |
+| `.bot hire <class> [race] [male/female] [tank/healer/dps\|spec] [tier] [level=<n>]` | Hires a companion at the recruiter; works anywhere only with `AiPlayerbot.HireAnywhere`. | [Roster and Hiring](roster-and-hiring.md) |
 | `.bot summon <bot>` | Brings the bot to your side; its master only, with a per-bot wait. | [Roster and Hiring](roster-and-hiring.md) |
 | `.bot follow <bot> [member]` | The bot follows you, the named member or your target. | [Party Actions](party-actions.md) |
 | `.bot stay <bot>` | The bot stands where it is. | [Party Actions](party-actions.md) |

@@ -187,7 +187,7 @@ nodes:
   - id: server-settings-hiring
     path: server/settings/hiring.md
     category: server
-    summary: Mercenary hiring, hire prices, gear tiers and recruiter world buffs are not part of the ForeverCore build; bots come from the bot pool or from a player's own characters.
+    summary: Hired companions, their fees, level, cap and PvP rules, and the AiPlayerbot.Hire settings that control them.
   - id: server-settings-class-behaviour
     path: server/settings/class-behaviour.md
     category: server

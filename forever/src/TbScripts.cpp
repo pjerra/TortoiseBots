@@ -18,8 +18,10 @@
 #include "host/cmd/TbCmdTrace.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
+#include "host/hire/TbHireWorldBuffs.h"
 #include "host/TbPet.h"
 #include "host/TbAddonAi.h"
+#include "host/hire/TbHireRecruiter.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #include "host/TbPetFactory.h"
@@ -40,10 +42,14 @@
 #include "host/gear/TbGearGen.h"
 #include "host/TbSpecEnchant.h"
 #include "host/gear/TbGearSourceTier.h"
+#include "host/hire/TbHireTiers.h"
+#include "host/hire/TbHire.h"
+#include "host/hire/TbHireProvision.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostWorldPvp.h"
 #include "host/TbHostRitualFill.h"
 #include "runtime/PassingBuffsService.h"
+#include "runtime/HireLifecycle.h"
 #if defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
 #include "host/TbLuaBots.h"
 #endif
@@ -380,10 +386,12 @@ public:
             if (BotMgr::Instance().Enabled())
             {
                 LoadEngineConfig();
+                TortoiseBots::hire::AdvertiseAddonCaps();   // TBM:CAPS after the engine config, not at script registration
                 TortoiseBots::RunTraceService::Instance().Initialize();   // mark summaries the last server never finalised
                 TortoiseBots::gear::InitGearIndex();
                 TortoiseBots::gear::InitGearSourceIndex();
                 TortoiseBots::enchant::LoadSpecEnchants();   // the level-60 enchant choice, one world table read
+                TortoiseBots::hire::LoadAtStartup();   // P4: the contract gear sets (a missing table leaves tier sets off)
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
                 TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
@@ -406,6 +414,10 @@ public:
     {
         auto const started = std::chrono::steady_clock::now();
         BotMgr::Instance().Update(diff);
+#ifdef TORTOISEBOTS_SLICE1
+        // The hire ledger's grace, battleground boundary and one-per-tick deletion drain (host/hire/TbHireLifecycle.cpp).
+        TortoiseBots::HireLifecycle::Instance().Update(diff);
+#endif
         TortoiseBots::pool::Reset::Update(diff);   // the startup reset, one step and at most one deletion per tick
 #ifdef TORTOISEBOTS_SLICE1
         TortoiseBots::PassingBuffsService::Instance().Update(diff);   // pool bots' buffs for the real players they pass
@@ -454,6 +466,7 @@ public:
             BotPerf() = TortoiseBots::perf::Window();
 #ifdef TORTOISEBOTS_SLICE1
         TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
+        TortoiseBots::hire::Update(diff);     // #298: the mustering companions (confirm, ledger, charge, login, provision, group)
         TortoiseBots::DashRuns::Update(diff);  // dashboard round 1: COMMANDERS and the run summaries (forever/docs/DASH-RUNS-R1-NOTES.md)
         TortoiseBots::cmd::Maintain();         // P2: the binding timers (dead lead, absent commander) and the stored rows whose party is back
         TortoiseBots::place::Update();          // #15: the minimap-ping timeouts and the walk back of a placed bot that lost its slot
@@ -509,10 +522,19 @@ public:
     void OnAddMember(Group* group, ObjectGuid guid) override { TortoiseBots::cmd::NoteGroupAdd(group, guid); }
     void OnRemoveMember(Group* group, ObjectGuid guid, RemoveMethod /*method*/, ObjectGuid /*kicker*/, char const* /*reason*/) override
     {
+#ifdef TORTOISEBOTS_SLICE1
+        TortoiseBots::HireLifecycle::Instance().OnGroupMemberRemoved(group, guid);
+#endif
         TortoiseBots::cmd::NoteGroupRemove(group, guid);
     }
     void OnChangeLeader(Group* group, ObjectGuid newLeaderGuid, ObjectGuid /*oldLeaderGuid*/) override { TortoiseBots::cmd::NoteGroupLeader(group, newLeaderGuid); }
-    void OnDisband(Group* group) override { TortoiseBots::cmd::NoteGroupDisband(group); }
+    void OnDisband(Group* group) override
+    {
+#ifdef TORTOISEBOTS_SLICE1
+        TortoiseBots::HireLifecycle::Instance().OnGroupDisband(group);
+#endif
+        TortoiseBots::cmd::NoteGroupDisband(group);
+    }
 };
 
 class tortoisebots_player : public PlayerScript
@@ -599,6 +621,10 @@ public:
 #endif
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
+#ifdef TORTOISEBOTS_SLICE1
+        // A hire's master is back inside the disconnect grace: its companions rejoin the party (host/hire/TbHireLifecycle.cpp).
+        TortoiseBots::HireLifecycle::Instance().OnMasterLogin(player);
+#endif
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         TortoiseBots::addonhint::NoteLogin(player);   // a real player whose client has not spoken TBM yet
 #endif
@@ -662,6 +688,10 @@ public:
 #endif
         // #20: the pieces the bot's own are due back before the Player is deleted (the hold map is host state: it must not leak).
         TortoiseBots::resistgear::Restore(player, "logout");
+#ifdef TORTOISEBOTS_SLICE1
+        // A hire's master logs out: the disconnect grace starts, and the companions wait (host/hire/TbHireLifecycle.cpp).
+        TortoiseBots::HireLifecycle::Instance().OnMasterLogout(player);
+#endif
         // Before the Player is deleted: the engine brain (PlayerbotAI) must be gone by then.
         BotMgr::Instance().OnPlayerLogout(player);
     }
@@ -2052,6 +2082,9 @@ void AddSC_tortoisebots()
     new tortoisebots_commands();
     TortoiseBots::chatin::AddScripts();     // S1-R2: PlayerScript::OnChat -> the bots' chat inboxes (host/chat/TbChatIn.cpp)
     TortoiseBots::player::AddScripts();     // R1: PlayerScript::OnCommand -> the players' `.bot` entry (host/player/TbPlayerCmd.cpp)
+#ifdef TORTOISEBOTS_SLICE1
+    TortoiseBots::hire::RegisterRecruiterScripts();   // #298 P3: the <Mercenary Hire> NPC gossip (host/hire/TbHireRecruiter.cpp)
+#endif
     TortoiseBots::addon::AddScripts();      // #130: PlayerScript::OnAddonMessageSent -> the TBM addon channel (host/TbAddonChannel.cpp)
     TortoiseBots::addoninfo::RegisterAddonVerbsInfo(); // #130 f-info: the "features" and "run" verbs (host/TbAddonInfo.cpp)
     TortoiseBots::action::RegisterAddonVerbsActions();   // #130 f-actions: the `action` verb + `action:<intent>` tokens
@@ -2071,6 +2104,10 @@ void AddSC_tortoisebots()
     TortoiseBots::cmd::combat::RegisterScripts();   // P5: the damage, heal, death and cast hooks of the fight monitor
     TortoiseBots::bg::RegisterScripts();            // BG1: the battleground queue join, invite and port-failed hooks (inert while off)
     TortoiseBots::lfg::RegisterScripts();           // #160: the dungeon-finder fill tick (inert while off)
+#ifdef TORTOISEBOTS_SLICE1
+    TortoiseBots::hire::worldbuffs::AddScripts();   // world-buff aura/kill credit and the raid-entry rule (engine build only)
+    TortoiseBots::hire::RegisterScripts();          // P4: the contract kill credit (boss kills, kill-store load/drop)
+#endif
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1 && defined(TBF_WITH_FOREVER_LUA) && TBF_WITH_FOREVER_LUA
     TortoiseBots::luabots::Register();              // B1: the ForeverLua bot API provider (host/TbLuaBots.cpp); once, never unregistered
 #endif

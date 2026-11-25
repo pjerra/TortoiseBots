@@ -55,6 +55,7 @@ void HandleStats(Player* requester, std::string_view args) { RunVerb("stats", re
 void HandleWho(Player* requester, std::string_view args) { RunVerb("who", requester, args); }
 void HandleMaintenance(Player* requester, std::string_view args) { RunVerb("maintenance", requester, args); }
 void HandleAutogear(Player* requester, std::string_view args) { RunVerb("autogear", requester, args); }
+void HandleHire(Player* requester, std::string_view args) { RunVerb("hire", requester, args); }
 
 } // namespace
 
@@ -68,6 +69,7 @@ void RegisterAddonVerbsPassthrough()
     addon::RegisterVerb("who", &HandleWho);
     addon::RegisterVerb("maintenance", &HandleMaintenance);
     addon::RegisterVerb("autogear", &HandleAutogear);
+    addon::RegisterVerb("hire", &HandleHire);
 }
 
 } // namespace addonverbs

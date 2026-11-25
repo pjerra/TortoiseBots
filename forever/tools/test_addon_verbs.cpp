@@ -23,16 +23,16 @@ int main()
         CHECK(out.detail == "started; it arrives next to you");
     }
 
-    // Exactly the eight verbs the player layer answers ride natively; everything else stays unsupported (f-chan).
+    // Exactly the nine verbs the player layer answers ride natively; everything else stays unsupported (f-chan).
     // case: registered_verbs_are_the_player_layer_verbs
     {
-        for (char const* verb : {"add", "logout", "remove", "summon", "stats", "who", "maintenance", "autogear"})
+        for (char const* verb : {"add", "logout", "remove", "summon", "stats", "who", "maintenance", "autogear", "hire"})
             CHECK(v::IsPassthroughVerb(verb));
         for (char const* verb : {"roster", "list", "alts", "action", "invite", "uninvite", "role", "strategy",
                                  "formation", "downtime", "command", "cc", "run", "features", "config", "help",
                                  "follow", "stay", "attack", "flee"})
             CHECK(!v::IsPassthroughVerb(verb));
-        CHECK(v::PassthroughVerbs().size() == 8);
+        CHECK(v::PassthroughVerbs().size() == 9);
     }
 
     // `remove` is the alias: the player layer prints `logout` lines, the intent stays the sent word.

@@ -12,7 +12,7 @@ relates_to:
 
 # Roster and Character Commands
 
-On ForeverCore you bring your own characters into the world as bots, or a GameMaster logs any bot in. There is no mercenary hiring, no recruiter service and no autonomous alt-bot that plays while you are offline.
+On ForeverCore you bring your own characters into the world as bots, a GameMaster logs any bot in, or a player hires a temporary companion at a `<Mercenary Hire>` recruiter. There is no autonomous alt-bot that plays while you are offline.
 
 ## Summary
 
@@ -20,7 +20,8 @@ On ForeverCore you bring your own characters into the world as bots, or a GameMa
 | :--- | :--- | :--- |
 | [`.bot who`](#roster) | player | Lists the bots you may order (aliases `roster`, `list`). |
 | [`.bot add`](#logging-in-and-out) | player | Logs one of your own characters in as a bot in your party. |
-| [`.bot logout`](#logging-in-and-out) | owner | Logs a bot out (alias `remove`). |
+| [`.bot logout`](#logging-in-and-out) | owner | Logs a bot out (alias `remove`); on a hire it dismisses and deletes the companion. |
+| [`.bot hire`](#hiring-a-companion) | player | Hires a temporary companion at a recruiter (anywhere only with `AiPlayerbot.HireAnywhere`). |
 | [`.bot summon`](#summon) | master or GM | Brings a bot to your side. |
 | [`.bot maintenance`](#maintenance) | owner | Tops up reagents, bandages and ammo, repairs and saves. |
 | [`.bot autogear`](#gearing) | owner | Equips better gear up to a quality or item-level cap. |
@@ -56,6 +57,18 @@ There is no away-summary store: the addon's `alts` request lists the free bots y
 - Refusals: `not-found`, `already-online`, `not-leader`, `too-many`, `not-yours`, `login-refused`.
 - `.bot logout` and its alias `.bot remove` log an owned bot out; the character keeps all progress. `not-found` means no such online bot.
 - To play the character yourself, log into it from the character screen; the bot session is disconnected.
+
+## Hiring a Companion
+
+```text
+.bot hire <class> [race] [male/female] [tank/healer/dps|<spec>] [tier] [level=<n>]
+```
+
+- Normal hiring is at a `<Mercenary Hire>` recruiter in an inn. The chat command is the fast path and works anywhere only when the server sets `AiPlayerbot.HireAnywhere = 1` (default 0); otherwise it answers `recruiter-required`.
+- Words are in any order: the class; an optional race and `male`/`female` (the hirer's faction's valid races, random when omitted); `tank`/`healer`/`dps` or a spec word such as `frost`, `prot` or `resto`; a tier (`t1`..`t7`, or a name such as `mc`); and `level=<n>` (or a bare number 12 or higher as the last word). The companion arrives at your level unless you ask otherwise, never more than `AiPlayerbot.HireMaxLevelAboveHirer` above you (default 0).
+- The hire is a new character on a hire account, levelled and geared on the world tick, then logged in and invited to your party. It is temporary: `.bot logout` / `.bot remove` on it ends the hire and deletes the character with no fee returned; leaving your party or entering a battleground also ends it (`AiPlayerbot.HireAllowPvP = 1` lifts the PvP rule).
+- `AiPlayerbot.HireMaxBotsPerPlayer` (default 4) caps your live companions. The fee is `AiPlayerbot.HireBaseCostCopper` escalated by the party multipliers and scaled by level; it is charged only once the character exists, and a hire that fails later is undone with the fee returned. `AiPlayerbot.HireFreeMinSecurity` waives it for staff accounts.
+- Refusals name a code: `disabled`, `no-permission`, `recruiter-required`, `bad-choice`, `cap`, `group-full`, `poor`, `tier-locked`, `failed`.
 
 ## GameMaster Roster Commands
 
@@ -168,4 +181,4 @@ Guild orders are not a `.bot` chat command on Forever. Use `.tb guildorder creat
 
 ## Not on ForeverCore Yet
 
-Mercenary hiring (`.bot hire`, `.bot hire raid`), recruiter menus, capital world-buff services, mercenary contracts, autonomous alt-bots (`.bot alts` summaries, alt progress, `AiPlayerbot.AltBots`), `.bot invite` / `.bot uninvite`, `.bot gear` tier and preset names, `.bot role` spec ids, and the chat `.bot release` / `.bot corpse run` / `.bot learn` / `.bot trade` commands are not in this build. Their settings stay in `aiplayerbot.conf.dist`, but no gameplay code reads them.
+Raid hiring (`.bot hire raid`), recruiter menus, capital world-buff services, mercenary contracts, autonomous alt-bots (`.bot alts` summaries, alt progress, `AiPlayerbot.AltBots`), `.bot invite` / `.bot uninvite`, `.bot gear` tier and preset names, `.bot role` spec ids, and the chat `.bot release` / `.bot corpse run` / `.bot learn` / `.bot trade` commands are not in this build. Their settings stay in `aiplayerbot.conf.dist`, but no gameplay code reads them.

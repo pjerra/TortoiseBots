@@ -11,6 +11,7 @@
 #include "Player.h"
 
 #include "runtime/PoolGearTopUpPolicy.h"
+#include "runtime/HireLifecycle.h"
 
 #include <map>
 
@@ -26,6 +27,11 @@ std::map<uint32, uint32> s_lastTopUpLevel;
 bool IsPoolBot(Player* bot)
 {
     return bot && TortoiseBots::BotMgr::Instance().IsPoolBot(bot->GetObjectGuid());
+}
+
+bool IsHired(Player* bot)
+{
+    return bot && TortoiseBots::HireLifecycle::Instance().IsHired(bot->GetObjectGuid());
 }
 
 uint32 LastLevel(Player* bot)

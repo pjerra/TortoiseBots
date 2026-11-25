@@ -43,8 +43,11 @@ public:
 
     // Empty string = started. Otherwise the reason it was refused. An empty master with `free` = a masterless bot that grinds,
     // loots and corpse-runs on its own (W1); without `free` it stands where it is. `pool` marks a login the pool scheduler
-    // started (W0): a pool bot is always a free bot, and IsPoolBot answers for the scheduler.
-    std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false, bool pool = false, bool owned = false);
+    // started (W0): a pool bot is always a free bot, and IsPoolBot answers for the scheduler. `engine` asks for the real brain
+    // on a commanded bot that is neither free nor owned (a hire): on a server with TortoiseBots.Slice.EngineByDefault off, every
+    // other commanded bot runs the follow-only spike.
+    std::string Login(ObjectGuid characterGuid, ObjectGuid master, bool free = false, bool pool = false, bool owned = false,
+        bool engine = false);
 
     // Makes a new level 1 character on the account the way the core's own creation does (realm character count, creation hooks).
     // Empty string = the saves were QUEUED; the character commit is asynchronous, and only when it succeeds are the login side

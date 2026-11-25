@@ -1,11 +1,12 @@
-// Host service R6B-2: the pool, hire, claim, lease, commander and guild-order questions the legacy engine asks, answered for a
-// ForeverCore host bot. Built only with TORTOISEBOTS_SLICE1 (CMakeLists.txt).
+// Host service R6B-2: the pool, claim, lease, commander and guild-order questions the legacy engine asks, answered for a
+// ForeverCore host bot. Built only with TORTOISEBOTS_SLICE1 (CMakeLists.txt). The hired-companion lifecycle has its own
+// owner now (host/hire/TbHireLifecycle.cpp).
 //
 // A host bot (forever/src/TbBotMgr.h) is no pool bot, no hire, no claimed guild bot, holds no activity lease, belongs to no
 // commanded group and has no guild order. Each function below keeps the legacy name and signature and answers that; the
 // "not on this host" ones also count under a feature of the unported list, so `.tb unported` shows how often the engine asked.
 // Every answer is listed in forever/docs/SLICE1-R6B-NOTES.md (section 3, choice c). The real owners of these names
-// (runtime/HireLifecycle.cpp, ClaimLifecycle.cpp, BotActivityLease.cpp, AhBotSellerAccount.cpp, RandomBotAccountRegistry.cpp,
+// (ClaimLifecycle.cpp, BotActivityLease.cpp, AhBotSellerAccount.cpp, RandomBotAccountRegistry.cpp,
 // GuildOrderStore.cpp, commands/Commander.cpp, behavior/PlayerConvenience.cpp) are not part of the slice: if one is ported, its
 // function must leave this file (a duplicate symbol at link says so).
 #include "compat/botpch_forever.h"
@@ -17,7 +18,6 @@
 #include "runtime/ClaimLifecycle.h"
 #include "runtime/CommandedGroupQuery.h"
 #include "runtime/GuildOrderStore.h"
-#include "runtime/HireLifecycle.h"
 #include "runtime/RandomBotAccountRegistry.h"
 #include "runtime/RunReleaseHold.h"
 #include "host/TbH3.h"
@@ -30,23 +30,6 @@
 
 namespace TortoiseBots
 {
-// ---- HireLifecycle (runtime/HireLifecycle.cpp): nobody is hired. ----
-HireLifecycle& HireLifecycle::Instance()
-{
-    static HireLifecycle instance;
-    return instance;
-}
-
-bool HireLifecycle::IsHired(ObjectGuid /*botGuid*/) const
-{
-    return false;
-}
-
-ObjectGuid HireLifecycle::GetMaster(ObjectGuid /*botGuid*/) const
-{
-    return ObjectGuid::Empty;
-}
-
 // ---- ClaimLifecycle (runtime/ClaimLifecycle.cpp): no guild bot is claimed. ----
 ClaimLifecycle& ClaimLifecycle::Instance()
 {

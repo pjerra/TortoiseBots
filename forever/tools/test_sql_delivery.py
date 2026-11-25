@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Check that every module SQL file under forever/sql/ is in an applied updater path
-(forever/sql/world/ or forever/sql/characters/), follows the naming & idempotency rules,
-and is documented in forever/sql/README.md.
+(forever/sql/world/, forever/sql/characters/ or forever/sql/hotfixes/), follows the naming
+& idempotency rules, and is documented in forever/sql/README.md. hotfixes/ is the same
+delivery rule against the separate hotfixes database (broadcast_text lives there).
 
 Run:
   python3 forever/tools/test_sql_delivery.py
@@ -14,7 +15,7 @@ import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SQL_ROOT = os.path.join(ROOT, "forever", "sql")
-APPLIED_SUBDIRS = {"world", "characters"}
+APPLIED_SUBDIRS = {"world", "characters", "hotfixes"}
 NAME_RE = re.compile(r"^\d{4}_\d{2}_\d{2}_\d{2}_[a-z0-9_]+\.sql$")
 MUTATE = False
 
@@ -61,6 +62,8 @@ class TestSqlDelivery(unittest.TestCase):
         self.assertIn("$/sql/tortoisebots/world", readme)
         self.assertIn("$/sql/tortoisebots/characters", readme)
         self.assertIn("characters/2026_11_20_01_tb_guild_orders.sql", readme)
+        self.assertIn("$/sql/tortoisebots/hotfixes", readme)
+        self.assertIn("hotfixes/2026_11_25_02_tortoisebots_hire_recruiter_text.sql", readme)
 
 
 if __name__ == "__main__":

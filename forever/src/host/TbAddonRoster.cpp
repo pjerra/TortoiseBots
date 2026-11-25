@@ -13,6 +13,7 @@
 #include "host/TbAddonInfo.h"
 #include "host/TbAddonRosterPure.h"
 #include "host/player/TbPlayerAuthPure.h"
+#include "runtime/HireLifecycle.h"
 #include "TbBotMgr.h"
 #include "host/cmd/TbCmdBinding.h"
 #include "host/run/TbRunHooks.h"
@@ -207,9 +208,17 @@ void HandleRoster(Player* requester, std::string_view /*args*/)
     caller.account = scope.bnet;
 
     std::vector<Player*> const bots = VisibleBots(requester, caller, scope);
-    std::vector<RosterRow> rows;
-    rows.reserve(bots.size());
+    // A hire is not a roster row (TortoiseBots parity): its Logout would delete the character, so the
+    // addon must not offer the roster's lifecycle buttons for it. It stays a bot target through
+    // BOTSTATE below, so the party/bot panels keep working.
+    std::vector<Player*> rosterBots;
+    rosterBots.reserve(bots.size());
     for (Player* bot : bots)
+        if (!HireLifecycle::Instance().IsHired(bot->GetGUID()))
+            rosterBots.push_back(bot);
+    std::vector<RosterRow> rows;
+    rows.reserve(rosterBots.size());
+    for (Player* bot : rosterBots)
         rows.push_back(ToRosterRow(bot, InRequesterGroup(requester, bot)));
 
     addon::Send(requester, RosterBegin(rows.size()));

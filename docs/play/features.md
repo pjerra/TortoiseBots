@@ -46,6 +46,17 @@ New here? Read [Getting Started](getting-started.md) first.
 
 The bot answers `TortoiseBots: <verb>: ...` on the channel you typed on. A refused order names a short code (`refused too-many: ...`), never an account.
 
+## Hired Companions
+
+| Feature | On? | Where | More |
+| :--- | :---: | :--- | :--- |
+| Hire a temporary companion at a `<Mercenary Hire>` recruiter | Yes | `AiPlayerbot.HireEnabled = 1` | [Hiring](commands/roster-and-hiring.md#hiring-a-companion) |
+| `.bot hire <class> ...` anywhere, not only at a recruiter | No | `AiPlayerbot.HireAnywhere = 0` | [Hiring](commands/roster-and-hiring.md#hiring-a-companion) |
+| Up to four live companions | Yes | `AiPlayerbot.HireMaxBotsPerPlayer = 4` | [Hiring settings](../server/settings/hiring.md) |
+| A fee scaled by level and party size, waived for staff | Yes | `AiPlayerbot.HireBaseCostCopper`, `HireFreeMinSecurity` | [Hiring settings](../server/settings/hiring.md) |
+| Companions stay out of battlegrounds | Yes | `AiPlayerbot.HireAllowPvP = 0` | [Hiring settings](../server/settings/hiring.md) |
+| Dismissing a companion deletes its character | Always | — | [Roster](commands/roster-and-hiring.md#hiring-a-companion) |
+
 ## Party Controls
 
 | Feature | On? | Where | More |
@@ -175,7 +186,7 @@ These are the party orders both the `.tb order` console command and the addon's 
 
 These are part of the Turtle WoW build that this page used to describe, or of old TortoiseBots releases. None of them is built into the Forever module; none has a setting here.
 
-- **Hired companions and recruiters.** No `.bot hire`, no mercenary contracts, no recruiter world buffs, no gear tiers.
+- **Raid and contract hiring.** Raid hiring (`.bot hire raid`, whole compositions), the recruiter gear-tier contracts and the capital recruiters' world buffs are not built; ordinary companion hiring is.
 - **Autonomous alt-bots.** An own alt that leaves your group does not start playing by itself.
 - **Claimed guild bots.** A pool bot cannot be claimed as your own by a guild invite.
 - **Boss and raid tactics.** No per-boss interrupt, positioning or add rules; `AiPlayerbot.RaidReactions` is off and the boss-tactic tables are not loaded.

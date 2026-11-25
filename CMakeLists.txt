@@ -51,6 +51,8 @@ option(TORTOISEBOTS_SLICE1 "Also build the slice-1 legacy bot engine (forever/SL
 if(NOT TORTOISEBOTS_SLICE1)
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/compat/(TbCompat_C|TbCompat_Config|TbCompat_Unported|TbCompat_V|TbCompat_WL4)\\.cpp$")
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/(TbH3|TbOrders|TbPartyState|TbTestKit|TbLuaBots|chat/TbChatCmd)\\.cpp$")
+  # The hire provisioner is the engine's (it logs a bot in, levels it and gears it): forever/src/host/hire is slice-only.
+  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/hire/[^/]*\\.cpp$")
 else()
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/TbH3Off\\.cpp$")
   # TBF-B1 third review finding 9: the provider is compiled only when the engine is built too (without BUILD_FOREVER_LUA the whole
@@ -137,6 +139,9 @@ if(TORTOISEBOTS_SLICE1)
     ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/host/TbHost*.cpp)
 
   target_sources(tortoisebots PRIVATE ${TB_SLICE_LEGACY} ${TB_SLICE_NEW})
+
+  # The hire fee is the one TortoiseBots formula (runtime/HireCost.h): core-free, so it needs no preinclude.
+  target_sources(tortoisebots PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/runtime/HireCost.cpp)
 
   # The run trace and the why trace: the shared Turtle runtime sources (docs/server/run-trace.md, docs/server/
   # why-trace.md); the host glue is forever/src/host/cmd/TbCmdTrace.cpp. They read the engine and the core, so they get

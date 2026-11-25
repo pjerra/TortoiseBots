@@ -7,6 +7,7 @@
 #include "TbBotMgr.h"
 #include "ai/playerbot/DungeonPlanMgr.h"
 #include "host/TbCc.h"
+#include "host/hire/TbHireProvision.h"
 #include "host/run/TbRun.h"
 #include "runtime/DungeonRunPolicy.h"
 
@@ -102,6 +103,12 @@ void HandleFeatures(Player* requester, std::string_view args)
     {
         for (Feature const& feature : kFeatures)
             addon::Send(requester, FeatureLine(feature.id, FeatureValue(feature), feature.label));
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        // The hire switches live in the engine's own config file (AiPlayerbot.*), which sConfigMgr does not read: the
+        // hire piece answers their live values so the Info window never shows a stale default.
+        for (std::string const& line : hire::FeatureLines())
+            addon::Send(requester, line);
+#endif
         return;
     }
     std::vector<std::string> keys = sConfigMgr->GetKeysByString("");

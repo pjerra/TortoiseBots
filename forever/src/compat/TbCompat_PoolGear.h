@@ -10,6 +10,7 @@ namespace tbs_poolgear
 {
 // host/TbHostPoolGear.cpp: the host's pool flag and the level marker the legacy facade kept in memory.
 bool IsPoolBot(Player* bot);
+bool IsHired(Player* bot);
 uint32 LastLevel(Player* bot);
 void MarkLevel(Player* bot, uint32 level);
 uint32 TopUp(Player* bot, uint32 level);
@@ -22,11 +23,11 @@ inline bool PoolGearTopUpIsPoolBotCompat(Player* bot)
     return tbs_poolgear::IsPoolBot(bot);
 }
 
-// Nobody is hired or guild-claimed on this host: runtime/HireLifecycle.cpp and runtime/ClaimLifecycle.cpp are not part of
-// the slice and host/TbHostOwnership.cpp answers both false for any host bot.
-inline bool PoolGearTopUpIsHiredCompat(Player*)
+// Hired companions keep the kit their player paid for: the ledger answers (host/hire/TbHireLifecycle.cpp); no guild bot
+// is claimed on this host (runtime/ClaimLifecycle.cpp is not part of the slice and TbHostOwnership.cpp answers false).
+inline bool PoolGearTopUpIsHiredCompat(Player* bot)
 {
-    return false;
+    return tbs_poolgear::IsHired(bot);
 }
 
 inline bool PoolGearTopUpIsClaimedCompat(Player*)

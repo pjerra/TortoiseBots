@@ -52,7 +52,7 @@ The addon sends short verbs over the addon channel, not chat text. The Forever s
 | :--- | :--- |
 | `action <intent>` | The party-wide orders: `attack`, `stop`, `follow`, `stay`, `flee`, `guard`, `stance`, `engage`, `rebuff`, `interrupt`, `pull`, `pullback`, `end pull`, `come`, `hold`, `comestay`, `focus skull`, `cc clear`, `release`, `repair`, `sell`, `learn`, `rest`, `drink`, `eat`. |
 | `roster` / `list` | The roster snapshot, the handshake trailer and the party's movement states. |
-| `who`, `stats`, `add`, `logout`, `remove`, `summon`, `maintenance`, `autogear` | The same words as the `.bot` commands of those names. |
+| `who`, `stats`, `add`, `logout`, `remove`, `summon`, `maintenance`, `autogear`, `hire` | The same words as the `.bot` commands of those names (`hire` is the fast path and needs `AiPlayerbot.HireAnywhere`). |
 | `alts` | One line per owned bot playing on its own (free mode). |
 | `inv` / `inventory` / `item` | The inventory snapshot, and item moves into and out of a bot's bags. |
 | `trade` | Drives a trade window with a bot. |
@@ -68,7 +68,7 @@ A verb the server cannot run answers one `TBM:ACTION_ERR|<verb>|<code>|<text>` l
 
 ### Capabilities
 
-The handshake sends `TBM:CAPS` with the features this server really has. Always: `claimed-roster`, `inventory`, `professions`, `loot-log`, `behavior`, `service`, `totem`, `blessing`, `blessing-player`, `choice`, `ai`, `pull-seconds`, `flee`, `engage`, `guild-orders`, `guild-order-steps`, `guild-order-nobuy`. For a GameMaster: `tb-gm`. The addon only lights a button whose capability is on the line.
+The handshake sends `TBM:CAPS` with the features this server really has. Always: `claimed-roster`, `inventory`, `professions`, `loot-log`, `behavior`, `service`, `totem`, `blessing`, `blessing-player`, `choice`, `ai`, `pull-seconds`, `flee`, `engage`, `guild-orders`, `guild-order-steps`, `guild-order-nobuy`. For a GameMaster: `tb-gm`. When companion hiring is on: `hiring`; when `.bot hire` works away from a recruiter: `hire-anywhere`. The addon only lights a button whose capability is on the line.
 
 ## Transport
 
@@ -85,7 +85,7 @@ Every structured line starts with `TBM:`. The ones the Forever server sends:
 | Stream | Meaning |
 | :--- | :--- |
 | `VERSION`, `PROTO`, `LATEST`, `VERBS_*`, `CAPS`, `TRANSPORT` | Handshake: module version, protocol level and minimum addon level, update-check result (`-` when unknown), advertised verbs, capabilities and the command channel. |
-| `ROSTER_BEGIN`, `ROSTER`, `ROSTER_END` | The roster: one row per owned character (`guid`, name, class id, state, grouped, location, class name). |
+| `ROSTER_BEGIN`, `ROSTER`, `ROSTER_END` | The roster: one row per owned character (`guid`, name, class id, state, grouped, location, class name). A hired companion is not a row (its Logout would delete it); `BOTSTATE` still names it, so the bot panels work. |
 | `ALTBOTS` | Comma-separated owned bots playing on their own (free mode). |
 | `ALTSUM`, `ALTSUM_END` | One summary line per such bot, then the count. |
 | `CC_ASSIGN_BEGIN`, `CC_ASSIGN`, `CC_ASSIGN_END` | The party bots holding a crowd-control mark. |
