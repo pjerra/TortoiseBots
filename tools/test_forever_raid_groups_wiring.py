@@ -111,7 +111,7 @@ class RaidGroupsWiring(unittest.TestCase):
 
     def test_only_the_explicit_commands_may_make_a_raid(self):
         scripts = read("forever/src/TbScripts.cpp")
-        self.assertIn("BotMgr::Instance().Login(GuidByName(name), master, free, false, false, true)", scripts)   # .tb login
+        self.assertIn("BotMgr::Instance().Login(guid, master, free, false, false, true)", scripts)   # .tb login
         self.assertIn("BotMgr::Instance().GroupWith(guid, master, true)", scripts)                              # .tb group
         self.assertIn("GroupWith(member->GetGUID(), leader->GetGUID(), true)", read("forever/src/host/TbPartyState.cpp"))
         self.assertIn("BotMgr::Instance().GroupWith(bot, m.lead);", read("forever/src/host/cmd/TbCmdBinding.cpp"))  # restore: 5-man
