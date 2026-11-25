@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Strategy rows for Turtle-only spells stay out of the Forever build (no Forever class can learn them on 70959).
+"""Strategy rows for Turtle-only spells stay out of the Forever build (no Forever class can learn them on 70959),
+and the Forever rows stay in it (a row hidden behind the Turtle-only guard is dead on Forever).
 
     python3 forever/tools/test_forever_spell_rows.py
 """
 import os
-import re
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -16,6 +16,12 @@ ROWS = {
     'ai/playerbot/strategy/mage/FrostMageStrategy.cpp': ['icicles'],
     'ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp': ['envenom'],
     'ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp': ['shadow of death', 'mark for death', 'smoke bomb'],
+}
+FOREVER_ROWS = {
+    'ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp': ['arcane blast', 'arcane wrath', 'missile barrage'],
+    'ai/playerbot/strategy/mage/FrostMageStrategy.cpp': ['ice lance'],
+    'ai/playerbot/strategy/warlock/DestructionWarlockStrategy.cpp': ['incinerate'],
+    'ai/playerbot/strategy/warlock/AfflictionWarlockStrategy.cpp': ['wrack'],
 }
 
 # Forever actives the class line teaches (no talent needed): trigger -> action.
@@ -64,6 +70,12 @@ class ForeverSpellRowsTest(unittest.TestCase):
             text = open(os.path.join(ROOT, rel)).read()
             for action in actions:
                 self.assertTrue(guarded(text, action), '%s: "%s" row is not behind the Forever guard' % (rel, action))
+
+    def test_forever_rows_are_not_guarded(self):
+        for rel, actions in FOREVER_ROWS.items():
+            text = open(os.path.join(ROOT, rel)).read()
+            for action in actions:
+                self.assertFalse(guarded(text, action), '%s: "%s" row is hidden from the Forever build' % (rel, action))
 
     def test_guard_detects_an_unguarded_row(self):
         text = 'triggers.push_back(new TriggerNode("x", NextAction::array(0, new NextAction("envenom", 1), NULL)));'

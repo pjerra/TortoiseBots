@@ -40,6 +40,13 @@ void AfflictionWarlockStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
         "siphon life",
         NextAction::array(0, new NextAction("siphon life", ACTION_NORMAL), NULL)));
 
+    // Wrack (talent node 105909): the channel speeds up our Corruption,
+    // Siphon Life and Bane of Agony ticks. Below the DoT upkeep so a missing
+    // DoT is refreshed first, above the Shadow Bolt default.
+    triggers.push_back(new TriggerNode(
+        "wrack",
+        NextAction::array(0, new NextAction("wrack", ACTION_NORMAL - 1), NULL)));
+
     triggers.push_back(new TriggerNode(
         "immolate",
         NextAction::array(0, new NextAction("immolate", ACTION_NORMAL), NULL)));

@@ -53,6 +53,9 @@ namespace ai
     BEGIN_RANGED_SPELL_ACTION(CastShadowBoltAction, "shadow bolt")
     END_SPELL_ACTION()
 
+    BEGIN_RANGED_SPELL_ACTION(CastIncinerateAction, "incinerate")
+    END_SPELL_ACTION()
+
     class CastDrainSoulAction : public CastSpellAction
     {
     public:
@@ -898,6 +901,12 @@ namespace ai
 
     protected:
         std::string GetTargetName() override { return "warlock spread attacker my aura"; }
+    };
+
+    class CastWrackAction : public CastRangedDebuffSpellAction
+    {
+    public:
+        CastWrackAction(PlayerbotAI* ai) : CastRangedDebuffSpellAction(ai, "wrack") {}
     };
 
     class CastHowlOfTerrorAction : public CastMeleeAoeSpellAction

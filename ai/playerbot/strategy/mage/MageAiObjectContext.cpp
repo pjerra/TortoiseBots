@@ -157,6 +157,10 @@ namespace ai
                 creators["fireball"] = [](PlayerbotAI* ai) { return new FireballTrigger(ai); };
                 creators["frostbolt"] = [](PlayerbotAI* ai) { return new FrostboltTrigger(ai); };
                 creators["fire blast"] = [](PlayerbotAI* ai) { return new FireBlastTrigger(ai); };
+                creators["arcane blast"] = [](PlayerbotAI* ai) { return new ArcaneBlastTrigger(ai); };
+                creators["arcane wrath"] = [](PlayerbotAI* ai) { return new ArcaneWrathTrigger(ai); };
+                creators["missile barrage"] = [](PlayerbotAI* ai) { return new MissileBarrageTrigger(ai); };
+                creators["ice lance"] = [](PlayerbotAI* ai) { return new IceLanceTrigger(ai); };
                 creators["pyroblast"] = [](PlayerbotAI* ai) { return new PyroblastTrigger(ai); };
                 creators["combustion"] = [](PlayerbotAI* ai) { return new CombustionTrigger(ai); };
                 creators["arcane intellect"] = [](PlayerbotAI* ai) { return new ArcaneIntellectTrigger(ai); };
@@ -239,6 +243,9 @@ namespace ai
                 creators["polymorph"] = [](PlayerbotAI* ai) { return new CastPolymorphAction(ai); };
                 creators["evocation"] = [](PlayerbotAI* ai) { return new CastEvocationAction(ai); };
                 creators["arcane missiles"] = [](PlayerbotAI* ai) { return new CastArcaneMissilesAction(ai); };
+                creators["arcane blast"] = [](PlayerbotAI* ai) { return new CastArcaneBlastAction(ai); };
+                creators["arcane wrath"] = [](PlayerbotAI* ai) { return new CastArcaneWrathAction(ai); };
+                creators["ice lance"] = [](PlayerbotAI* ai) { return new CastIceLanceAction(ai); };
                 creators["arcane rupture"] = [](PlayerbotAI* ai) { return new CastArcaneRuptureAction(ai); };
                 creators["counterspell on enemy healer"] = [](PlayerbotAI* ai) { return new CastCounterspellOnEnemyHealerAction(ai); };
                 creators["fire ward"] = [](PlayerbotAI* ai) { return new CastFireWardAction(ai); };

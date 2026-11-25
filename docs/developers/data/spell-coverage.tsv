@@ -58,6 +58,12 @@ Shaman	Enhancement	Lightning Strike	not on Forever	forever/data/waterys/forever-
 Shaman	Enhancement	Bloodlust	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/EnhancementShamanStrategy.cpp	no shaman ability by this name
 Shaman	Restoration	Spirit Link, Ancestral Swiftness	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp	no shaman abilities by these names
 Shaman	Tank	Earthshaker Slam, Totemic Slam	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ShamanActions.h:522,548	tank kit has no taunt on Forever
+Mage	Arcane	Arcane Blast	available	forever/data/waterys/talent-builds.csv (node 105806)	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	Forever arcane filler; Arcane Missiles stays the default fallback
+Mage	Arcane	Arcane Wrath	in preset	forever/data/waterys/talent-builds.csv (node 113627)	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	talent-only: ranks have no trainer or chain row; 6 s cooldown nuke
+Mage	Arcane	Missile Barrage (proc)	in preset	forever/data/waterys/talent-builds.csv (node 105809)	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	proc aura 400589 spent on Arcane Missiles
+Mage	Frost	Ice Lance	available	forever/data/waterys/talent-builds.csv (node 105767)	ai/playerbot/strategy/mage/FrostMageStrategy.cpp	frozen target or Fingers of Frost aura 400669; 8 s cooldown
+Mage	Arcane	Arcane Barrage	not in preset	none	none	client spell 400610; chainless, no trainer row and no preset point, so no bot learns it
+Mage	Fire	Heating Up (Pyroblast cast-time proc)	in preset	forever/data/waterys/talent-builds.csv (node 105786)	none	proc aura 400625; the Hot Streak row below still reads the Turtle proc ids
 Mage	Arcane	Arcane Power, Presence of Mind	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp:267-271	burst cooldowns
 Mage	Fire	Combustion, Pyroblast, Blast Wave	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/mage/FireMageStrategy.cpp:52-325	Fire kit
 Mage	Frost	Cold Snap, Ice Block, Ice Barrier	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/mage/FrostMageStrategy.cpp:206-256	Frost kit
@@ -65,6 +71,9 @@ Mage	all	Evocation	available	forever/data/waterys/class-review/mage.md:127	ai/pl
 Mage	Arcane	Arcane Rupture	not on Forever	forever/tools/test_forever_spell_rows.py:13	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	row compiled out for the Forever build
 Mage	Frost	Icicles	not on Forever	forever/tools/test_forever_spell_rows.py:13	ai/playerbot/strategy/mage/FrostMageStrategy.cpp	row compiled out for the Forever build
 Mage	Fire	Hot Streak	not on Forever	ai/playerbot/strategy/mage/MageTriggers.cpp:154	ai/playerbot/strategy/mage/FireMageStrategy.cpp:51	proc auras 51930/51931 are absent from the client
+Warlock	Destruction	Incinerate	available	forever/data/waterys/talent-builds.csv (node 105874)	ai/playerbot/strategy/warlock/DestructionWarlockStrategy.cpp	Forever destruction filler; Shadow Bolt stays the fallback
+Warlock	Affliction	Wrack	in preset	forever/data/waterys/talent-builds.csv (node 105909)	ai/playerbot/strategy/warlock/AfflictionWarlockStrategy.cpp	talent-only (single rank, no trainer row); channel speeds up our DoTs
+Warlock	Destruction	Bane of Havoc	in preset	forever/data/waterys/talent-builds.csv (node 105876)	none	active curse on a second target; no row (single-target play gets nothing from it)
 Warlock	Demonology	Soul Link, Demonic Sacrifice, Fel Domination	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/warlock/DemonologyWarlockStrategy.cpp:56-254	demon kit
 Warlock	Destruction	Conflagrate, Shadowburn, Rain of Fire	available	forever/data/waterys/class-review/warlock.md:22-30	ai/playerbot/strategy/warlock/DestructionWarlockStrategy.cpp:21	Destruction kit
 Warlock	all	Imp, Voidwalker, Succubus, Felhunter	available	forever/data/waterys/class-review/warlock.md:22-30	ai/playerbot/strategy/warlock/WarlockAiObjectContext.cpp	all four summon spells exist

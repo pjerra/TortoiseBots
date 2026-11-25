@@ -59,6 +59,18 @@ namespace ai
         CastArcaneMissilesAction(PlayerbotAI* ai) : CastSpellAction(ai, "arcane missiles") {}
     };
 
+    class CastArcaneBlastAction : public CastSpellAction
+    {
+    public:
+        CastArcaneBlastAction(PlayerbotAI* ai) : CastSpellAction(ai, "arcane blast") {}
+    };
+
+    class CastArcaneWrathAction : public CastSpellAction
+    {
+    public:
+        CastArcaneWrathAction(PlayerbotAI* ai) : CastSpellAction(ai, "arcane wrath") {}
+    };
+
     // Turtle Arcane Rupture (51949-51954): direct damage that lands the
     // self buff (52502/52588, +19% missiles, 8s). Builder half of the
     // arcane rupture->missiles rhythm (MAG-5).
@@ -114,6 +126,14 @@ namespace ai
 	public:
 		CastFrostboltAction(PlayerbotAI* ai) : CastSpellAction(ai, "frostbolt") {}
 	};
+
+    // Instant, 8 s cooldown, triple damage on a frozen target: the shatter
+    // button, not a Frostbolt replacement.
+    class CastIceLanceAction : public CastSpellAction
+    {
+    public:
+        CastIceLanceAction(PlayerbotAI* ai) : CastSpellAction(ai, "ice lance") {}
+    };
 
 	class CastBlizzardAction : public CastSpellAction
 	{
