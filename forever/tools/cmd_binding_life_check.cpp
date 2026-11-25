@@ -277,6 +277,17 @@ void TestBgBind()
         live.botOnline = false;
         live.commanderOnline = false;
         CHECK(L::CheckBg(book, { live }, true).at(0).end == L::End::BgBotLeft);      // the bot's own departure first
+        // #321 follow-up: a mid-match transfer puts them on different teams. The order gate refuses every command then, and the bind must be
+        // released, not left standing to the end of the match.
+        live.botOnline = true;
+        live.commanderOnline = true;
+        live.sameTeam = false;
+        auto const transferred = L::CheckBg(book, { live }, true);
+        CHECK(transferred.size() == 1 && transferred[0].release && transferred[0].end == L::End::BgTeamChanged);
+        CHECK(std::string(L::EndCode(L::End::BgTeamChanged)) == "bg-team-changed");
+        CHECK(std::string(L::EndText(L::End::BgTeamChanged)).find("different teams") != std::string::npos);
+        live.sameTeam = true;
+        CHECK(L::CheckBg(book, { live }, true).empty());     // one team again: the bind stands
     }
     // The direct rule, without a stored row: the bind survives only while both are inside the very instance it was made in.
     {
@@ -294,6 +305,12 @@ void TestBgBind()
         facts.botInstance = 42;
         facts.commanderInstance = 42;
         CHECK(L::BgBindEnd(facts) == L::BgEnd::MatchEnded);       // both somewhere else: this match is gone
+        facts.botInstance = 41;
+        facts.commanderInstance = 41;
+        facts.sameTeam = false;
+        CHECK(L::BgBindEnd(facts) == L::BgEnd::TeamChanged);      // same instance, opposite sides
+        facts.botOnline = false;
+        CHECK(L::BgBindEnd(facts) == L::BgEnd::BotLeft);          // leaving the match still reads first
     }
     // Outside the kind nothing changes: a normal binding in a battleground group is released as before (the live row's failure, kept as a test).
     {
@@ -500,6 +517,39 @@ void TestMayCommand()
     CHECK(!L::MayCommand(true, false, true, false));
 }
 
+void TestBgCommandGate()
+{
+    // A bg member bound to this commander, both in the record's instance, both online, one team: commands may use it.
+    L::BgCommandFacts here;
+    here.botOnline = here.commanderOnline = here.botInInstance = here.commanderInInstance = here.sameTeam = true;
+    CHECK(L::MayCommandBg(true, here));
+    // h3 no longer binds the bot to this commander.
+    CHECK(!L::MayCommandBg(false, here));
+
+    // THE LEAVE BETWEEN TWO MAINTENANCE TICKS (#315): the commander left the match (or logged out, or was moved to the other side) and the 1 Hz
+    // CheckBg has not run yet - the stored member still names him, so an authorisation that read only the member (and h3's row) answered true.
+    {
+        L::BgCommandFacts left = here;
+        left.commanderInInstance = false;
+        CHECK(!L::MayCommandBg(true, left));
+        L::BgCommandFacts offline = here;
+        offline.commanderOnline = false;
+        CHECK(!L::MayCommandBg(true, offline));
+        L::BgCommandFacts transferred = here;
+        transferred.sameTeam = false;
+        CHECK(!L::MayCommandBg(true, transferred));
+    }
+    // The bot's own leave counts the same way, and so does its logout.
+    {
+        L::BgCommandFacts botLeft = here;
+        botLeft.botInInstance = false;
+        CHECK(!L::MayCommandBg(true, botLeft));
+        L::BgCommandFacts botOffline = here;
+        botOffline.botOnline = false;
+        CHECK(!L::MayCommandBg(true, botOffline));
+    }
+}
+
 void TestPickLead()
 {
     // A named host bot this commander commands is the lead the command asked for.
@@ -647,6 +697,7 @@ int main()
     TestKindPerBot();
     TestDeferredRelease();
     TestMayCommand();
+    TestBgCommandGate();
     TestPickLead();
     TestDepartedFollowers();
     TestRestore();

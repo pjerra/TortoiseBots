@@ -883,7 +883,8 @@ struct HoldRow
     uint32_t map = 0;
     uint32_t instance = 0;
     int slot = 0;
-    uint32_t seq = 0;       // the `come` order that put the bot on the slot
+    uint32_t seq = 0;       // the `come` order that last moved the bot (a walk-back re-queues it under a new number)
+    uint32_t passiveSeq = 0; // the `come` order that owns the row's emergency passive: the fall back's own, never a walk-back's newer number
     Rank rank = Rank::Melee;
     uint32_t walkMs = 0;    // when the walk back was last asked for
     uint32_t disengageMs = 0; // a fall back row: when its passive hold started (the cap's clock; a walk back never restarts it)
@@ -932,11 +933,13 @@ inline bool DisengageEnds(float distance, bool inCombat, bool walkEnded, uint32_
 // The walk back re-queues an off-slot idle bot's `come` at most this often (place::Update).
 constexpr uint32_t kWalkBackEveryMs = 5000u;
 
-// A new row: the walk-back clock and the fall back's own clock both start with the row's `come`.
+// A new row: the walk-back clock and the fall back's own clock both start with the row's `come`, and a fall back's `come` also owns the
+// emergency passive it sets (`disengage` is read here, so it is set before this call).
 inline void StartRowClock(HoldRow& row, uint32_t now)
 {
     row.walkMs = now;
     row.disengageMs = now;
+    row.passiveSeq = row.disengage ? row.seq : 0;
 }
 
 // F1b (live 11-24): the fall back's passive ends at its spot, when the bot stops short in a fight, or at the cap, all counted from the
@@ -945,6 +948,15 @@ inline void StartRowClock(HoldRow& row, uint32_t now)
 inline bool RowDisengageEnds(HoldRow const& row, float distance, bool inCombat, bool walkEnded, uint32_t now)
 {
     return row.disengage && DisengageEnds(distance, inCombat, walkEnded, now - row.disengageMs);
+}
+
+// The row's hold is the `stay` its own `come` wrote. A whisper shortcut (`follow`, `free`, ...) runs in the engine's chat path: it drops the stay
+// and advances no order number, so the row's `come` is still the bot's last order while the stay is gone - the row then survived, and the walk
+// back queued another `come` that pulled the bot back to the old slot (#316). The row ends on the stay being gone, unless its own `come` is still
+// waiting in the queue (its stay has not been written yet) or there is no engine to read the strategy from (`stayRead` false).
+inline bool RowStayGone(bool stayRead, bool stayActive, bool ownComeQueued)
+{
+    return stayRead && !stayActive && !ownComeQueued;
 }
 
 // F1 (cold review): the fall back's passive is the row's own only when the row added it. A bot the owner already held passive
@@ -982,12 +994,104 @@ inline bool PlacePassiveReleasable(bool claimed, uint32_t rowSeq, uint32_t lastP
 }
 
 // The walk back queued a `come` with a new order number: the row names it, so the stay it leaves can be cleared later
-// (h3::ReleasePlaceStay matches the row's seq against the bot's last order).
+// (h3::ReleasePlaceStay matches the row's seq against the bot's last order). The emergency passive's owner (`passiveSeq`) is NOT moved: that
+// number belongs to the fall back's own `come`, and the order record still names it (`ReleasePlacePassive` matches by that number).
 inline void AfterWalkBack(HoldRow& row, uint32_t seq, uint32_t now)
 {
     row.walkMs = now;
     row.walkFails = 0;
     row.seq = seq;
+}
+
+// The order number that owns the row's emergency passive. A fall back's own `come` set it (StartRowClock); a walk-back moved only `seq`, and the
+// engine's record kept the first. Releasing with the newest movement number finds no record, reports "nothing to release" and leaves the bot
+// passive for good (#316): every passive release asks this.
+inline uint32_t PassiveOwner(HoldRow const& row)
+{
+    return row.passiveSeq ? row.passiveSeq : row.seq;
+}
+
+// The end of a fall back's hold: the row stops disengaging only when its emergency passive is really gone (released, or held by an order that is
+// not the row's). A release that could not run (the bot's engine is away) keeps both fields, so the next 1 Hz pass retries it.
+inline bool DisengageSettled(HoldRow& row, bool passiveGone)
+{
+    if (!passiveGone)
+        return false;
+    row.disengage = false;
+    row.passiveSeq = 0;
+    return true;
+}
+
+// The bot's record of the emergency passive (BotRec in TbOrders.cpp), pure so the row and the order bookkeeping are tested as one state. `owner`
+// is the row's token - the fall back `come` whose `passive` is on (0: none of a fall back's); `last` is the token of the last order that set
+// `passive` itself (0: none, or older than the row). A token, not the order number: a walk back re-queues the movement under a new number and
+// must not look like a newer owner.
+struct PassiveBook
+{
+    uint32_t owner = 0;
+    uint32_t last = 0;
+};
+
+// A fall back `come` that just ran added the passive. It owns it only when it added it (PlaceClaimsPassive): a bot the owner already held
+// passive keeps that passive, and the row's own walk back carries the row's token instead of taking the record over under its newer number.
+// Returns the owner to record.
+inline uint32_t RanComePassiveOwner(PassiveBook const& book, bool alreadyPassive, uint32_t seq)
+{
+    bool const carried = book.owner != 0;
+    if (!PlaceClaimsPassive(alreadyPassive, carried))
+        return book.owner;
+    return carried ? book.owner : seq;
+}
+
+// An order that just ran, for the record. A fall back `come` (a walk back included) records the token of the `come` that owns the passive, never
+// its own newer number; any other order that sets `passive` itself (`hold`, `flee`, `co/nc +passive`) becomes the newer one and takes the row's
+// record away. Failures are no record.
+inline void NoteRanPassive(PassiveBook& book, std::string_view verb, std::string_view arg, bool disengage, uint32_t seq)
+{
+    if (!OrderSetsPassive(verb, arg, disengage))
+        return;
+    if (verb == "come")
+    {
+        book.last = book.owner;
+        return;
+    }
+    book.last = seq;
+    book.owner = 0;
+}
+
+// The release of a fall back's passive by the row's owner token. Returns whether the host drops `passive` now: true only when the record is the
+// row's and no newer order that sets `passive` itself took it over. The record is consumed either way; a token that is not the record's leaves
+// another row's (or another order's) passive alone.
+inline bool TakeOwnerPassive(PassiveBook& book, uint32_t token)
+{
+    if (book.owner != token)
+        return false;
+    bool const drop = PlacePassiveReleasable(true, token, book.last);
+    book.owner = 0;
+    return drop;
+}
+
+// A walk back carries the row's owner token on the queued `come`. The come may add `passive` only while that token still owns the record: the
+// 10 s cap (the order lives 15 s) or an owner's `co -passive` released it, and the row is over then. Without this the late come claimed the record
+// with its own newer number and turned the bot passive for good (#321 review). A token of 0 is a fall back's own come, which always may.
+inline bool ComeKeepsPassive(uint32_t token, PassiveBook const& book)
+{
+    return token == 0 || book.owner == token;
+}
+
+// The come's passive step as the engine sees it: `PassiveOn` answers whether the bot carries `passive` in any of the three states NOW, `AddPassive`
+// adds it in all three. The read happens BEFORE the add: a bot that was already passive keeps that passive's record (`hold`, `flee`, an owner's
+// `+passive`), and the come owns only the passive it added itself. `book` is the bot's record, null when it has none (the passive is still added,
+// there is simply nothing to release later).
+template <typename Engine>
+inline void ApplyComePassive(Engine& engine, PassiveBook* book, uint32_t seq, uint32_t token)
+{
+    if (book && !ComeKeepsPassive(token, *book))
+        return;
+    bool const alreadyPassive = engine.PassiveOn();
+    engine.AddPassive();
+    if (book)
+        book->owner = RanComePassiveOwner(*book, alreadyPassive, seq);
 }
 
 struct Hold
@@ -1196,8 +1300,9 @@ inline bool WalkGiveUp(uint32_t fails)
 }
 
 // Why a hold row ended. Every terminal reason releases the bot: still commanded by this commander, the release is the module's own `follow`; a bot that
-// changed commander is only cleared of the stay this placement wrote (never given an order by its old commander).
-enum class RowEnd { None, Dead, Teleport, OtherMap, Commander, Run, NewerOrder, Unreachable };
+// changed commander is only cleared of the stay this placement wrote (never given an order by its old commander). `StayGone`: the bot's movement
+// strategy is no longer the stay this row wrote (a newer order, or a whisper shortcut that numbered nothing) - its driver is not fought.
+enum class RowEnd { None, Dead, Teleport, OtherMap, Commander, Run, StayGone, Unreachable };
 enum class Release { None, Follow, ClearStay };
 
 inline Release ReleaseOn(RowEnd end, bool stillCommanded)
@@ -1207,7 +1312,7 @@ inline Release ReleaseOn(RowEnd end, bool stillCommanded)
         case RowEnd::None:
             return Release::None;
         case RowEnd::Run:
-        case RowEnd::NewerOrder:
+        case RowEnd::StayGone:
             // Another driver owns the bot's movement now: never queue an order that would fight it.
             return Release::ClearStay;
         default:

@@ -78,6 +78,8 @@ class Wiring(unittest.TestCase):
                      "TestLiquidSlotIsNudged", "TestNudgeGoesInward", "TestPathVerdicts", "TestTankExcluded",
                      "TestFallbackRefusedStillDisengages", "TestFallbackCommanderValidated",
                      "TestComePolicy", "TestDisengageEnds", "TestFallbackCapSurvivesWalkBacks", "TestFallbackPassiveOwnership",
+                     "TestWhisperFollowEndsTheHold", "TestWalkBackPassiveOwner", "TestLateWalkBackIsNotPassive",
+                     "TestComePassiveReadsBeforeAdding",
                      "TestRallyAndFallbackWords", "TestRallyDecision", "TestStoredRallyFilter",
                      "TestTargetNudgeGuard", "TestCardHoldKeys"):
             self.assertIn(f"static void {name}()", behaviour)
@@ -141,9 +143,12 @@ class Wiring(unittest.TestCase):
         self.assertIn("void NoteOrdered(", host)
         self.assertRegex(host, r'verb == "attack" \|\| verb == "pull" \|\| verb == "pullback" \|\| verb == "resume"')
         self.assertRegex(host, r'if \(verb == "follow"\)')
-        # A newer order that left the bot off its stay releases the row too, so `.tb order ... follow` cannot leave a stale slot behind.
-        self.assertIn("last.seq > row.seq", host)
-        self.assertIn('ai->HasStrategy("stay"', host)
+        # The row's own `come` still waiting in the queue has not written its stay yet; any other loss of the stay (a newer order, or a whisper
+        # shortcut that numbered nothing) ends the row (#316).
+        self.assertIn("ownComeQueued = last.seq == row.seq && last.verb == \"come\" && last.result == \"queued\"", host)
+        self.assertIn("RowStayGone(ai != nullptr, ai && ai->HasStrategy(\"stay\", BotState::BOT_STATE_NON_COMBAT), ownComeQueued)", host)
+        self.assertIn("end = RowEnd::StayGone;", host)
+        self.assertNotIn("last.seq > row.seq", host)
         # The walk back keeps its order number (ReleasePlaceStay matches it), and a dropped row's follow yields to a newer order.
         self.assertIn("AfterWalkBack(row, seq, now)", host)
         self.assertIn("if (!NewerOrderOwns(h3::LastOrder(bot->GetGUID()).seq, row.seq))", host)
@@ -161,10 +166,20 @@ class Wiring(unittest.TestCase):
         self.assertIn("ReleasePlaceDisengage(bot, row.seq)", host)
         self.assertIn("ReleasePlaceHold(bot, row.x, row.y, row.z)", host)
         # F1: every exit passes the row's own order number, and there is no unconditional clear left: only the passive the fall back
-        # set itself is released.
-        self.assertEqual(host.count("ReleasePlacePassive(bot, row.seq)"), 7)
+        # set itself is released. #316: the passive belongs to the order that set it (the fall back's `come`), never to a walk-back's newer
+        # movement number - asking with that number found no record, "succeeded" and left the bot passive.
+        self.assertEqual(host.count("ReleasePlacePassive(bot, PassiveOwner(row))"), 7)
+        self.assertNotIn("ReleasePlacePassive(bot, row.seq)", host)
         self.assertNotIn("ReleasePlacePassive(bot);", host)
-        self.assertIn("ReleasePlaceDisengage(bot, row.seq) || h3::ReleasePlacePassive(bot, row.seq)", host)
+        self.assertIn("bool const passiveGone = h3::ReleasePlacePassive(bot, PassiveOwner(row));", host)
+        self.assertIn("DisengageSettled(row, passiveGone);", host)
+        self.assertNotIn("row.disengage = false;", host)                       # only DisengageSettled clears it
+        self.assertTrue(passive_owner_pin(read(CMD / "TbPlacePlan.h")))
+        # #316 follow-up: the record's owner is the row's token, kept by the walk back that runs; the release consumes it either way.
+        self.assertTrue(passive_book_pin(read(CMD / "TbPlacePlan.h")))
+        # #321 review: a walk back that runs after the 10 s cap carries the row's token and adds nothing; the come's passive step reads
+        # "already passive" before it adds, so a bot the owner held passive keeps that record (a behavioural test covers both).
+        self.assertTrue(come_passive_pin(read(CMD / "TbPlacePlan.h")))
         # F1b (live 11-24): the cap counts from the fall back's start, not from the last walk back (which restarts every 5 s while the
         # bot stands idle off its slot, so a cap on walkMs never fired and the passive lasted until `resume`).
         self.assertIn("RowDisengageEnds(row, distance, bot->IsInCombat(), bot->movespline->Finalized(), now)", host)
@@ -183,6 +198,8 @@ class Wiring(unittest.TestCase):
         self.assertIn("bot->AttackStop();", orders)
         self.assertIn("bot->InterruptNonMeleeSpells(false);", orders)
         self.assertIn('ChangeStrategy("+passive"', orders)
+        self.assertIn("place::ApplyComePassive(engine, book, o.seq, o.passiveToken)", orders)
+        self.assertIn("place::PassiveBook* book = nullptr;", orders)
         # Every terminal row releases the bot (follow while ours; only the placement's stay once it changed commander).
         self.assertIn("ReleaseRow(row, ReleaseOn(end, ours))", host)
         self.assertIn("h3::ReleasePlaceStay(bot, row.seq)", host)
@@ -446,18 +463,72 @@ def placed_come_pin(src):
 def dropped_passive_pin(src):
     c = strip_comments(src)
     body = re.search(r"void ReleaseRow\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
-    return body is not None and "ReleasePlacePassive(bot, row.seq);" in body.group(1)
+    return body is not None and "ReleasePlacePassive(bot, PassiveOwner(row));" in body.group(1)
 
 
-def fallback_passive_pin(src):
+def hold_ends_pin(src):
+    """#316 (1): the row ends when its stay is gone, whether a newer order or a whisper shortcut (which numbers nothing) dropped it; only its
+    own `come` still waiting in the queue is exempt."""
     c = strip_comments(src)
-    body = re.search(r"bool ReleasePlacePassive\(Player\* bot, uint32 seq\)\s*\{([\s\S]*?)\n\}", c)
-    return (body is not None
-            and "place::PlacePassiveReleasable(true, seq, rec->second.lastPassiveSeq)" in body.group(1)
-            and "place::PlaceClaimsPassive(alreadyPassive, carried)" in c
-            and "rec->placePassiveSeq = o.seq;" in c
-            and "place::OrderSetsPassive(order.verb, order.arg, order.disengage)" in c
-            and "rec.placePassiveSeq = 0;" in c)
+    return ('RowStayGone(ai != nullptr, ai && ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT), ownComeQueued)' in c
+            and 'ownComeQueued = last.seq == row.seq && last.verb == "come" && last.result == "queued"' in c
+            and "end = RowEnd::StayGone;" in c)
+
+
+def disengage_flag_pin(src):
+    c = strip_comments(src)
+    return "DisengageSettled(row, passiveGone);" in c and "row.disengage = false;" not in c
+
+
+def passive_owner_pin(src):
+    """#316: the emergency passive is owned by the fall back's own `come`, and the walk back moves only the movement number (`row.seq`). Releasing
+    with the newest number found no record and left the bot passive."""
+    c = strip_comments(src)
+    start = re.search(r"inline void StartRowClock\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
+    back = re.search(r"inline void AfterWalkBack\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
+    owner = re.search(r"inline uint32_t PassiveOwner\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
+    settled = re.search(r"inline bool DisengageSettled\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
+    return (start is not None and "row.passiveSeq = row.disengage ? row.seq : 0;" in start.group(1)
+            and back is not None and "passiveSeq" not in back.group(1)
+            and owner is not None and "row.passiveSeq ? row.passiveSeq : row.seq" in owner.group(1)
+            and settled is not None and "if (!passiveGone)" in settled.group(1)
+            and "row.disengage = false;" in settled.group(1))
+
+
+def passive_book_pin(src):
+    """#316 follow-up: the walk back that RUNS is the ordinary case, so the record's owner is the row's token; the newer number must not take
+    the passive over, and the release consumes the record whether or not it drops `passive`."""
+    c = strip_comments(src)
+    claim = re.search(r"inline uint32_t RanComePassiveOwner\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
+    note = re.search(r"inline void NoteRanPassive\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
+    take = re.search(r"inline bool TakeOwnerPassive\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
+    return (claim is not None and "return carried ? book.owner : seq;" in claim.group(1)
+            and note is not None and "book.last = book.owner;" in note.group(1)
+            and take is not None and "book.owner != token" in take.group(1)
+            and "PlacePassiveReleasable(true, token, book.last)" in take.group(1))
+
+
+def come_passive_pin(src):
+    """#321: the come's passive step reads the strategies BEFORE it adds `passive`, records only the passive it added, and a walk back whose
+    row the cap already ended (its token is no longer the record) adds nothing."""
+    c = strip_comments(src)
+    keeps = re.search(r"inline bool ComeKeepsPassive\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
+    apply = re.search(r"inline void ApplyComePassive\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
+    if keeps is None or apply is None:
+        return False
+    body = apply.group(1)
+    read = body.find("bool const alreadyPassive = engine.PassiveOn();")
+    add = body.find("engine.AddPassive();")
+    return ("token == 0 || book.owner == token" in keeps.group(1)
+            and read != -1 and add != -1 and read < add
+            and "book->owner = RanComePassiveOwner(*book, alreadyPassive, seq);" in body
+            and "if (book && !ComeKeepsPassive(token, *book))" in body)
+
+
+def walk_back_token_pin(src):
+    """#321 follow-up: the walk back's queued `come` carries the row's passive owner, so it can tell its own row from a released one."""
+    c = strip_comments(src)
+    return "row.placed, row.disengage, PassiveOwner(row), seq, code, detail)" in c
 
 
 def fallback_cap_pin(src):
@@ -467,7 +538,7 @@ def fallback_cap_pin(src):
     back = re.search(r"inline void AfterWalkBack\([^)]*\)\s*\{([\s\S]*?)\n\}", c)
     return (ends is not None and "now - row.disengageMs" in ends.group(1)
             and start is not None and "row.disengageMs = now;" in start.group(1)
-            and back is not None and "disengageMs" not in back.group(1))
+            and back is not None and "disengageMs" not in back.group(1) and "passiveSeq" not in back.group(1))
 
 
 MUTANTS = [
@@ -492,12 +563,29 @@ MUTANTS = [
     ("a run's come takes the placement's combat path", SRC / "host" / "TbOrders.cpp",
      "PlanCome(o.placed, o.disengage, bot->IsInCombat())", "PlanCome(true, o.disengage, bot->IsInCombat())", placed_come_pin),
     ("a dropped fall-back row keeps its passive", CMD / "TbPlace.cpp",
-     "        h3::ReleasePlacePassive(bot, row.seq);      // the emergency hold never outlives its row (cancel, death, logout, unbind), and never strips another's",
+     "        h3::ReleasePlacePassive(bot, PassiveOwner(row));      // the emergency hold never outlives its row (cancel, death, logout, unbind), and never strips another's",
      "", dropped_passive_pin),
-    ("the fall back drops passive whatever set it", SRC / "host" / "TbOrders.cpp",
-     "place::PlacePassiveReleasable(true, seq, rec->second.lastPassiveSeq)", "true", fallback_passive_pin),
-    ("the fall back's come records no passive of its own", SRC / "host" / "TbOrders.cpp",
-     "rec->placePassiveSeq = o.seq;", "rec->placePassiveSeq = 0;", fallback_passive_pin),
+    ("the walk back hands the passive to its own new order", CMD / "TbPlacePlan.h",
+     "    row.walkFails = 0;\n    row.seq = seq;", "    row.walkFails = 0;\n    row.passiveSeq = seq;\n    row.seq = seq;", passive_owner_pin),
+    ("the cap clears the flag without dropping the passive", CMD / "TbPlace.cpp",
+     "                DisengageSettled(row, passiveGone);", "                row.disengage = false;", disengage_flag_pin),
+    ("a whispered follow leaves the placed hold standing", CMD / "TbPlace.cpp",
+     "                if (RowStayGone(ai != nullptr, ai && ai->HasStrategy(\"stay\", BotState::BOT_STATE_NON_COMBAT), ownComeQueued))",
+     "                if (last.seq > row.seq && ai && !ai->HasStrategy(\"stay\", BotState::BOT_STATE_NON_COMBAT))", hold_ends_pin),
+    ("the fall back drops passive whatever set it", CMD / "TbPlacePlan.h",
+     "bool const drop = PlacePassiveReleasable(true, token, book.last);", "bool const drop = true;", passive_book_pin),
+    ("the walk back's come takes the passive over", CMD / "TbPlacePlan.h",
+     "return carried ? book.owner : seq;", "return seq;", passive_book_pin),
+    ("the fall back's come records no passive of its own", CMD / "TbPlacePlan.h",
+     "        book->owner = RanComePassiveOwner(*book, alreadyPassive, seq);", "        book->owner = 0;", come_passive_pin),
+    ("a walk back whose row ended turns the passive back on", CMD / "TbPlacePlan.h",
+     "    return token == 0 || book.owner == token;", "    return true;", come_passive_pin),
+    ("the come reads the strategies after adding the passive", CMD / "TbPlacePlan.h",
+     "    bool const alreadyPassive = engine.PassiveOn();\n    engine.AddPassive();",
+     "    engine.AddPassive();\n    bool const alreadyPassive = engine.PassiveOn();", come_passive_pin),
+    ("the walk back's come carries no token", CMD / "TbPlace.cpp",
+     "QueueCome(bot, row.x, row.y, row.z, row.placed, row.disengage, PassiveOwner(row), seq, code, detail)",
+     "QueueCome(bot, row.x, row.y, row.z, row.placed, row.disengage, 0, seq, code, detail)", walk_back_token_pin),
     ("the fall back's cap restarts with every walk back", CMD / "TbPlacePlan.h",
      "now - row.disengageMs", "now - row.walkMs", fallback_cap_pin),
     ("the walk back restarts the fall back's cap", CMD / "TbPlacePlan.h",

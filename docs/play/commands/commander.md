@@ -37,7 +37,7 @@ The commander commands bind a group of bots to one commander. The commander usua
 - Addresses: one bot by name; `party <leader>` for every host bot in that character's party, with that character as the binding's lead; `party` alone for the bots already bound to you, else the one commander's bots, else the one bot-led party.
 - `none` releases the bots; they go back to following their own masters.
 - Binding does not move anyone and does not change the group.
-- A binding ends by itself when the party it was made on stops being that party: the lead leaves the world or the party, the group leadership changes, another player joins a binding whose commander is outside the party, the party becomes a raid or grows past five, the lead lies dead past the dead grace, the commander leaves an in-party binding, or the commander is away past the master grace.
+- A binding ends by itself when the party it was made on stops being that party: the lead leaves the world or the party, the group leadership changes, another player joins a binding whose commander is outside the party, the party becomes a raid or grows past five, the lead lies dead past the dead grace, the commander leaves an in-party binding, or the commander is away past the master grace. Inside a battleground the binding is that match's own: it ends when either side leaves the instance (or logs out) or the two are no longer on one team, and orders are refused from the moment that happens, not one maintenance pass later.
 - Bindings are kept in memory only unless `TortoiseBots.Commander.KeepBindings = 1` (default `0`), so a restart drops them.
 
 ## Reading a Binding
@@ -85,7 +85,7 @@ The orders go to the party your binding commands; `.tb cmd` needs a player chara
 | `gossip <my\|guid\|entry:<id>> [bot] [option]` | A bot picks one gossip option of an allowlisted NPC. |
 | `lootmethod <ffa\|group\|rr\|master\|nbg> [threshold]` | Sets the party's loot method. |
 | `state [bot]` | Reads each bound bot's current task. |
-| `place ...`, `rally ...`, `fallback ...`, `resume` | Positions the party in a shape, stores a fall-back point, runs the fall back, or ends it. |
+| `place ...`, `rally ...`, `fallback ...`, `resume` | Positions the party in a shape, stores a fall-back point, runs the fall back, or ends it. A placed bot keeps walking back to its slot while it still answers to the hold. The hold ends whenever the bot loses its stay, whoever caused it: a whispered movement order to that bot (`follow`, `free`, …) or any newer order ends it instead of being pulled back against, and so does a rebuild of its tank kit (a respec or role change resets its strategies). A fall back's emergency passivity always ends at its 10 s cap, whether or not its walk-back order runs; a walk-back order that runs after the cap moves the bot and does not make it passive again. |
 
 Targets are a 32-hex GUID, `my` for your selection, or an object entry as `entry:<id>[@x,y,z]`. Accepted orders carry `status=accepted`; refusals answer one `error` line with a stable code (`not-bound`, `invalid`, `no-target`, `dead-target`, `no-bot`, `unsupported`, and the order's own codes).
 

@@ -100,6 +100,7 @@ struct Order
     bool fromRun = false;       // O6: the run leader's order (QueueOrder): owner is the bot itself, a pull hold anchors on the tank's own spot
     bool disengage = false;     // come: the fall back (stop the attack/cast/pet and hold passive on the way)
     bool placed = false;        // come: the placement's own order (only it keeps the combat-time behaviour)
+    uint32 passiveToken = 0;    // come: the row's passive owner a walk back carries; 0 = the fall back's own come
 };
 
 struct BotRec
@@ -112,8 +113,7 @@ struct BotRec
     uint32 seq = 0;             // the last order that finished or is queued
     std::string verb = "none";
     std::string result = "none";   // ok | fail:<code> | queued
-    uint32 placePassiveSeq = 0;    // F1: the fall back `come` whose `passive` this is (0: none of a fall back's); only its exit drops it
-    uint32 lastPassiveSeq = 0;     // F1: the last order that sets `passive` itself (`hold`, `flee`, `co/nc +passive`, a fall back's `come`)
+    place::PassiveBook placePassive;   // F1: the fall back's emergency passive - who owns it, and the last order that set `passive` itself
 };
 
 std::map<ObjectGuid, BotRec>& Recs()
@@ -427,19 +427,31 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
         if (come.passive)
         {
             // F1: the row owns the passive it adds, so its exit never strips one an owner order set (`hold`, `flee`, `.bot co +passive`).
-            // A bot that was already passive keeps that passive; the same row's walk-back `come` carries its record on under the new number.
-            bool const alreadyPassive = ai->HasStrategy("passive", BotState::BOT_STATE_REACTION) ||
-                ai->HasStrategy("passive", BotState::BOT_STATE_NON_COMBAT) ||
-                ai->HasStrategy("passive", BotState::BOT_STATE_COMBAT);
-            BotRec* rec = nullptr;
-            if (auto found = Recs().find(bot->GetGUID()); found != Recs().end())
-                rec = &found->second;
-            bool const carried = rec && rec->placePassiveSeq != 0;
-            ai->ChangeStrategy("+passive", BotState::BOT_STATE_REACTION);
-            ai->ChangeStrategy("+passive", BotState::BOT_STATE_NON_COMBAT);
-            ai->ChangeStrategy("+passive", BotState::BOT_STATE_COMBAT);
-            if (rec && place::PlaceClaimsPassive(alreadyPassive, carried))
-                rec->placePassiveSeq = o.seq;
+            // The read of "already passive" happens inside ApplyComePassive, before any `+passive`: a bot that was already passive keeps that
+            // passive, and the same row's walk-back `come` keeps the row's token, never its new number. That token also gates the add: a walk
+            // back whose row the 10 s cap already ended (the order may live 15 s) moves the bot and adds nothing, instead of turning it passive
+            // with no owner left to release it.
+            struct Engine
+            {
+                PlayerbotAI* ai;
+                bool PassiveOn() const
+                {
+                    return ai->HasStrategy("passive", BotState::BOT_STATE_REACTION) ||
+                        ai->HasStrategy("passive", BotState::BOT_STATE_NON_COMBAT) ||
+                        ai->HasStrategy("passive", BotState::BOT_STATE_COMBAT);
+                }
+                void AddPassive() const
+                {
+                    ai->ChangeStrategy("+passive", BotState::BOT_STATE_REACTION);
+                    ai->ChangeStrategy("+passive", BotState::BOT_STATE_NON_COMBAT);
+                    ai->ChangeStrategy("+passive", BotState::BOT_STATE_COMBAT);
+                }
+            };
+            place::PassiveBook* book = nullptr;
+            if (auto rec = Recs().find(bot->GetGUID()); rec != Recs().end())
+                book = &rec->second.placePassive;
+            Engine engine{ ai };
+            place::ApplyComePassive(engine, book, o.seq, o.passiveToken);
         }
         if (come.keepCombatStayOut)
             ai->ChangeStrategy("-stay", BotState::BOT_STATE_COMBAT);
@@ -898,16 +910,12 @@ Player* ResurrectOffererOf(Player* bot)
     return nullptr;
 }
 
-// F1: an order that just ran, for the fall back's passive record. An order that sets `passive` itself becomes the bot's last one, and a
-// newer one than the fall back's `come` takes the row's record over (the row's exit then drops nothing). A plain come/attack/follow leaves
-// the record alone, so the row still releases its own passive on every exit path. Failures are no record: a `flee` that could not run set nothing.
+// F1: an order that just ran, for the fall back's passive record (TbPlacePlan.h). A `come` keeps the row's owner token; `hold`, `flee` and an
+// owner's `+passive` take the record over. A plain come/attack/follow leaves the record alone, so the row still releases its own passive on
+// every exit path.
 void NoteRanOrderPassive(BotRec& rec, Order const& order)
 {
-    if (!place::OrderSetsPassive(order.verb, order.arg, order.disengage))
-        return;
-    rec.lastPassiveSeq = order.seq;
-    if (order.verb != "come")
-        rec.placePassiveSeq = 0;
+    place::NoteRanPassive(rec.placePassive, order.verb, order.arg, order.disengage, order.seq);
 }
 
 void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
@@ -1111,14 +1119,8 @@ bool ReleasePlacePassive(Player* bot, uint32 seq)
     if (!ai || !ai->GetAiObjectContext())
         return false;
     auto rec = Recs().find(bot->GetGUID());
-    if (rec == Recs().end() || rec->second.placePassiveSeq != seq)
-        return true;      // not a fall back's passive (an owner's, a `hold`'s, a `flee`'s, or another row's): never the row's to drop
-    // F1: only a newer order that sets `passive` itself keeps it (its record is the newer one); any other newer order, and the row's own
-    // `come` (a walk-back keeps the row's number), leave the release to the row. The record is done either way.
-    bool const releasable = place::PlacePassiveReleasable(true, seq, rec->second.lastPassiveSeq);
-    rec->second.placePassiveSeq = 0;
-    if (!releasable)
-        return true;
+    if (rec == Recs().end() || !place::TakeOwnerPassive(rec->second.placePassive, seq))
+        return true;      // not a fall back's passive (an owner's, a `hold`'s, a `flee`'s, another row's, or a newer order's): never the row's to drop
     ai->ChangeStrategy("-passive", BotState::BOT_STATE_REACTION);
     ai->ChangeStrategy("-passive", BotState::BOT_STATE_NON_COMBAT);
     ai->ChangeStrategy("-passive", BotState::BOT_STATE_COMBAT);
@@ -1348,6 +1350,7 @@ bool QueueOrder(Player* bot, OrderSpec const& spec, std::string& code, std::stri
     order.fromRun = spec.fromRun;
     order.disengage = spec.disengage;
     order.placed = spec.placed;
+    order.passiveToken = spec.passiveToken;
     Player* commander = CommanderOf(bot);
     order.owner = (commander && !spec.fromRun) ? commander->GetGUID() : bot->GetGUID();
     return Enqueue(bot, std::move(order), code, detail, seq);

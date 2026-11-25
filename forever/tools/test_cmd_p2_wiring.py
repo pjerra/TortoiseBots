@@ -284,6 +284,21 @@ class Wiring(unittest.TestCase):
                 "facts.commanderInGroup = group->IsMember(commander);",
                 "facts.commanderInGroup = commanderPlayer && group->IsMember(commanderPlayer->GetGUID());"))
 
+    def test_a_battleground_bind_commands_nothing_after_the_commander_leaves(self):
+        # #315: the authorisation read the stored member and h3's row, while the clean-up runs once a second: between the commander's leave and
+        # the next tick a command was still accepted.
+        check_bg_command_gate(self.cpp)
+        # THE MUTATION: the pre-fix check (the stored member plus h3's row, no live instance or team) still authorises the gap.
+        with self.assertRaises(AssertionError):
+            check_bg_command_gate(self.cpp.replace(
+                "L::MayCommandBg(h3::CommanderGuid(bot->GetGUID()) == commander->GetGUID(), facts)",
+                "L::MayCommand(true, false, h3::CommanderGuid(bot->GetGUID()) == commander->GetGUID(), true)"))
+        # A gate that stops reading the team (or one instance) is the same failed case with half the facts.
+        with self.assertRaises(AssertionError):
+            check_bg_command_gate(self.cpp.replace("            facts.sameTeam = bot->GetBGTeam() == commander->GetBGTeam();\n", ""))
+        with self.assertRaises(AssertionError):
+            check_bg_command_gate(self.cpp.replace("            facts.commanderInInstance = member->instance && commander->GetBattlegroundId() == member->instance;\n", ""))
+
     def test_an_in_party_commander_leaving_ends_his_binding(self):
         check_commander_removal(self.cpp)
         # THE MUTATION: without the branch the core's promoted leader (leader-changed) or a disbanded party (group-changed) reports the removal.
@@ -541,6 +556,24 @@ def check_command_gate(source):
         source, r"void ReleaseCommander\(ObjectGuid commander, L::End end, Group\* partyGroup = nullptr, bool partyKnown = false\)\s*\{"))
     if "DropPending(commander);" not in release:
         raise AssertionError("a release leaves a group hook's event to fire against a later binding of the same commander")
+
+
+def check_bg_command_gate(source):
+    """A battleground bind authorises on its live facts, never the stored member alone (#315): h3 still binds the bot to this commander, both
+    stand in the world, both stand in the instance the bind was made in, and both are still on one team. The 1 Hz check ends a stale row, but a
+    command sent between two ticks must not use it: the commander's leave (or a transfer, or a logout) denies at once."""
+    commanded = code(function_body(source, r"bool IsCommandedBy\(Player\* commander, Player\* bot\)\s*\{"))
+    if "L::MayCommandBg(" not in commanded:
+        raise AssertionError("IsCommandedBy does not apply the battleground command gate")
+    for needle, why in (
+            ("bot->IsInWorld()", "the bot's login is not read"),
+            ("commander->IsInWorld()", "the commander's login is not read"),
+            ("bot->GetBattlegroundId() == member->instance", "the bot's instance is not read"),
+            ("commander->GetBattlegroundId() == member->instance", "the commander's instance is not read"),
+            ("member->instance &&", "a member with no recorded instance would match an empty live one"),
+            ("bot->GetBGTeam() == commander->GetBGTeam()", "the team is not read")):
+        if needle not in commanded:
+            raise AssertionError(f"the battleground command gate: {why}")
 
 
 def check_restore_leadership(source):

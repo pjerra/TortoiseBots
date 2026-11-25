@@ -293,7 +293,7 @@ static void TestHoldBookkeeping()
     CHECK(P::ReleaseOn(P::RowEnd::OtherMap, false) == P::Release::ClearStay);
     // A run or a newer order drives the bot: their driver must not be fought with a `follow`.
     CHECK(P::ReleaseOn(P::RowEnd::Run, true) == P::Release::ClearStay);
-    CHECK(P::ReleaseOn(P::RowEnd::NewerOrder, true) == P::Release::ClearStay);
+    CHECK(P::ReleaseOn(P::RowEnd::StayGone, true) == P::Release::ClearStay);
 
     // A later command ends the pending cursor request, and logout forgets rallies, holds and pendings.
     P::PendingRequest pending;
@@ -339,6 +339,285 @@ static void TestDroppedFollowYieldsToNewerOrder()
     CHECK(P::NewerOrderOwns(6u, 5u));
     CHECK(!P::NewerOrderOwns(4u, 5u));
     CHECK(!P::NewerOrderOwns(0u, 0u));
+}
+
+// #316 (1): a whispered `follow` runs in the engine's chat path. It drops the stay and advances no order number, so the row's `come` is still
+// the bot's last order: the old rule (`last.seq > row.seq && no stay`) never fired, the row survived, and across one walk-back interval it
+// queued another `come` that pulled the bot back to the old slot.
+static void TestWhisperFollowEndsTheHold()
+{
+    P::HoldRow row;
+    row.seq = 11u;
+    P::StartRowClock(row, 1000u);
+    uint32_t const lastSeq = 11u;                 // the row's own `come`; a whisper numbers nothing
+    bool const stayActive = false;                // the chat shortcut dropped the stay
+    CHECK(!P::NewerOrderOwns(lastSeq, row.seq));  // the old rule's whole condition: no newer order...
+    CHECK(P::RowStayGone(true, stayActive, false));
+
+    // Across one walk-back interval: Update's own order of checks, once a second. The row must end on the first pass, before any walk back
+    // is queued (the walk back is due 5 s after the row's clock).
+    uint32_t seq = row.seq, walks = 0, endedAt = 0;
+    for (uint32_t now = 1000u; now <= 1000u + 3u * P::kWalkBackEveryMs && !endedAt; now += 1000u)
+    {
+        if (P::RowStayGone(true, stayActive, false))
+        {
+            endedAt = now;
+            break;
+        }
+        if (now - row.walkMs >= P::kWalkBackEveryMs)
+        {
+            P::AfterWalkBack(row, ++seq, now);
+            ++walks;
+        }
+    }
+    CHECK(endedAt == 1000u);
+    CHECK(walks == 0u);
+    CHECK(row.seq == 11u);
+
+    // The row a placement's `come` still stands on: the stay is active, so it is served as before.
+    CHECK(!P::RowStayGone(true, true, false));
+    // The row's own `come` is still waiting in the queue: its stay has not been written yet, so the engine being late is no lost hold.
+    CHECK(!P::RowStayGone(true, false, true));
+    CHECK(!P::RowStayGone(false, false, false));  // no engine to read the strategy from: nothing to end on
+}
+
+// #316 (2): a fall back's walk-back queued a `come` that the engine never ran. The walk back moved the movement number (`row.seq`), while the
+// passive's record stays on the fall back's own `come`: the 10 s cap released with the new number, which found no record, answered "nothing to
+// release" and cleared the row's flag with the bot still passive. The nominal test is the pure state: the owner never moves, and the flag only
+// clears on a release that really ran.
+static void TestWalkBackPassiveOwner()
+{
+    P::HoldRow row;
+    row.seq = 7u;
+    row.disengage = true;
+    P::StartRowClock(row, 50000u);
+    CHECK(row.passiveSeq == 7u);                  // the fall back's own `come` owns the passive
+    P::AfterWalkBack(row, 9u, 55000u);            // the walk-back `come`, never run
+    CHECK(row.seq == 9u);
+    CHECK(row.passiveSeq == 7u);                  // the owner is unchanged by the walk back
+    CHECK(P::PassiveOwner(row) == 7u);
+    // The cap still fires on the fall back's own clock.
+    CHECK(P::RowDisengageEnds(row, 8.0f, false, true, 50000u + P::kDisengageMaxMs));
+    // The release ran with the owner's number: the row stops disengaging.
+    CHECK(P::DisengageSettled(row, true));
+    CHECK(!row.disengage && row.passiveSeq == 0u);
+
+    // A release that could not run (the bot's engine is away) leaves the row to retry: no flag cleared over a passive still on the bot.
+    P::HoldRow away;
+    away.seq = 7u;
+    away.disengage = true;
+    P::StartRowClock(away, 1000u);
+    P::AfterWalkBack(away, 9u, 6000u);
+    CHECK(!P::DisengageSettled(away, false));
+    CHECK(away.disengage && P::PassiveOwner(away) == 7u);
+    CHECK(P::RowDisengageEnds(away, 8.0f, false, true, 1000u + P::kDisengageMaxMs));   // the next pass asks again
+    CHECK(P::DisengageSettled(away, true));
+    CHECK(!away.disengage && away.passiveSeq == 0u);
+    // A row that is not a fall back owns no passive at all.
+    P::HoldRow placed;
+    placed.seq = 3u;
+    P::StartRowClock(placed, 1000u);
+    CHECK(placed.passiveSeq == 0u);
+    CHECK(P::PassiveOwner(placed) == 3u);
+}
+
+static void TestExecutedWalkBackPassiveOwner()
+{
+    // #316 follow-up (review): the ordinary case is the walk back that RUNS. The engine re-queues the movement `come` under a new number and
+    // executes it, so the record's owner must not move: the row and the order bookkeeping are driven here as the host drives them, the row
+    // (TbPlacePlan.h) and the bot's record (PassiveBook, the functions TbOrders.cpp calls).
+    P::HoldRow row;
+    row.seq = 7u;
+    row.disengage = true;
+    P::StartRowClock(row, 1000u);
+    P::PassiveBook book;
+    // The fall back's own `come` runs on a bot that was not passive: it owns the passive it adds, and is the last one that set it.
+    book.owner = P::RanComePassiveOwner(book, false, 7u);
+    P::NoteRanPassive(book, "come", "", true, 7u);
+    CHECK(book.owner == 7u && book.last == 7u);
+    CHECK(book.owner == P::PassiveOwner(row));
+
+    // 5 s later the walk back runs: a new order number, the same row's passive.
+    P::AfterWalkBack(row, 12u, 6000u);
+    book.owner = P::RanComePassiveOwner(book, true, 12u);
+    P::NoteRanPassive(book, "come", "", true, 12u);
+    CHECK(row.seq == 12u);
+    CHECK(P::PassiveOwner(row) == 7u);
+    CHECK(book.owner == 7u);                  // the walk-back `come` is not a newer owner
+    CHECK(book.last == 7u);                   // ... and not a newer order that set `passive` itself
+    CHECK(P::RowDisengageEnds(row, 8.0f, false, true, 1000u + P::kDisengageMaxMs));
+    // The cap fires: the passive is dropped once, and the row settles.
+    CHECK(P::TakeOwnerPassive(book, P::PassiveOwner(row)));
+    CHECK(book.owner == 0u);
+    CHECK(P::DisengageSettled(row, true));
+    CHECK(!row.disengage && row.passiveSeq == 0u);
+    CHECK(!P::TakeOwnerPassive(book, P::PassiveOwner(row)));   // a second pass drops nothing more
+
+    // The walk back that stays queued: the same record, the same single release.
+    P::HoldRow queued;
+    queued.seq = 21u;
+    queued.disengage = true;
+    P::StartRowClock(queued, 1000u);
+    P::PassiveBook qbook;
+    qbook.owner = P::RanComePassiveOwner(qbook, false, 21u);
+    P::NoteRanPassive(qbook, "come", "", true, 21u);
+    P::AfterWalkBack(queued, 30u, 6000u);
+    CHECK(P::TakeOwnerPassive(qbook, P::PassiveOwner(queued)));
+    CHECK(P::DisengageSettled(queued, true));
+    CHECK(!P::TakeOwnerPassive(qbook, 30u));   // asking with the walk-back's number drops nothing (and leaves nothing to drop)
+
+    // No walk back at all: same.
+    P::HoldRow plain;
+    plain.seq = 41u;
+    plain.disengage = true;
+    P::StartRowClock(plain, 1000u);
+    P::PassiveBook pbook;
+    pbook.owner = P::RanComePassiveOwner(pbook, false, 41u);
+    P::NoteRanPassive(pbook, "come", "", true, 41u);
+    CHECK(P::TakeOwnerPassive(pbook, P::PassiveOwner(plain)));
+    CHECK(P::DisengageSettled(plain, true));
+
+    // A fall back on a bot the owner already held passive owns nothing: its walk back must not create a record either.
+    P::HoldRow kept;
+    kept.seq = 55u;
+    kept.disengage = true;
+    P::StartRowClock(kept, 1000u);
+    P::PassiveBook kbook;
+    kbook.owner = P::RanComePassiveOwner(kbook, true, 55u);
+    P::NoteRanPassive(kbook, "come", "", true, 55u);
+    CHECK(kbook.owner == 0u && kbook.last == 0u);
+    P::AfterWalkBack(kept, 60u, 6000u);
+    kbook.owner = P::RanComePassiveOwner(kbook, true, 60u);
+    P::NoteRanPassive(kbook, "come", "", true, 60u);
+    CHECK(kbook.owner == 0u);
+    CHECK(!P::TakeOwnerPassive(kbook, P::PassiveOwner(kept)));
+    CHECK(P::DisengageSettled(kept, true));    // the row served its record (none): the owner keeps the passive
+
+    // A `flee` after the executed walk back takes the record over: the cap drops nothing, the bot keeps the flee's passive.
+    P::HoldRow fleeRow;
+    fleeRow.seq = 71u;
+    fleeRow.disengage = true;
+    P::StartRowClock(fleeRow, 1000u);
+    P::PassiveBook fbook;
+    fbook.owner = P::RanComePassiveOwner(fbook, false, 71u);
+    P::NoteRanPassive(fbook, "come", "", true, 71u);
+    P::AfterWalkBack(fleeRow, 80u, 6000u);
+    fbook.owner = P::RanComePassiveOwner(fbook, true, 80u);
+    P::NoteRanPassive(fbook, "come", "", true, 80u);
+    P::NoteRanPassive(fbook, "flee", "", false, 90u);
+    CHECK(fbook.owner == 0u && fbook.last == 90u);
+    CHECK(!P::TakeOwnerPassive(fbook, P::PassiveOwner(fleeRow)));
+
+    // A `hold` between the fall back and its walk back: the walk back runs without recreating a record the hold now owns.
+    P::HoldRow heldRow;
+    heldRow.seq = 101u;
+    heldRow.disengage = true;
+    P::StartRowClock(heldRow, 1000u);
+    P::PassiveBook hbook;
+    hbook.owner = P::RanComePassiveOwner(hbook, false, 101u);
+    P::NoteRanPassive(hbook, "come", "", true, 101u);
+    P::NoteRanPassive(hbook, "hold", "", false, 105u);
+    CHECK(hbook.owner == 0u && hbook.last == 105u);
+    P::AfterWalkBack(heldRow, 112u, 6000u);
+    hbook.owner = P::RanComePassiveOwner(hbook, true, 112u);
+    P::NoteRanPassive(hbook, "come", "", true, 112u);
+    CHECK(hbook.owner == 0u);
+    CHECK(!P::TakeOwnerPassive(hbook, P::PassiveOwner(heldRow)));
+}
+
+// #321 review: the order lives 15 s (OrderMaxAgeMs), the fall back's cap is 10 s, so a walk back can run AFTER the cap released the passive. The
+// row is over then and nobody owns the passive: the queued `come` must move the bot and add nothing (before, it claimed the record with its own
+// newer number and turned the bot passive for good). The same end comes through an owner's `co +passive`, `co -passive`: the record is no
+// longer the row's token either.
+struct FakeEngine
+{
+    bool passive = false;
+    std::string events;                       // 'r' = asked for the passive now, 'a' = added it
+    bool PassiveOn()
+    {
+        events.push_back('r');
+        return passive;
+    }
+    void AddPassive()
+    {
+        events.push_back('a');
+        passive = true;
+    }
+};
+
+static void TestLateWalkBackIsNotPassive()
+{
+    P::HoldRow row;
+    row.seq = 7u;
+    row.disengage = true;
+    P::StartRowClock(row, 1000u);
+    P::PassiveBook book;
+    book.owner = P::RanComePassiveOwner(book, false, 7u);
+    P::NoteRanPassive(book, "come", "", true, 7u);
+    P::AfterWalkBack(row, 30u, 9000u);            // the walk back queued and never run: the order waits
+    // The cap fires at 10 s while the order still waits: the passive is dropped once and the row settles.
+    CHECK(P::TakeOwnerPassive(book, P::PassiveOwner(row)));
+    CHECK(P::DisengageSettled(row, true));
+    CHECK(book.owner == 0u);
+    // The walk back now runs (it may live to 15 s): the bot moves, no passive comes back, and nobody owns one.
+    FakeEngine engine;
+    P::ApplyComePassive(engine, &book, 30u, P::PassiveOwner(row));
+    CHECK(!engine.passive);
+    CHECK(engine.events.empty());                 // not even a look at the strategies: the row is over
+    CHECK(book.owner == 0u);
+
+    // The owner's own `co +passive`, then `co -passive`, then the walk back runs: passive stays off.
+    P::HoldRow typed;
+    typed.seq = 41u;
+    typed.disengage = true;
+    P::StartRowClock(typed, 1000u);
+    P::PassiveBook tbook;
+    tbook.owner = P::RanComePassiveOwner(tbook, false, 41u);
+    P::NoteRanPassive(tbook, "come", "", true, 41u);
+    P::NoteRanPassive(tbook, "co", "+passive", false, 42u);
+    P::NoteRanPassive(tbook, "co", "-passive", false, 43u);
+    CHECK(tbook.owner == 0u);
+    FakeEngine typedEngine;
+    P::ApplyComePassive(typedEngine, &tbook, 44u, P::PassiveOwner(typed));
+    CHECK(!typedEngine.passive);
+    CHECK(typedEngine.events.empty());
+    CHECK(tbook.owner == 0u);
+
+    // The ordinary walk back, before any cap: the token still owns the record, so the come keeps the passive and the record unchanged.
+    P::HoldRow early;
+    early.seq = 51u;
+    early.disengage = true;
+    P::StartRowClock(early, 1000u);
+    P::PassiveBook ebook;
+    ebook.owner = P::RanComePassiveOwner(ebook, false, 51u);
+    P::NoteRanPassive(ebook, "come", "", true, 51u);
+    FakeEngine earlyEngine;
+    earlyEngine.passive = true;
+    P::ApplyComePassive(earlyEngine, &ebook, 60u, P::PassiveOwner(early));
+    CHECK(earlyEngine.passive);
+    CHECK(ebook.owner == 51u);                    // the walk back's newer number never takes the record over
+}
+
+// #321 review follow-up: the come reads the strategies BEFORE it adds `passive`. Read after the three `+passive` calls, every come would see
+// "already passive", claim nothing and leave a passive nobody releases; the read is inside the helper so this order is testable.
+static void TestComePassiveReadsBeforeAdding()
+{
+    FakeEngine engine;                            // not passive
+    P::PassiveBook book;
+    P::ApplyComePassive(engine, &book, 11u, 0u);
+    CHECK(engine.events == "ra");                 // asked first, added second
+    CHECK(engine.passive && book.owner == 11u);   // it added the passive: it owns it
+
+    FakeEngine held;                              // already passive (a `hold`, a `flee`, an owner's `+passive`)
+    held.passive = true;
+    P::PassiveBook hbook;
+    P::ApplyComePassive(held, &hbook, 12u, 0u);
+    CHECK(held.events == "ra");
+    CHECK(hbook.owner == 0u);                     // the owner keeps that passive; the come claims nothing
+
+    FakeEngine bare;                              // no order record: the passive is still added, just never managed
+    P::ApplyComePassive(bare, nullptr, 13u, 0u);
+    CHECK(bare.events == "ra" && bare.passive);
 }
 
 static void TestLedgeSlotIsRefused()
@@ -852,6 +1131,11 @@ int main()
     TestClock();
     TestWalkBackKeepsTheRowsOrder();
     TestDroppedFollowYieldsToNewerOrder();
+    TestWhisperFollowEndsTheHold();
+    TestWalkBackPassiveOwner();
+    TestExecutedWalkBackPassiveOwner();
+    TestLateWalkBackIsNotPassive();
+    TestComePassiveReadsBeforeAdding();
     TestLedgeSlotIsRefused();
     TestLiquidSlotIsNudged();
     TestNudgeGoesInward();

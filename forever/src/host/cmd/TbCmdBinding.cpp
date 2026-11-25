@@ -474,7 +474,7 @@ void ReleaseBgMember(uint64_t bot, uint64_t commander, L::End end)
         L::EndText(end), L::EndCode(end));
 }
 
-// Every bg member on its own facts (L::CheckBg): the two live instance ids, the two logins and h3's commander. `leaving` is a character that is
+// Every bg member on its own facts (L::CheckBg): the two live instance ids, the two logins, the team pair and h3's commander. `leaving` is a character that is
 // logging out now (still in the world during the hook): it reads as offline, so a logout ends its binds at once.
 void RunBgCheck(ObjectGuid leaving = ObjectGuid::Empty)
 {
@@ -495,6 +495,10 @@ void RunBgCheck(ObjectGuid leaving = ObjectGuid::Empty)
         facts.botCommander = h3::CommanderGuid(botGuid).GetCounter();
         facts.commanderOnline = commanderPlayer != nullptr;
         facts.commanderInstance = commanderPlayer ? commanderPlayer->GetBattlegroundId() : 0;
+        // A mid-match transfer takes the bot and the commander to different sides: the bind cannot move a bot across sides, and the order gate
+        // already refuses it (#315); the bind must not outlive it either.
+        if (bot && commanderPlayer)
+            facts.sameTeam = bot->GetBGTeam() == commanderPlayer->GetBGTeam();
         live.push_back(facts);
     }
     for (L::BgVerdict const& verdict : L::CheckBg(s.bg, live, BotMgr::Instance().Enabled()))
@@ -1065,11 +1069,19 @@ bool IsCommandedBy(Player* commander, Player* bot)
     if (!commander || !bot)
         return false;
     State const& s = Get();
-    // A bg member is commanded while h3 binds it to this commander and it is still inside the match it was bound in (no record, no lead party).
+    // A bg member is commanded while h3 binds it to this commander and BOTH still stand in the instance the bind was made in, on its team (no
+    // record, no lead party). The clean-up runs once a second; a commander who left between two ticks is refused here, at once (#315).
     if (L::BgMember const* member = L::FindBg(s.bg, bot->GetGUID().GetCounter()))
         if (member->commander == commander->GetGUID().GetCounter())
-            return L::MayCommand(true, false, h3::CommanderGuid(bot->GetGUID()) == commander->GetGUID(),
-                member->instance && bot->GetBattlegroundId() == member->instance);
+        {
+            L::BgCommandFacts facts;
+            facts.botOnline = bot->IsInWorld();
+            facts.commanderOnline = commander->IsInWorld();
+            facts.botInInstance = member->instance && bot->GetBattlegroundId() == member->instance;
+            facts.commanderInInstance = member->instance && commander->GetBattlegroundId() == member->instance;
+            facts.sameTeam = bot->GetBGTeam() == commander->GetBGTeam();
+            return L::MayCommandBg(h3::CommanderGuid(bot->GetGUID()) == commander->GetGUID(), facts);
+        }
     auto const it = s.metas.find(commander->GetGUID());
     bool const stands = it != s.metas.end() && it->second.restored;
     // The record is only half the answer: h3's table must bind this very bot to this very commander too (review fix: a party member commanded by

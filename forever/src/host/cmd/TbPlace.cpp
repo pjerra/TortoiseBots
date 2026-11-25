@@ -400,7 +400,8 @@ bool ResolveAnchor(Player* commander, Binding const& binding, Command const& com
     return false;
 }
 
-bool QueueCome(Player* bot, float x, float y, float z, bool placed, bool disengage, uint32& seq, std::string& code, std::string& detail)
+bool QueueCome(Player* bot, float x, float y, float z, bool placed, bool disengage, uint32 passiveToken, uint32& seq, std::string& code,
+    std::string& detail)
 {
     h3::OrderSpec spec;
     spec.verb = "come";
@@ -410,6 +411,7 @@ bool QueueCome(Player* bot, float x, float y, float z, bool placed, bool disenga
     spec.map = bot->GetMapId();
     spec.placed = placed;
     spec.disengage = disengage;
+    spec.passiveToken = passiveToken;
     return h3::QueueOrder(bot, spec, code, detail, seq);
 }
 
@@ -551,7 +553,7 @@ uint32 ApplyPlan(h3::Reply& reply, std::string const& verb, PlanResult const& pl
         }
         uint32 seq = 0;
         std::string code, detail;
-        if (!QueueCome(bot, step.pos.x, step.pos.y, step.z, placed, disengage, seq, code, detail))
+        if (!QueueCome(bot, step.pos.x, step.pos.y, step.z, placed, disengage, 0, seq, code, detail))
         {
             rec.S("status", "refused").S("code", code.empty() ? std::string("failed") : code).T("msg", detail);
             reply.Line(rec);
@@ -575,9 +577,9 @@ uint32 ApplyPlan(h3::Reply& reply, std::string const& verb, PlanResult const& pl
         row.slot = step.slot;
         row.seq = seq;
         row.rank = picked.info[step.bot].rank;
-        StartRowClock(row, now);
         row.placed = placed;
         row.disengage = disengage;
+        StartRowClock(row, now);      // the passive's owner is the fall back's own `come`: the flags are set before it
         rows.push_back(row);
     }
     return uint32(rows.size());
@@ -611,7 +613,7 @@ void ReleaseRow(HoldRow const& row, Release how)
     else
         h3::ReleasePlaceStay(bot, row.seq);
     if (row.disengage)
-        h3::ReleasePlacePassive(bot, row.seq);      // the emergency hold never outlives its row (cancel, death, logout, unbind), and never strips another's
+        h3::ReleasePlacePassive(bot, PassiveOwner(row));      // the emergency hold never outlives its row (cancel, death, logout, unbind), and never strips another's
 }
 
 // Every dropped row is released. `commander` may be null (the commander left): then only the placement's own stay is cleared.
@@ -745,7 +747,7 @@ bool RunPlaceFollow(ChatHandler* handler, h3::Words const& args, Player* command
     }))
         if (row.disengage)
             if (Player* bot = ObjectAccessor::FindPlayer(BotOf(row.bot)))
-                h3::ReleasePlacePassive(bot, row.seq);
+                h3::ReleasePlacePassive(bot, PassiveOwner(row));
     NoteOrder(binding, "place follow", "released " + std::to_string(released));
 
     Player* lead = ObjectAccessor::FindPlayer(binding.lead);
@@ -989,7 +991,7 @@ bool HandleResume(ChatHandler* handler, h3::Words const& args, Player* commander
     }))
         if (row.disengage)
             if (Player* bot = ObjectAccessor::FindPlayer(BotOf(row.bot)))
-                h3::ReleasePlacePassive(bot, row.seq);
+                h3::ReleasePlacePassive(bot, PassiveOwner(row));
     std::vector<HoldRow> const dropped = DropRows(Memory(), key, [&](HoldRow const& row)
     {
         return std::any_of(stale.begin(), stale.end(), [&](GuidKey const& guid) { return guid == row.bot; });
@@ -1114,7 +1116,7 @@ void NoteLogout(Player* player)
         for (HoldRow const& row : hold->second.rows)
             if (row.disengage)
                 if (Player* bot = ObjectAccessor::FindPlayer(BotOf(row.bot)))
-                    h3::ReleasePlacePassive(bot, row.seq);
+                    h3::ReleasePlacePassive(bot, PassiveOwner(row));
     Forget(Memory(), key);
 }
 
@@ -1183,7 +1185,7 @@ void NoteOrdered(ObjectGuid commander, std::string const& verb)
         for (HoldRow const& row : it->second.rows)
             if (row.disengage)
                 if (Player* bot = ObjectAccessor::FindPlayer(BotOf(row.bot)))
-                    h3::ReleasePlacePassive(bot, row.seq);
+                    h3::ReleasePlacePassive(bot, PassiveOwner(row));
         Memory().holds.erase(it);
     }
     else if (it->second.fallback && (verb == "attack" || verb == "pull" || verb == "pullback" || verb == "resume"))
@@ -1193,7 +1195,7 @@ void NoteOrdered(ObjectGuid commander, std::string const& verb)
             {
                 h3::ReleasePlaceHold(bot, row.x, row.y, row.z);
                 if (row.disengage)
-                    h3::ReleasePlacePassive(bot, row.seq);
+                    h3::ReleasePlacePassive(bot, PassiveOwner(row));
             }
         Memory().holds.erase(it);
     }
@@ -1254,12 +1256,15 @@ void Update()
                 end = RowEnd::Run;       // a run drives this bot: its hold is over
             else
             {
-                // A newer order that left the bot off its stay (`.tb order ... follow`, a chat shortcut, `.tb action free`) releases the slot: the bot
-                // answers to something else now, and walking it back would fight that order.
+                // The row's hold is the `stay` its `come` wrote. A newer order (`.tb order ... follow`, `.tb action free`) or a whisper shortcut
+                // (`follow`, `free`, ...: the engine's chat path, which advances no order number) leaves the bot off its stay: it answers to
+                // something else now, and walking it back would fight that. The row's own `come` still waiting in the queue is no loss: its stay
+                // has not been written yet.
                 h3::OrderStatus const last = h3::LastOrder(bot->GetGUID());
                 PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
-                if (last.seq > row.seq && ai && !ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT))
-                    end = RowEnd::NewerOrder;
+                bool const ownComeQueued = last.seq == row.seq && last.verb == "come" && last.result == "queued";
+                if (RowStayGone(ai != nullptr, ai && ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT), ownComeQueued))
+                    end = RowEnd::StayGone;
             }
             if (end != RowEnd::None)
             {
@@ -1273,9 +1278,12 @@ void Update()
                 // The fall back has landed, or the bot stopped short in a fight (a blocked spot), or the walk outlived its cap: the
                 // emergency passivity ends, the bot fights what follows it (and still returns to the spot after the fight). A newer order
                 // may own the bot by now (its number no longer matches): only the row's OWN passive is released (F1), so a `flee` or `hold`
-                // ordered on the way keeps its own; only the matching `come` still owns the combat-state stay.
-                if (h3::ReleasePlaceDisengage(bot, row.seq) || h3::ReleasePlacePassive(bot, row.seq))
-                    row.disengage = false;
+                // ordered on the way keeps its own; only the matching `come` still owns the combat-state stay. The passive is released by the
+                // order that OWNS it: a walk back re-queued the movement `come` under a new number, and asking with that number found no
+                // record, reported "nothing to release" and cleared the flag with the bot still passive (#316).
+                bool const passiveGone = h3::ReleasePlacePassive(bot, PassiveOwner(row));
+                h3::ReleasePlaceDisengage(bot, row.seq);
+                DisengageSettled(row, passiveGone);
             }
             bool const idle = !bot->IsInCombat() && !bot->IsNonMeleeSpellCast(true, false, true) && bot->movespline->Finalized();
             if (distance > kSlotToleranceYd && idle && Due(now, row.walkMs + kWalkBackEveryMs))
@@ -1299,7 +1307,7 @@ void Update()
                 {
                     uint32 seq = 0;
                     std::string code, detail;
-                    if (QueueCome(bot, row.x, row.y, row.z, row.placed, row.disengage, seq, code, detail))
+                    if (QueueCome(bot, row.x, row.y, row.z, row.placed, row.disengage, PassiveOwner(row), seq, code, detail))
                         AfterWalkBack(row, seq, now);
                 }
             }

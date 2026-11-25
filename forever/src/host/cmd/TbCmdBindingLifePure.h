@@ -69,6 +69,25 @@ inline bool MayCommand(bool bindingStands, bool releasePending, bool boundToComm
     return bindingStands && !releasePending && boundToCommander && inLeadGroup;
 }
 
+// A battleground bind's authorisation (BG2 live row 5): the same question for a bot that stands in a match, read from its own live facts. The
+// 1 Hz check (CheckBg) ends a stale row, but it runs between two ticks at most: an authorisation that only read the stored member would keep
+// commanding after the commander left the match (or was moved out of it) until the next tick. The check itself therefore requires both in the
+// world, both in the instance the bind was made in, and both still on one team - the very facts the bind was allowed on (TbMasterBindPure.h
+// IsBgBind). A leave, a transfer or a logout denies at once; the maintenance pass does the release.
+struct BgCommandFacts
+{
+    bool botOnline = false;             // the bot is in the world
+    bool commanderOnline = false;       // the commander is in the world
+    bool botInInstance = false;         // the bot's live GetBattlegroundId() is the bind's instance
+    bool commanderInInstance = false;   // the commander's live GetBattlegroundId() is the bind's instance
+    bool sameTeam = false;              // their live GetBGTeam() are equal
+};
+
+inline bool MayCommandBg(bool boundToCommander, BgCommandFacts const& facts)
+{
+    return boundToCommander && facts.botOnline && facts.commanderOnline && facts.botInInstance && facts.commanderInInstance && facts.sameTeam;
+}
+
 // ---- the row text (one line per field group, no escaping: guids and numbers only) ----
 
 inline std::string EncodeMembers(std::vector<uint64_t> const& members)
@@ -157,6 +176,7 @@ enum class End : uint8_t
     BgBotLeft,          // a battleground bind: the bot left the match (or logged out); never a verdict of the party rules
     BgCommanderLeft,    // a battleground bind: the commander left the match (or logged out)
     BgMatchEnded,       // a battleground bind: the match it was made in is over
+    BgTeamChanged,      // a battleground bind: the two are no longer on one team (a mid-match transfer)
     Unbound,            // the commander's own release; not a verdict of Decide
 };
 
@@ -166,7 +186,7 @@ enum class End : uint8_t
 // short-lived kind: it is never stored, and the rules below do not apply to it. Inside a match the lead's group is the battleground raid, so
 // groupIsBg / groupIsRaidOrBg would release it within one 1 Hz tick (group-raid), and the raid's leader is the human, not the bot (leader-changed).
 // It has exactly one end: the match it was made in, when either side leaves it (the instance changes or goes to 0, which covers a leave, the end of
-// the match and both logouts).
+// the match and both logouts), or when a mid-match transfer puts them on different teams.
 struct BgFacts
 {
     uint32_t instance = 0;              // the instance the bind was made in (0 = none recorded: a bind with no match is over)
@@ -174,6 +194,7 @@ struct BgFacts
     uint32_t commanderInstance = 0;     // the commander's live GetBattlegroundId()
     bool botOnline = true;
     bool commanderOnline = true;
+    bool sameTeam = true;               // Player::GetBGTeam() equal (read only while both are here); a transfer ends the bind
 };
 
 enum class BgEnd : uint8_t
@@ -182,6 +203,7 @@ enum class BgEnd : uint8_t
     BotLeft,            // the bot left the match, or logged out
     CommanderLeft,      // the commander left the match, or logged out
     MatchEnded,         // the match is gone for both (it ended), or the record names none
+    TeamChanged,        // the two stand in the instance on different teams now (a mid-match transfer)
 };
 
 // Both gone is the match ending; one gone is that one leaving. A logout ends it at once: the kind has no grace, the match is the whole life.
@@ -201,6 +223,8 @@ inline BgEnd BgBindEnd(BgFacts const& facts)
         return BgEnd::BotLeft;
     if (!commanderHere)
         return BgEnd::CommanderLeft;
+    if (!facts.sameTeam)
+        return BgEnd::TeamChanged;
     return BgEnd::None;
 }
 
@@ -212,6 +236,7 @@ inline End BgEndToEnd(BgEnd end)
         case BgEnd::BotLeft: return End::BgBotLeft;
         case BgEnd::CommanderLeft: return End::BgCommanderLeft;
         case BgEnd::MatchEnded: return End::BgMatchEnded;
+        case BgEnd::TeamChanged: return End::BgTeamChanged;
         case BgEnd::None: break;
     }
     return End::None;
@@ -338,6 +363,7 @@ struct BgLive
     uint64_t botCommander = 0;          // h3's commander of the bot now (0 = none)
     bool commanderOnline = false;
     uint32_t commanderInstance = 0;     // the commander's GetBattlegroundId()
+    bool sameTeam = true;               // the two live GetBGTeam() values are equal (false = a transfer since the bind)
 };
 
 struct BgVerdict
@@ -380,6 +406,7 @@ inline std::vector<BgVerdict> CheckBg(BgBook const& book, std::vector<BgLive> co
         bg.commanderInstance = facts.commanderInstance;
         bg.botOnline = facts.botOnline;
         bg.commanderOnline = facts.commanderOnline;
+        bg.sameTeam = facts.sameTeam;
         End const end = BgEndToEnd(BgBindEnd(bg));
         if (end != End::None)
             out.push_back({ member.bot, member.commander, end, true });
@@ -467,6 +494,7 @@ inline char const* EndCode(End end)
         case End::BgBotLeft: return "bg-bot-left";
         case End::BgCommanderLeft: return "bg-commander-left";
         case End::BgMatchEnded: return "bg-match-ended";
+        case End::BgTeamChanged: return "bg-team-changed";
         case End::Unbound: return "unbound";
     }
     return "";
@@ -491,6 +519,7 @@ inline char const* EndText(End end)
         case End::BgBotLeft: return "the bound bot left the battleground";
         case End::BgCommanderLeft: return "the commander left the battleground";
         case End::BgMatchEnded: return "the battleground the binding was made in has ended";
+        case End::BgTeamChanged: return "the commander and the bound bot are on different teams now";
         case End::Unbound: return "released by the commander";
     }
     return "unknown";

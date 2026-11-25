@@ -83,12 +83,17 @@ kind per bot at the moment it binds (`master_bind::IsBgBind`: both in the same i
   release). A commander may hold both kinds at once;
 - `CheckBg` (1 Hz, and at a logout with that side offline): each bg member on its own facts. `bg-bot-left` releases that bot alone (it left
   the instance, logged out, or has no live row); `bg-commander-left` releases all of that commander's bg members; `bg-match-ended` when both are
-  gone from the instance or none was recorded; `disabled` when the module is off. A member h3 now gives to someone else is dropped, not released;
+  gone from the instance or none was recorded; `bg-team-changed` when both stand in the instance on different teams (a mid-match transfer: the
+  order gate refuses the commander from that moment, and the bind must not outlive it either); `disabled` when the module is off. A member h3
+  now gives to someone else is dropped, not released;
 - `ReleaseReachesParty`: only a normal in-party record's release runs the party rule. A bg release (`ReleaseBgMember`) never touches a group, so
   the raid's leader stands; the log line is `the battleground bind of <bot> to <commander> was released: ... (<code>)`;
-- a bg member is commanded (`IsCommandedBy`) while h3 binds it to that commander and it is inside the instance it was bound in.
+- a bg member is commanded (`IsCommandedBy`) while h3 binds it to that commander AND both are still in the world, in the instance the bind was
+  made in and on one team (`life::MayCommandBg`, #315). The stored member alone was one maintenance tick behind a leave or a transfer: an order
+  sent in that gap was accepted. The 1 Hz `CheckBg` still ends the row (the log line and the release above); the authorisation just refuses at once.
 
-Tested in `forever/tools/cmd_binding_life_check.cpp` (`TestKindPerBot`: the review's cases a-f plus kind moves, hand-overs and the off switch).
+Tested in `forever/tools/cmd_binding_life_check.cpp` (`TestKindPerBot`: the review's cases a-f plus kind moves, hand-overs and the off switch;
+`TestBgCommandGate`: #315's leave between two ticks, a logout, a transfer and the bot's own leave).
 `test_bg2_wiring.py`'s check 14 pins the path (per-bot kind in the handler -> `NoteMaster` reads `kinds[i]` and the handler's instance -> the book
 -> the record from normal bots only -> `RunBgCheck` in the tick and at logout -> the bg release reaches no group), with a mutation for each.
 
@@ -121,6 +126,31 @@ WSG match, 10v10 with pool bots and one human at level 19 (`LIVE-QUEUE.md`): the
 does not wander off to grind, a killed bot releases and is back on the next wave (BG1) and fights again, nothing in the log repeats
 "reset strategies" for a bot in the match, and `.tb state` of a bound bot shows it taking its human's target. Open: the human's own queue and
 bound bots (a human who groups bots) are BG1's; AB nodes and flag objectives are BG3/BG4, so bots only fight what they meet.
+
+#315's own check, in the same match: `.tb master <pool bot> <human>` inside the instance, an order accepted; the human leaves the battleground
+(`/afk` out or the match ends) and the SAME `.tb cmd` order sent immediately is refused before the next second's log line, then the log line
+`the battleground bind of <bot> to <human> was released: ... (bg-commander-left)` follows within a second. A commander transferred to the other
+side (`other-team`) is refused the same way, and the next 1 Hz pass releases the bind with `bg-team-changed`; a bot that left is refused and
+released with `bg-bot-left`. The bind must never authorise an order out of the match or across sides.
+
+## Re-read (#321 review): a commander between maps, an offline pointer, the cost
+
+The battleground authorisation asks both sides for `IsInWorld()`. That cannot refuse a legitimate command: a teleport that stays in the
+match is the near path (`IsInWorld() && GetMapId() == target && same instance`, Player.cpp:1374) and never leaves the world. A far teleport
+removes the player from its map at once (Player.cpp:1527) and, when the target map differs, runs `LeaveBattleground` first
+(Player.cpp:1470), which clears the match id and the team (Battleground.cpp:1062-1064): the load that follows is the leave the bind is meant
+to end, and the 1 Hz check reads the cleared facts. While such a load lasts the check returns false (the denial #315 wants), and it returns
+true again on the next command once the player is back in the world in a match - nothing latches, and no legitimate same-match load exists to
+be lost. A logout is the same false from the same tick (`RunBgCheck(leaving)` passes the leaving side as null, so a logged-out player is
+never dereferenced).
+
+Offline pointers: `IsCommandedBy` refuses a null commander or bot before any read; the battleground branch reads only the two guids,
+`IsInWorld()`, `GetBattlegroundId()` and `GetBGTeam()` on players the caller already holds. The maintenance pass maps its two lookups to
+null, and `FindBg`/`DropBg` work on the stored guid counters, never a Player.
+
+Cost: no database query, no world scan, no session lookup. `L::FindBg` walks the in-memory bg book (one small entry per bg-bound bot),
+`h3::CommanderGuid` is a map lookup plus `BotMgr::MasterOf` (the bot table), and the three getters read `m_bgData`. The 1 Hz pass reads
+one fact set per bg-bound bot; a snapshot that asks `IsCommandedBy` per bot adds the same two in-memory lookups per bot.
 
 ## Risks
 

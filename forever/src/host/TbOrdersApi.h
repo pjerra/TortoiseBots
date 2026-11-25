@@ -33,6 +33,7 @@ struct OrderSpec
     bool fromRun = false;
     bool disengage = false;     // come: a fall back. Stops the swing, the cast and the pet's attack, and holds the bot passive on the way.
     bool placed = false;        // come: a placement's own order (`.tb cmd place`). Only this one keeps the combat-time behaviour: no Reset mid-fight and no `stay` in the combat state.
+    uint32 passiveToken = 0;    // come: a walk back carries its row's passive owner; it adds `passive` only while that token still owns the record (0: the fall back's own come)
 };
 
 // Everything the queue could refuse later, asked now and changing nothing: engine present, the legacy actions the verb needs registered, queue not full,

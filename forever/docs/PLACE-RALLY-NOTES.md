@@ -52,7 +52,7 @@ what decides what, why, and what has to be checked live.
    and the bot returns to the slot when the fight ends; a fall back keeps `stay` and adds `passive` until the bot reaches its spot. `place::Update()` adds the net under the cases that walk gives up in: outside combat, more than 3 yd
    (`kSlotToleranceYd`) from the slot, not casting, not moving, at most a fresh `come` every 5 s. A bot that leaves the map/instance, dies, is unbound or
    logs out drops out of the hold, and so does a bot a dungeon run drives (the run owns its movement; a walk-back `come` would read as an outside order and
-   pause the run) or one a newer order of someone else left off its stay. A place command typed while a run goes on still moves the bots — the run pauses
+   pause the run) or one a newer order of someone else left off its stay — a whisper shortcut (`follow`, `free`, …) counts: it runs in the engine's chat path and advances no order number, so the row ends on the stay being gone (only its own `come` still in the queue is exempt, #316). Any other loss of the stay ends the row the same way, including a rebuilt tank kit: `ApplyKit` (`.tb role`, and the 1 Hz check that re-applies the kit the bot's spec asks for) resets the strategies, so the bot gets a new kit and is not walked back against it. A place command typed while a run goes on still moves the bots — the run pauses
    itself with `outside-order`, exactly as for a hand-typed `.tb cmd` order. `follow` and `place follow` release the hold; `attack`/`pull`/`pullback` do not (the placed bots must keep their slots
    through every fight).
 7. **Fall back.** The rally point is memory per commander (`rally here`: the player's position, map, instance). `fallback` uses it while the player is on the
@@ -73,7 +73,7 @@ what decides what, why, and what has to be checked live.
    order, so the old commander never orders a bot it no longer owns. A placement replaces only the rows of the bots it addressed; a placement that put
    nobody leaves the hold exactly as it was (a fall back always replaces the whole hold).
 10. **The clock and the walk-back.** `Update` gates on a `uint32` clock with a wrap-safe compare (`TimeReached`, `int32(now - target) >= 0`), never an
-   `int64` wall comparison. A walk-back re-runs the placement's own `VerdictFor` first (no-path, liquid path and detour included) and gives up after three failed checks, logging the rule that refused; the row is then released.
+   `int64` wall comparison. A walk-back re-runs the placement's own `VerdictFor` first (no-path, liquid path and detour included) and gives up after three failed checks, logging the rule that refused; the row is then released. The queued order outlives the cap (it may run up to 15 s, the fall back's cap is 10 s), so it carries the row's passive owner (`OrderSpec::passiveToken`): once the cap released that record the come only moves the bot, where before it claimed the passive under its own new number and left the bot passive for good.
 11. **The cursor request is cancellable.** A pending `place ... cursor` is ended by any later command from the commander — every `.tb cmd` verb, every
    `.tb order`, and the place/chat forms — with `error code=cancelled` on its own token. A malformed ping leaves the request waiting. Logout forgets the
    commander's rallies, holds and pending request.
@@ -144,6 +144,11 @@ Builds and the Turtle build: see the "Gate lines" section at the end (copied ver
    to the old slot. `.tb cmd place circle` a second time on the same commander replaces the hold (no two slots fight over one bot).
 5. **Chat form.** Whisper `place arc here` to one of the bots: the reply lines arrive as system messages and the whole group forms the arc; whisper `back`
    to one bot after a fight: the group falls back to the stored rally point; a non-commander player's party chat "back" does nothing.
+6. **A whispered `follow` ends a placed hold (#316).** `.tb cmd place circle here`, then whisper `follow` to one of the placed bots: within a
+   second the bot's `mv=` is follow and it never walks back to its slot (`slot=` gone from `.tb commander status`); before the fix the hold
+   survived and pulled it back. Same with a whisper `free`. Then `.tb cmd fallback` and whisper `follow` to a bot on the way: its `passive`
+   ends with the hold, and a `fallback` whose walk-back order never runs (engine off, `.tb engine <bot> off`, then `fallback`) still has no
+   `passive` left on the bot at the 10 s cap (`state` shows `passive` neither in reaction nor in combat).
 
 ## Open items
 
@@ -623,3 +628,73 @@ with `StartRowClock`; mutation mode adds "the fall back's cap restarts with ever
 
 Open for the live re-run: why the bots did not walk to their slots at all (positions unchanged for 40 s). The engine's passive multiplier
 lets `return to stay position` through ("stay" part), so the passive alone does not explain it; the re-run must show whether the bots walk.
+
+## Round 6 (bug round, #316): a hold a whisper superseded, and the passive's owner
+
+Found by an adversarial review of the code already on dev; both are placements only, no new verb, no setting.
+
+**(1) A whispered `follow` did not end a placed hold.** The row ended only on a newer order number (`last.seq > row.seq`) whose stay was gone.
+A chat shortcut (`follow`, `free`, `stay`, …) runs in the engine's chat path (`PlayerbotAI::HandleCommand` -> the shortcut actions): it drops
+the stay, advances no `h3` order number, so the row's `come` was still the bot's last order and the row survived; once the bot had followed far
+enough, the walk back queued another `come` and pulled it to the old slot. The row now ends on **the stay being gone** (`RowStayGone`), whatever
+removed it: only its own `come` still waiting in the queue is exempt (its stay has not been written yet), and a bot with no engine reads no
+strategy and is left as before. `RowEnd::NewerOrder` became `RowEnd::StayGone` (same release: `ClearStay`, never a `follow` that would fight
+the newer word). Limit, documented: a whisper that lands inside the same second in which a walk back was already queued is still overridden by
+that one queued `come`; the row then ends on the next loss of the stay.
+
+**(2) A walk back that never ran stranded the bot passive.** `AfterWalkBack` replaced the row's `seq` with the new `come`, while the fall back's
+passive record (`BotRec::placePassiveSeq`) still named the fall back's first `come`. The 10 s cap then called `ReleasePlacePassive` with the new
+number: it found no record, answered "nothing to release" (true), the `||` short-circuited and `row.disengage` was cleared - the passive stayed
+on the bot with nothing left to remove it. `HoldRow::passiveSeq` now names the order that OWNS the passive (`StartRowClock` sets it from the
+fall back's own `come`; `AfterWalkBack` never moves it), every passive release site asks `PassiveOwner(row)`, and the flag clears only through
+`DisengageSettled(row, passiveGone)`, which keeps it for the next 1 Hz pass when the release could not run (no engine). The cap therefore still
+removes the passive when the walk-back order never runs.
+
+Tests:
+
+* `TestWhisperFollowEndsTheHold` (`test_place_plan.cpp`): place, then a whispered follow, driven across three walk-back intervals at Update's
+  1 s step: the row ends on the first pass and no walk-back `come` is queued (the old rule's condition is checked to be false in that state); the
+  queued-`come` exemption, the live stay and the no-engine case.
+* `TestWalkBackPassiveOwner` (`test_place_plan.cpp`): fall back `seq` 7 owns the passive, the walk back moves `seq` to 9 and the owner stays 7;
+  the cap still fires; the settled flag clears only on a release that ran, and a release that could not run keeps the row for the next pass.
+* Wiring (`test_place_wiring.py`): the seven passive-exit sites all pass `PassiveOwner(row)` and none passes `row.seq`; `DisengageSettled` is
+  the only place the flag clears; Update ends a row through `RowStayGone(ai != nullptr, ai && …stay, ownComeQueued)`. Mutation mode adds "a
+  whispered follow leaves the placed hold standing", "the walk back hands the passive to its own new order" and "the cap clears the flag without
+  dropping the passive" (15 of 15 caught).
+
+Fail-before: mutation mode restores exactly the pre-fix lines (`last.seq > row.seq && …`, `row.passiveSeq = seq` in the walk back,
+`row.disengage = false`) and each pin fails on it; the pure tests' failing states are the pre-fix ones (no newer order yet the hold lived; the
+passive's record naming another number than the one the release asked with).
+
+## Round 7 (review fix, #321): the walk back that runs keeps the row's passive
+
+Review of round 6: the fix covered a walk-back order that never ran, and regressed the ordinary case where it does run. When the queued
+`come` executed, `TbOrders` saw a carried record, wrote the walk back's new number into `BotRec::placePassiveSeq` and noted it as the last
+order that set `passive` itself. The cap then called `ReleasePlacePassive` with the row's owner (number 7), the record said 12, so the release
+answered "not the row's" (true), `DisengageSettled` cleared the flag, and the bot stayed passive for good - the live symptom of (2), on the
+normal path.
+
+**One record, one token.** The bot's record is now `place::PassiveBook` (`owner`, `last`) beside the row rules in `TbPlacePlan.h`, with the
+three transitions the host uses:
+
+* `RanComePassiveOwner(book, alreadyPassive, seq)`: the `come` that just ran owns the passive only if it added it (`PlaceClaimsPassive`); a
+  walk back carries the row's token, never its own newer number.
+* `NoteRanPassive(book, verb, arg, disengage, seq)`: a `come` records its owner's token as the last order that set `passive`; `hold`, `flee`
+  and `co/nc +passive` still become the newer owner and take the row's record away.
+* `TakeOwnerPassive(book, token)`: drops `passive` only for the record's owner and only while no newer `passive` order took it over; the
+  record is consumed either way, so a second pass drops nothing.
+
+`TbOrders.cpp` keeps `place::PassiveBook placePassive` in `BotRec` and calls these; the row (`HoldRow::passiveSeq`, `PassiveOwner`) is
+unchanged. The release site's request is therefore the same number the record holds, in all three cases.
+
+Tests: `TestExecutedWalkBackPassiveOwner` (`test_place_plan.cpp`) drives the row helpers and the record together: the fall back with no walk
+back, the walk back that runs (new `row.seq`, unchanged owner and `last`), and the walk back that stays queued - each drops the passive exactly
+once and settles the row; a `flee` or `hold` after the executed walk back owns the passive and the row's release drops nothing; a bot the
+owner already held passive never gets a record (its walk back included). Wiring (`test_place_wiring.py`): the release asks
+`TakeOwnerPassive`, the `come` claims through `RanComePassiveOwner`, the runner notes through `NoteRanPassive`, and `passive_book_pin` pins the
+three bodies. Mutation mode adds "the walk back's come takes the passive over" and "the fall back drops passive whatever set it" (18 of 18 caught).
+
+Fail-before: with `RanComePassiveOwner` returning the new number for a carried `come`, `TestExecutedWalkBackPassiveOwner` fails five checks
+(owner, last, the release and its one-shot behaviour) while the no-walk-back and never-run cases pass.
+
+#315 (the battleground bind's authorisation) is recorded in `forever/docs/BG2-NOTES.md`; the same round, a separate commit.
