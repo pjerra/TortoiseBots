@@ -2,7 +2,7 @@
 
 F2: the fresh-seed band in InitEquipment takes its floor from SeedQualityFloor
     (white below level 20, never grey); grey stays in the empty-slot backstop.
-F3: the pool start level minimum defaults to 5 (gear seeding starts at 5).
+F3: the pool start level range is applied on a fresh bot's first login (minimum default 1).
 F4: the RandomGearUpgradeEnabled dist comment says it is a one-time seed.
 F5: the unused isRandomBot variable is gone from InitEquipment.
 """
@@ -43,9 +43,9 @@ class GearSeedWiringTest(unittest.TestCase):
         self.assertIn("TortoiseBots::GearQualityFloor(level, freshPoolSeed)", gates)
         self.assertNotIn("ITEM_QUALITY_POOR", gates)
 
-    def test_start_level_minimum_defaults_to_five(self):
-        self.assertRegex(CONFIG, r'"AiPlayerbot\.RandomBotStartLevelMin",\s*5\)')
-        self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.RandomBotStartLevelMin = 5$")
+    def test_start_level_minimum_defaults_to_one(self):
+        self.assertRegex(CONFIG, r'"AiPlayerbot\.RandomBotStartLevelMin",\s*1\)')
+        self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.RandomBotStartLevelMin = 1$")
 
     def test_gear_upgrade_comment_says_one_time_seed(self):
         i = TEMPLATE.index("#AiPlayerbot.RandomGearUpgradeEnabled")

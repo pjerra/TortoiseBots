@@ -12,16 +12,19 @@ namespace
 {
 inline void LogGearIndexBuilt(uint32 count, long long elapsedMs)
 {
-    TC_LOG_INFO("server.loading", "TortoiseBots: gear index built ({} classic items in {} ms)", count, elapsedMs);
+    TC_LOG_INFO("server.loading", "TortoiseBots: gear index built ({} items in {} ms)", count, elapsedMs);
 }
 } // namespace
 
 #include "compat/botpch_forever.h"
+#include "host/gear/TbGearSourceTier.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/policy/item/GearSetPolicy.h"
 #include "runtime/GearItemLevelCapPolicy.h"
+#include "runtime/GearSeedMixPolicy.h"
 #include "runtime/GearSeedQualityPolicy.h"
+#include "runtime/policy/provision/GearBlacklistPolicy.h"
 
 #include <algorithm>
 #include <chrono>
@@ -181,6 +184,7 @@ void InitGearIndex()
         }
     }
 
+    InitGearSourceIndex();
     idx.initialized = true;
     auto const elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - start).count();
@@ -226,7 +230,7 @@ std::vector<GearAuditEntry> AuditGearIndex(uint32 level)
         for (ai::GearItemCandidate const& c : Index().bySlot[slot])
         {
             if (c.quality <= maxQ &&
-                c.requiredLevel <= bracket.maxRequiredLevel &&
+                TortoiseBots::GearEffectiveRequiredLevel(c.requiredLevel, c.itemLevel) <= bracket.maxRequiredLevel &&
                 c.itemLevel >= bracket.minItemLevel &&
                 c.itemLevel <= bracket.maxItemLevel)
             {
@@ -310,7 +314,7 @@ GearSetOutcome TopUpGearForTarget(Player* target, uint32 levelArg, uint32 slotMa
         ranked.erase(std::remove_if(ranked.begin(), ranked.end(),
             [minQuality, maxItemLevel](ai::GearItemCandidate const& c)
             {
-                return c.quality < minQuality || c.itemLevel > maxItemLevel;
+                return c.quality < minQuality || c.itemLevel > maxItemLevel || !SourceGateAllows(c.itemId);
             }), ranked.end());
         if (!allowTwoHand)
             ranked.erase(std::remove_if(ranked.begin(), ranked.end(),
@@ -362,6 +366,162 @@ GearSetOutcome TopUpGearForTarget(Player* target, uint32 levelArg, uint32 slotMa
             {
                 target->DestroyItem(worn->GetBagSlot(), worn->GetSlot(), true);
                 worn = nullptr;
+            }
+            if (slot == EQUIPMENT_SLOT_MAINHAND && twoHander)
+            {
+                if (Item* off = target->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
+                    target->DestroyItem(off->GetBagSlot(), off->GetSlot(), true);
+                if (target->CanEquipNewItem(slot, dest, cand.itemId, false) != EQUIP_ERR_OK)
+                {
+                    lastFailCode = "core-refused";
+                    continue;
+                }
+            }
+
+            Item* equipped = target->EquipNewItem(dest, cand.itemId, ItemContext::NONE, true);
+            Item* check = target->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            if (equipped && check && check->GetEntry() == cand.itemId)
+            {
+                res.itemId = cand.itemId;
+                res.itemLevel = cand.itemLevel;
+                res.score = cand.score;
+                res.status = "equipped";
+                equippedSlot = true;
+                alreadyPicked.push_back(cand.itemId);
+                if (slot == EQUIPMENT_SLOT_MAINHAND && twoHander)
+                    mainHandIsTwoHanded = true;
+                ++outcome.equipped;
+                break;
+            }
+
+            lastFailCode = "core-refused";
+            if (equipped)
+                target->DestroyItem(equipped->GetBagSlot(), equipped->GetSlot(), true);
+        }
+
+        if (!equippedSlot)
+        {
+            res.status = "refused";
+            res.code = lastFailCode;
+            ++outcome.failed;
+        }
+        outcome.slots.push_back(res);
+    }
+
+    return outcome;
+}
+
+GearSetOutcome SeedGearForTarget(Player* target, uint32 levelArg)
+{
+    GearSetOutcome outcome;
+    if (!target)
+    {
+        outcome.errorCode = "no-such-player";
+        outcome.errorDetail = "target is null";
+        return outcome;
+    }
+
+    if (!Index().initialized)
+        InitGearIndex();
+
+    uint32 const level = levelArg > 0 ? std::clamp<uint32>(levelArg, 1, 60)
+                                      : std::clamp<uint32>(target->GetLevel(), 1, 60);
+    if (!TortoiseBots::SpawnSeedReady(level))
+    {
+        outcome.errorCode = "below-level";
+        outcome.errorDetail = "a spawn below level 5 keeps the starter outfit";
+        return outcome;
+    }
+
+    uint8 const playerClass = target->GetClass();
+    uint32 specId = sRandomItemMgr.GetPlayerSpecId(target);
+    if (!specId)
+        specId = sRandomItemMgr.GetFallbackSpecId(playerClass);
+    std::string const canonicalSpec = ai::CanonicalSpecName(playerClass, sRandomItemMgr.GetSpecName(specId));
+
+    uint8 const minQuality = static_cast<uint8>(TortoiseBots::SeedQualityFloor(level));
+    uint32 const maxItemLevel = TortoiseBots::GearItemLevelCap(level,
+        sPlayerbotAIConfig.randomGearMaxItemLevelAboveLevel, sPlayerbotAIConfig.randomGearMaxLevel);
+    bool const canDualWield = target->CanDualWield();
+
+    uint32 const slotCount = static_cast<uint32>(ai::GearSetSlotOrder().size());
+    uint32 const offset = slotCount > 1 ? urand(0, slotCount - 1) : 0;
+    TortoiseBots::GearSeedQualityPlan const plan = TortoiseBots::SeedQualityPlan(level);
+
+    outcome.ok = true;
+    outcome.specName = canonicalSpec;
+    outcome.level = level;
+    outcome.maxQuality = plan.upgradedQuality;
+
+    bool mainHandIsTwoHanded = false;
+    if (Item* mainHand = target->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND))
+        if (ItemTemplate const* tpl = mainHand->GetTemplate())
+            mainHandIsTwoHanded = tpl->GetInventoryType() == INVTYPE_2HWEAPON;
+
+    std::vector<uint32> alreadyPicked;
+    uint32 slotRank = 0;
+    for (uint8 slot : ai::GearSetSlotOrder())
+    {
+        uint8 const maxQuality = TortoiseBots::SeedSlotQualityCap(level, slotRank, slotCount, offset);
+        ++slotRank;
+
+        GearSlotResult res;
+        res.slot = slot;
+
+        if (slot == EQUIPMENT_SLOT_OFFHAND && mainHandIsTwoHanded)
+        {
+            res.status = "refused";
+            res.code = "two-hand";
+            outcome.slots.push_back(res);
+            ++outcome.failed;
+            continue;
+        }
+
+        std::vector<ai::GearItemCandidate> ranked = ai::FilterCandidatesForSlot(
+            Index().bySlot[slot], playerClass, canonicalSpec, level, slot, maxQuality, canDualWield,
+            mainHandIsTwoHanded, alreadyPicked);
+        ranked.erase(std::remove_if(ranked.begin(), ranked.end(),
+            [minQuality, maxItemLevel](ai::GearItemCandidate const& c)
+            {
+                return c.quality < minQuality || c.itemLevel > maxItemLevel || !SourceGateAllows(c.itemId) ||
+                    GearBlacklistBlocks(sPlayerbotAIConfig.randomGearBlacklist, c.itemId);
+            }), ranked.end());
+
+        if (ranked.empty())
+        {
+            res.status = "refused";
+            res.code = "no-item";
+            outcome.slots.push_back(res);
+            ++outcome.failed;
+            continue;
+        }
+
+        for (ai::GearItemCandidate& c : ranked)
+            if (ItemPrototype const* proto = tbcompat::ItemProto(c.itemId))
+            {
+                ItemSpecType itSpec;
+                c.score = sRandomItemMgr.CalculateStatWeight(playerClass, static_cast<uint8>(specId), proto, itSpec);
+            }
+        ai::SortCandidatesForSlot(ranked);
+
+        bool equippedSlot = false;
+        std::string lastFailCode = "no-item";
+        for (ai::GearItemCandidate const& cand : ranked)
+        {
+            bool const twoHander = cand.inventoryType == INVTYPE_2HWEAPON;
+            uint16 dest = 0;
+            // The core's slot rules with the starter outfit still in place: only a passing candidate is spent.
+            if (target->CanEquipNewItem(slot, dest, cand.itemId, true) != EQUIP_ERR_OK)
+                continue;
+
+            if (Item* worn = target->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            {
+                ItemTemplate const* wornTpl = worn->GetTemplate();
+                bool const wornTwoHander = wornTpl && wornTpl->GetInventoryType() == INVTYPE_2HWEAPON;
+                target->DestroyItem(worn->GetBagSlot(), worn->GetSlot(), true);
+                if (slot == EQUIPMENT_SLOT_MAINHAND && wornTwoHander)
+                    if (Item* off = target->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
+                        target->DestroyItem(off->GetBagSlot(), off->GetSlot(), true);
             }
             if (slot == EQUIPMENT_SLOT_MAINHAND && twoHander)
             {
@@ -473,6 +633,8 @@ GearSetOutcome SetGearForTarget(Player* target, std::string const& specArg, uint
         // Filter slot pool first, then score only fitting candidates.
         std::vector<ai::GearItemCandidate> ranked = ai::FilterCandidatesForSlot(
             Index().bySlot[slot], playerClass, canonicalSpec, level, slot, maxQuality, canDualWield, mainHandIsTwoHanded, alreadyPicked);
+        ranked.erase(std::remove_if(ranked.begin(), ranked.end(),
+            [](ai::GearItemCandidate const& c) { return !SourceGateAllows(c.itemId); }), ranked.end());
         for (ai::GearItemCandidate& c : ranked)
         {
             if (ItemPrototype const* proto = tbcompat::ItemProto(c.itemId))
@@ -494,6 +656,8 @@ GearSetOutcome SetGearForTarget(Player* target, std::string const& specArg, uint
                 if (it == Index().byId.end())
                     continue;
                 ai::GearItemCandidate cand = it->second;
+                if (!SourceGateAllows(cand.itemId))
+                    continue;
                 if (!ai::CandidateFitsSlotPolicy(cand, playerClass, canonicalSpec, level, slot, maxQuality, canDualWield, mainHandIsTwoHanded))
                     continue;
                 if (std::find(alreadyPicked.begin(), alreadyPicked.end(), cand.itemId) != alreadyPicked.end())

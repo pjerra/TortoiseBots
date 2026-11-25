@@ -1,3 +1,4 @@
+#define TORTOISEBOTS_CORE_FOREVER 1
 #include "playerbot/policy/item/GearSetPolicy.h"
 
 #include <cassert>
@@ -36,12 +37,12 @@ ai::GearItemCandidate MakeItem(uint32_t id,
 
 int main()
 {
-    // 1. Failing case first: pool contains a higher-scoring non-classic item (RequiredExpansion > 0)
-    //    and an item >= 25000; level-60 warrior must pick the classic item instead.
+    // 1. Failing case first: pool contains a higher-scoring non-classic item (RequiredExpansion > 0), an id
+    //    outside every gear band and an item that must not be picked; a level-60 warrior picks the legal plate.
     {
         std::vector<ai::GearItemCandidate> pool = {
             MakeItem(24000, 1, 3, 70, 60, 1, 4, 4, 9999),  // TBC expansion=1, highest score -> MUST NOT PICK
-            MakeItem(28000, 0, 3, 70, 60, 1, 4, 4, 8888),  // id >= 25000 -> MUST NOT PICK
+            MakeItem(28000, 0, 3, 70, 60, 1, 4, 4, 8888),  // 25000-199999 is outside the band -> MUST NOT PICK
             MakeItem(16922, 0, 4, 76, 60, 1, 4, 4, 7777),  // trap item -> MUST NOT PICK
             MakeItem(12640, 0, 4, 61, 56, 1, 4, 4, 6000),  // epic, requires quality=4 -> skipped at default rare
             MakeItem(12587, 0, 3, 63, 58, 1, 4, 4, 500),   // classic rare plate helm -> MUST PICK
@@ -132,6 +133,45 @@ int main()
         assert(rankedEmpty[0].itemId == 18727);
     }
 
-    std::cout << "PASS: test_gear_set_policy (8 checks, 0 failed)\n";
+    // 9. Gear band: the classic range plus Forever's own item range, nothing between or after.
+    {
+        assert(ai::IsItemInGearBand(19019));
+        assert(ai::IsItemInGearBand(24999));
+        assert(!ai::IsItemInGearBand(0));
+        assert(!ai::IsItemInGearBand(25000));
+        assert(!ai::IsItemInGearBand(199999));
+        assert(ai::IsItemInGearBand(200000));
+        assert(ai::IsItemInGearBand(291874));
+        assert(!ai::IsItemInGearBand(292000));
+
+        std::vector<ai::GearItemCandidate> pool = {
+            MakeItem(24999, 0, 3, 62, 57, 1, 4, 4, 100),
+            MakeItem(200001, 0, 3, 62, 57, 1, 4, 4, 900), // new Forever plate helm -> MUST PICK
+            MakeItem(292001, 0, 3, 62, 57, 1, 4, 4, 9999), // past the band -> MUST NOT PICK
+        };
+        auto ranked = ai::RankCandidatesForSlot(pool, 1, "arms", 60, 0, 3, false, false);
+        assert(ranked.size() == 2);
+        assert(ranked[0].itemId == 200001);
+    }
+
+    // 10. RequiredLevel 0 uses the effective level from the item level; a real requirement is kept.
+    {
+        std::vector<ai::GearItemCandidate> pool = {
+            MakeItem(13000, 0, 2, 16, 0, 5, 4, 1, 900), // req 0, ilvl 16 -> effective 11 > 10 -> refused
+            MakeItem(13001, 0, 1, 9, 0, 5, 4, 1, 800),  // req 0, ilvl 9 -> effective 4 -> allowed
+            MakeItem(13002, 0, 2, 10, 20, 5, 4, 1, 700), // stored req 20 > 10 -> refused
+        };
+        auto ranked = ai::RankCandidatesForSlot(pool, 8, "frost", 10, 4, 2, false, false);
+        assert(ranked.size() == 1);
+        assert(ranked[0].itemId == 13001);
+
+        std::vector<ai::GearItemCandidate> level20 = {
+            MakeItem(13003, 0, 2, 25, 0, 5, 4, 1, 900), // effective 20 <= 20 -> allowed
+        };
+        auto ranked20 = ai::RankCandidatesForSlot(level20, 8, "frost", 20, 4, 2, false, false);
+        assert(ranked20.size() == 1);
+    }
+
+    std::cout << "PASS: test_gear_set_policy (10 checks, 0 failed)\n";
     return 0;
 }

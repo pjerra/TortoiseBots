@@ -39,6 +39,7 @@ TortoiseBots.Enable = 1
 TortoiseBots.Pool.Enable = 1
 TortoiseBots.Pool.CreatePerMinute = 30
 TortoiseBots.Pool.MaxCharacters = 50
+TortoiseBots.Pool.GearOnCreate = 1
 ```
 
 1. Set the keys.
@@ -46,6 +47,16 @@ TortoiseBots.Pool.MaxCharacters = 50
 3. Start the schedule with [`.tb pool start`](admin-commands.md#the-bot-pool).
 
 `CreatePerMinute = 0` means nothing may be created; `MaxCharacters = 0` means the pool cannot grow. `.tb pool create` creates only what still fits under the cap and refuses a full pool.
+
+## Spawning a bot: start level and gear
+
+Characters are made at level 1. On a bot's **first login** the module spawns it once:
+
+- `AiPlayerbot.RandomBotStartLevelMin` / `.Max` (default `1` / `60`) roll its start level, before its level-bound spells, talents and professions are synced. Bots level up by playing from there.
+- With `TortoiseBots.Pool.GearOnCreate = 1` (the default), a bot of level 5 or above gets a one-time gear kit: level- and spec-fitting white, green and blue items, from the classic table and Forever's own items. The quality mix follows the level band (white below 20, green from 20, a few blue from 20), every piece passes the source check (no raid, PvP, reputation or unobtainable gear), and no piece sits above the bot's own level plus `AiPlayerbot.RandomGearMaxItemLevelAboveLevel`.
+- A bot that spawns at level 1-4 keeps the core's starter outfit for good, and no bot is seeded a second time. Existing bots (played time above zero) are never touched. The record that a spawn happened is a `pool-spawn` row in the characters table `tortoise_bots_player_flag`.
+
+After the spawn a bot upgrades only from what it finds, buys or is given.
 
 ## The scheduler
 

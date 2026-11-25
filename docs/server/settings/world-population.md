@@ -159,6 +159,14 @@ How a bot picks its reward when a quest offers a choice.
 
 Only your own alts ever ask; a pool bot always picks for itself.
 
+## Spawn
+
+### `AiPlayerbot.RandomBotStartLevelMin` / `.Max`
+The start level of a fresh pool bot, rolled uniformly on its first login.
+**Default:** `1` / `60` · **Values:** levels 1 to 60 (a maximum below the minimum reads as the minimum) · **Restart:** needed
+
+A bot is raised to the rolled level, never lowered, before its level-bound spells, talents and professions are synced. From then on it levels by playing. A bot that spawns below level 5 keeps the core's starter outfit for good; from level 5 it receives the one-time spawn kit of [`TortoiseBots.Pool.GearOnCreate`](../configuration.md#forevercore-module-keys-tortoisebotsconf) (default on).
+
 ## Gear
 
 ### `AiPlayerbot.AutoEquipUpgradeLoot`
@@ -282,7 +290,6 @@ The generated [key census](../config-keys.md) lists every advertised key and whe
 | `AiPlayerbot.RandomBotPoolReset` | The reset is `TortoiseBots.Pool.Reset`, read only at world startup. |
 | `AiPlayerbot.RandomBotAccountPrefix` | The pool creates its own accounts (the `TBPOOL<nnnn>` pattern). |
 | `AiPlayerbot.PinnedBots` | No rotation table reads it. |
-| `AiPlayerbot.RandomBotStartLevelMin` / `RandomBotStartLevelMax` | Pool characters are created at level 1 and level up by playing. |
 | `AiPlayerbot.LevelLadder` | Nothing acts on it; the dashboard only reports its value. There is no level ladder on this build. |
 | `AiPlayerbot.LevelLadderBandSize` | See `LevelLadder`. |
 | `AiPlayerbot.LevelLadderMaxLevelShare` | See `LevelLadder`. |
@@ -327,10 +334,10 @@ The generated [key census](../config-keys.md) lists every advertised key and whe
 | `AiPlayerbot.AutoLearnTrainerSpells` | Class spells are `TortoiseBots.AutoLearnOnLevel`. |
 | `AiPlayerbot.AutoLearnDroppedSpells` | Does nothing. |
 | `AiPlayerbot.PetAutoTrainAlts` | See `PetAutoTrain`: pet training covers every bot the module trains. |
-| `AiPlayerbot.RandomGearUpgradeEnabled` | There is no seed-time gear roll; use `PoolGearTopUpOnLevel` or `.bot autogear`. |
+| `AiPlayerbot.RandomGearUpgradeEnabled` | The spawn kit is `TortoiseBots.Pool.GearOnCreate`; level-up gear is `PoolGearTopUpOnLevel`. |
 | `AiPlayerbot.RandomGearProgression` | Nothing acts on it. |
-| `AiPlayerbot.RandomGearMaxSourceTier` | There is no seed-time gear roll to restrict. |
-| `AiPlayerbot.RandomGearSeedEpicChance` | There is no seed-time gear roll. |
+| `AiPlayerbot.RandomGearMaxSourceTier` | The spawn kit's source check is fixed (no raid, PvP, reputation or unobtainable gear); the key is not read. |
+| `AiPlayerbot.RandomGearSeedEpicChance` | The spawn kit never includes epics. |
 | `AiPlayerbot.AutoPickTalents` | Talents are `TortoiseBots.AutoTalentsOnLevel`. |
 | `AiPlayerbot.XPRate` | Nothing acts on it: the experience bonus action is not part of the build. Bots level at the server's own rate. |
 | `AiPlayerbot.RndBotCheats` | The cheat mask is compiled as a stub that always answers "no cheats", so no bot receives a repair, breath or item cheat. |

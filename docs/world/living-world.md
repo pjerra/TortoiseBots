@@ -128,7 +128,7 @@ Bots keep what they find and equip what is better:
 - **Loot upgrades:** with [`AiPlayerbot.AutoEquipUpgradeLoot`](../server/settings/world-population.md#aiplayerbotautoequipupgradeloot) on (it is), a bot equips a drop that beats the item in the slot. [`AiPlayerbot.EquipUpgradeThreshold`](../server/settings/world-population.md#aiplayerbotequipupgradethreshold) (1.1) is the margin an item must clear.
 - **Pool gear top-up:** [`AiPlayerbot.PoolGearTopUpOnLevel`](../server/settings/world-population.md#aiplayerbotpoolgeartopuponlevel) is off; when on, a pool bot fills empty slots and replaces clearly outdated grey and white gear once per level, never green or better.
 - **Autogear for your own bots:** `.bot autogear <bot>` re-gears one of your own bots; pool bots are refused and keep progressing on their own. The command is off until [`AiPlayerbot.OwnedBotAutogearEnabled`](../server/settings/world-population.md#aiplayerbotownedbotautogearnabled) is turned on, and it stays within the quality and item-level caps. The player-facing `.autogear` builds a level-appropriate outfit within [`AiPlayerbot.RandomGearMaxLevel`](../server/settings/world-population.md#aiplayerbotrandomgearmaxlevel) and [`AiPlayerbot.RandomGearMaxItemLevelAboveLevel`](../server/settings/world-population.md#aiplayerbotrandomgearmaxitemlevelabovelevel), skipping the item ids in [`AiPlayerbot.RandomGearBlacklist`](../server/settings/world-population.md#aiplayerbotrandomgearblacklist).
-- **No starting kit:** the Turtle build's hand-made starting bags, ammo pouches, thrown weapons and seed gear are not part of this build. Bots start with what the core gives a new character.
+- **Spawn kit:** a fresh pool bot rolls its start level on its first login and, at level 5 or above, receives one level- and spec-fitting gear kit ([`TortoiseBots.Pool.GearOnCreate`](../server/configuration.md#forevercore-module-keys-tortoisebotsconf), on by default). The Turtle build's hand-made starting bags, ammo pouches and thrown-weapon seeding are still not part of this build; ammo, tools and food come from the module's own upkeep.
 
 <a id="mount-rules"></a>
 ## Mounts
@@ -148,6 +148,6 @@ Bots keep themselves going between fights:
 ## Not on ForeverCore yet
 
 - Flight paths and boat travel for free bots; they walk.
-- The Turtle starting kit (bags, quivers, ammo pouches, thrown-weapon seeding) and the seed-time gear roll.
+- The Turtle starting kit's bags, quivers, ammo pouches and thrown-weapon seeding. (A fresh pool bot does get the module's own one-time spawn kit, above.)
 - Camping sessions with a tent; the "stay at an inn hub" leisure trip exists, the camp kit does not.
 - Offline AHBot stocking and buying; online free bots use the auction house directly when `TortoiseBots.World.Auction = 1` (see [Bot economy](economy.md)).

@@ -2869,11 +2869,11 @@ AiPlayerbot.RandomBotShowCloak = 1
 # level-bound skills, professions and starter gear are seeded, so a fresh pool
 # starts playable instead of walking up from level 1. Bots level up normally
 # from there. 1/1 keeps the historic behaviour (start at level 1).
-# The minimum defaults to 5: gear seeding starts at level 5, and a bot that
-# rolls 1-4 keeps its level-1 outfit for good (its played time is no longer 0
-# when it reaches level 5), so the default never rolls below 5.
-# Default: 5 / 60 (fresh bots spread over levels 5-60)
-AiPlayerbot.RandomBotStartLevelMin = 5
+# The spawn gear kit starts at level 5: a bot that rolls 1-4 keeps its level-1
+# outfit for good (its spawn happens once), so a range whose minimum is below 5
+# still produces some bots without a kit.
+# Default: 1 / 60 (fresh bots may start anywhere from level 1)
+AiPlayerbot.RandomBotStartLevelMin = 1
 AiPlayerbot.RandomBotStartLevelMax = 60
 
 # Set XP rate for bots (default: 1)
