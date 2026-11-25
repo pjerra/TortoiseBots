@@ -636,16 +636,22 @@ uint32 RandomItemMgr::CalculateStatWeight(uint8 playerclass, uint8 spec, ItemPro
             }
         }
 
+        uint32 statDivisor = 1;
         if (weightName.empty())
         {
             if (char const* classicName = ai::ClassicItemStatWeightName(statType))
+            {
                 weightName = classicName;
+                statDivisor = ai::ClassicItemStatRatingDivisor(statType);
+            }
         }
 
         if (weightName.empty())
             continue;
 
         uint32 singleStat = CalculateSingleStatWeight(playerclass, spec, weightName, val);
+        if (statDivisor > 1)
+            singleStat /= statDivisor;
         if (weightName == "splpwr" || weightName == "firsplpwr" || weightName == "natsplpwr" ||
             weightName == "frosplpwr" || weightName == "shasplpwr" || weightName == "arcsplpwr")
         {

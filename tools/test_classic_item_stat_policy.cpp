@@ -43,7 +43,9 @@ uint32_t ScoreClassicStat(uint32_t statType, int32_t value, bool isCaster,
     auto it = weights.find(key);
     if (it == weights.end())
         return 0;
-    return static_cast<uint32_t>(value) * it->second;
+    uint32_t const score = static_cast<uint32_t>(value) * it->second;
+    uint32_t const divisor = ai::ClassicItemStatRatingDivisor(statType);
+    return divisor > 1 ? score / divisor : score;
 }
 
 } // namespace
@@ -103,7 +105,7 @@ int main()
         {"frosplpwr", 11}, {"splpwr", 11}, {"int", 3}
     };
     std::unordered_map<std::string, uint32_t> const warriorWeights = {
-        {"str", 4}, {"atkpwr", 2}, {"critstrkrtng", 56}
+        {"str", 4}, {"atkpwr", 2}, {"critstrkrtng", 56}, {"hitrtng", 56}
     };
     CHECK(ScoreClassicStat(87, 15, true, frostMageWeights) > 0);
     CHECK(ScoreClassicStat(42, 15, true, frostMageWeights) > 0);
@@ -113,12 +115,32 @@ int main()
 
     // 4. Healing (41) vs intellect ordering for a holy priest.
     std::unordered_map<std::string, uint32_t> const holyPriestWeights = {
-        {"splheal", 29}, {"int", 25}, {"manargn", 26}
+        {"splheal", 61}, {"int", 33}, {"manargn", 26}
     };
     uint32_t const healScore = ScoreClassicStat(41, 10, true, holyPriestWeights);
     uint32_t const intScore = 10 * holyPriestWeights.at("int");
     CHECK(healScore > intScore);
     std::cout << "  [PASS] healing outscores equal intellect for holy priest\n";
+
+    // 5. Item stats that the scale prices per percent are stored as rating points
+    //    (level 60 CombatRatings). The divisor turns them back into percent, so
+    //    2% crit and 2% hit score like two point-weights - and a stat whose item
+    //    stat is already a raw value is not divided.
+    CHECK(ai::ClassicItemStatRatingDivisor(32) == 14);   // crit rating
+    CHECK(ai::ClassicItemStatRatingDivisor(21) == 14);   // spell crit rating
+    CHECK(ai::ClassicItemStatRatingDivisor(31) == 10);   // hit rating
+    CHECK(ai::ClassicItemStatRatingDivisor(18) == 10);   // spell hit rating
+    CHECK(ai::ClassicItemStatRatingDivisor(13) == 12);   // dodge rating
+    CHECK(ai::ClassicItemStatRatingDivisor(14) == 15);   // parry rating
+    CHECK(ai::ClassicItemStatRatingDivisor(15) == 5);    // block rating
+    CHECK(ai::ClassicItemStatRatingDivisor(37) == 10);   // expertise rating
+    CHECK(ai::ClassicItemStatRatingDivisor(12) == 1);    // defense skill
+    CHECK(ai::ClassicItemStatRatingDivisor(48) == 1);    // block value
+    CHECK(ai::ClassicItemStatRatingDivisor(45) == 1);    // spell power
+    CHECK(ScoreClassicStat(32, 28, false, warriorWeights) == 2 * warriorWeights.at("critstrkrtng"));
+    CHECK(ScoreClassicStat(31, 20, false, warriorWeights) == 2 * warriorWeights.at("hitrtng"));
+    CHECK(ScoreClassicStat(38, 10, false, warriorWeights) == 10 * warriorWeights.at("atkpwr"));
+    std::cout << "  [PASS] rating stats score in percent, raw stats unchanged\n";
 
     std::cout << "0 failed\n";
     return 0;
