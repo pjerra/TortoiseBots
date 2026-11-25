@@ -21,5 +21,10 @@ std::uint32_t EnchantWeightFor(Player* bot, std::uint32_t enchantId)
     return sRandomItemMgr.CalculateEnchantWeight(bot->GetClass(), spec, enchantId);
 }
 
+bool SpecEnchantGoverns(Player* bot, Item* item)
+{
+    return sRandomItemMgr.SpecEnchantGoverns(bot, item);
+}
+
 } // namespace upkeep
 } // namespace tbhost

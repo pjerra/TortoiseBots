@@ -388,6 +388,13 @@ EnchantChoice FindEnchant(Player* bot, BotState& st)
 {
     EnchantChoice best;
 
+    // Slots the level-60 spec table owns are off limits for this scan: the
+    // bot wears the common player choice there, or deliberately none.
+    bool specGoverned[EQUIPMENT_SLOT_END] = {};
+    for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+        if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            specGoverned[slot] = SpecEnchantGoverns(bot, item);
+
     for (EnchantEntry const& entry : Catalogue())
     {
         if (entry.reagents.empty() || !bot->HasSpell(entry.spellId))
@@ -406,7 +413,7 @@ EnchantChoice FindEnchant(Player* bot, BotState& st)
         {
             Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
             ItemTemplate const* proto = item ? item->GetTemplate() : nullptr;
-            if (!proto || item->IsInTrade())
+            if (!proto || item->IsInTrade() || specGoverned[slot])
                 continue;
             auto const itemFailed = st.failedEnchants.find(item->GetGUID().GetCounter());
             if (itemFailed != st.failedEnchants.end())

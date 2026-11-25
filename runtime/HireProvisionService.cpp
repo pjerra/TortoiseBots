@@ -1954,8 +1954,16 @@ bool HireProvisionService::EquipHireGearSet(Player* bot, PlayerbotAI* ai, uint8_
         }
         if (enchants && row->enchantSpell)
         {
-            if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
-                ai->EnchantItemT(row->enchantSpell, slot, item);
+            Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            if (!item)
+                continue;
+            // At 60 the per-spec table decides the enchant (the hire row's
+            // choice comes from the Turtle sheets and would otherwise stay).
+            uint32_t spellId = row->enchantSpell;
+            if (bot->GetLevel() >= 60)
+                spellId = sRandomItemMgr.CalculateBestBotEnchantId(bot, sRandomItemMgr.GetPlayerSpecId(bot), item);
+            if (spellId)
+                ai->EnchantItemT(spellId, slot, item);
         }
     }
     return true;

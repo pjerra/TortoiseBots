@@ -232,6 +232,11 @@ class RandomItemMgr
         uint32 CalculateProcEnchantWeight(uint8 playerclass, uint8 spec, uint32 enchantId);
         // min_level of one candidate row (for the deterministic tie-break).
         uint8 GetBotEnchantMinLevel(uint32 spellId, uint8 slotId);
+        // True when the level-60 per-spec table (ai_playerbot_spec_enchant)
+        // names this worn item's slot: the bot's permanent enchant there is
+        // the table's choice, or deliberately none, and no other picker may
+        // change it.
+        bool SpecEnchantGoverns(Player* bot, Item* item);
         uint32 CalculateRandomPropertyWeight(uint8 playerclass, uint8 spec, int32 randomPropertyId);
         uint32 CalculateStatWeight(uint8 playerclass, uint8 spec, ItemPrototype const* proto, ItemSpecType &itSpec);
         uint32 ItemStatWeight(Player* player, ItemQualifier& qualifier);
@@ -350,6 +355,14 @@ class RandomItemMgr
         void LoadBotEnchantCandidates();
         bool botEnchantsLoaded = false;
         std::vector<BotEnchantCandidate> botEnchantCandidates;
+        // Level-60 per-spec enchant choice (ai_playerbot_spec_enchant):
+        // specId -> slot -> enchant spell, 0 = players leave the slot empty.
+        // Only slots the table names are present; every other slot keeps the
+        // candidate-pool pick.
+        void LoadBotSpecEnchants();
+        bool FindBotSpecEnchant(uint32 specId, uint8 slotId, uint32& spellId);
+        bool botSpecEnchantsLoaded = false;
+        std::map<uint32, std::map<uint8, uint32> > botSpecEnchants;
         // Fresh-seed gate state: one-time raid provenance index (see
         // IsRaidSourcedItem), the memoized quest reverse-lookup
         // (GetQuestIdsForItem) and the quest chain predecessor index
