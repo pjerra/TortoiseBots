@@ -89,6 +89,16 @@ bool PrepareRunTank(Player* tank)
     return h3::SetBotRole(tank, BOT_ROLE_TANK, code, detail);
 }
 
+// A start that refuses after the role commit puts the tank's forced role (and the kit built from it) back: the role is what lets the last admission
+// check read the named tank, and a refusal must not leave a party bot ordered tank.
+void RestoreRunTank(Player* tank, uint8 previousRole, bool roleSet)
+{
+    if (!roleSet)
+        return;
+    std::string code, detail;
+    h3::SetBotRole(tank, previousRole, code, detail);
+}
+
 void LogRunTank(Player* tank, bool roleSetNow)
 {
     if (!tank)
@@ -1411,14 +1421,6 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs,
         return refuse("not-bot", "the leader must be a host bot in the world");
     if (!plan || plan->steps.empty())
         return refuse("no-plan", "the plan has no steps");
-    // The named leader is the run's tank: commit the role (and its kit) before the admission tests read it.
-    bool const tankRoleSet = PrepareRunTank(leader);
-    // The executor's own question first (O6): a host bot with an engine that leads its party, the tank role set, every member a host bot with an engine.
-    {
-        std::string code, message;
-        if (!StartCheck(leader->GetGUID(), code, message))
-            return refuse(code.empty() ? "not-bot" : code.c_str(), message);
-    }
     std::string const name = leader->GetName();
     Group* group = leader->GetGroup();
     if (!group || group->GetLeaderGUID() != leader->GetGUID())
@@ -1460,18 +1462,34 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs,
         if (!tasks::RunLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy))
             return refuse("loot-method", name + ": " + methodWhy + " (a run needs group loot or need-before-greed)");
     }
-    // Every check passed: nothing is changed before this line. A finished earlier run of the leader gives way to the new one.
+    // Every check above only reads the world: nothing is changed before this line. The start's one change is the named tank's role (and the kit built
+    // from it), which the last admission check reads; a refusal from here on puts the role and its kit back.
+    if (fromStep >= plan->steps.size())
+        return refuse("no-step", "the plan has no such step");
+    uint8 const previousRole = PlayerbotAIStorage::Instance().GetPlayerForcedRole(leader->GetGUID());
+    bool const tankRoleSet = PrepareRunTank(leader);
+    // The executor's own question (O6): a host bot with an engine that leads its party, the tank role set, every member a host bot with an engine.
+    {
+        std::string code, message;
+        if (!StartCheck(leader->GetGUID(), code, message))
+        {
+            RestoreRunTank(leader, previousRole, tankRoleSet);
+            return refuse(code.empty() ? "not-bot" : code.c_str(), message);
+        }
+    }
+    // A finished earlier run of the leader gives way to the new one.
     if (Find(leader->GetGUID()))
     {
         ForgetRun(leader->GetGUID());
         tasks::Forget(leader->GetGUID());   // S9 (O9)
         Remove(leader->GetGUID());
     }
-    if (fromStep >= plan->steps.size())
-        return refuse("no-step", "the plan has no such step");
     RunRec* rec = Create(leader->GetGUID(), name, plan, nowMs, fromStep);
     if (!rec)
+    {
+        RestoreRunTank(leader, previousRole, tankRoleSet);
         return refuse("no-plan", "the run could not be created");
+    }
     for (Player* member : others)
         if (!BindMember(*rec, member, leader))
         {
@@ -1479,6 +1497,7 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs,
             ReleaseAll(*rec);
             h3::HoldRunLead(leader->GetGUID(), false);
             Remove(leader->GetGUID());
+            RestoreRunTank(leader, previousRole, tankRoleSet);
             return refuse("bind-failed", "the host refused to bind " + failed + " to " + name);
         }
     rec->run.liveTactics = &ai::GetBossTactics();
@@ -1543,13 +1562,6 @@ StartOutcome StartPlayerLedRun(Player* commander, Player* tank, ai::DungeonPlan 
     playerled::StartVerdict const verdict = playerled::DecideStart(obs);
     if (!verdict.code.empty())
         return refuse(verdict.code.c_str(), verdict.text);
-    // The named tank is the run's tank in this mode too: commit its role before the admission tests read it.
-    bool const tankRoleSet = PrepareRunTank(tank);
-    {
-        std::string code, message;
-        if (!PlayerLedStartCheck(tank->GetGUID(), code, message))
-            return refuse(code.empty() ? "not-bot" : code.c_str(), message);
-    }
     std::string const name = tank->GetName();
     if (RunRec* old = Find(tank->GetGUID()); old && !Ended(*old))
         return refuse("already-running", name + " already has a run (.tb run status " + name + ")");
@@ -1580,7 +1592,19 @@ StartOutcome StartPlayerLedRun(Player* commander, Player* tank, ai::DungeonPlan 
         if (!tasks::RunLootMethodOk(tasks::PolicyLootMethod(uint32(group->GetLootMethod())), methodWhy))
             return refuse("loot-method", name + ": " + methodWhy + " (a run needs group loot or need-before-greed)");
     }
-    // Every check passed: nothing is changed before this line. A finished earlier run of the tank gives way to the new one.
+    // Every check above only reads the world: nothing is changed before this line. The start's one change is the named tank's role (and the kit built
+    // from it), which the last admission check reads; a refusal from here on puts the role and its kit back.
+    uint8 const previousRole = PlayerbotAIStorage::Instance().GetPlayerForcedRole(tank->GetGUID());
+    bool const tankRoleSet = PrepareRunTank(tank);
+    {
+        std::string code, message;
+        if (!PlayerLedStartCheck(tank->GetGUID(), code, message))
+        {
+            RestoreRunTank(tank, previousRole, tankRoleSet);
+            return refuse(code.empty() ? "not-bot" : code.c_str(), message);
+        }
+    }
+    // A finished earlier run of the tank gives way to the new one.
     if (Find(tank->GetGUID()))
     {
         ForgetRun(tank->GetGUID());
@@ -1589,7 +1613,10 @@ StartOutcome StartPlayerLedRun(Player* commander, Player* tank, ai::DungeonPlan 
     }
     RunRec* rec = Create(tank->GetGUID(), name, plan, nowMs, 0, false);   // no capture: a player-led run's ticks are not the policy's (#307)
     if (!rec)
+    {
+        RestoreRunTank(tank, previousRole, tankRoleSet);
         return refuse("no-plan", "the run could not be created");
+    }
     rec->commander = commander->GetGUID();
     rec->commanderName = commander->GetName();
     rec->pl.on = true;
