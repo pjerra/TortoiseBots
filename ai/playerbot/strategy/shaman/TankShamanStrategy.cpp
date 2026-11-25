@@ -97,20 +97,27 @@ void TankShamanStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     // Lost aggro (donor/protection shape: taunt at INTERRUPT+1): a mob
     // peeling onto a non-tank member outranks spenders and interrupts — a
     // missed kick costs damage, a missed taunt costs the healer. Sits below
-    // EMERGENCY defensives, above every HIGH-band builder. The fallback ES
-    // line queues right behind while the taunt cools down.
+    // EMERGENCY defensives, above every HIGH-band builder. Without a taunt
+    // the shock line is the whole answer.
     triggers.push_back(new TriggerNode(
         "lose aggro",
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+        NextAction::array(0, new NextAction("earth shock", ACTION_INTERRUPT), NULL)));
+#else
         NextAction::array(0, new NextAction("earthshaker slam", ACTION_INTERRUPT + 1),
                              new NextAction("earth shock", ACTION_INTERRUPT), NULL)));
+#endif
 
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     // A mob sitting on a non-tank member: "lose aggro" only sees the
     // shaman's current target. Same priority as "lose aggro"; no Earth Shock
     // fallback — the mob is already on someone else, and threat is what the
-    // taunt is for.
+    // taunt is for. The shaman taunt does not exist on the Forever data, so
+    // the row is compiled out rather than walking into a failed cast.
     triggers.push_back(new TriggerNode(
         "party member attacked",
         NextAction::array(0, new NextAction("earthshaker slam on attacker", ACTION_INTERRUPT + 1), NULL)));
+#endif
 
     // Earth Shock on fights that need it (boss/elite/raid):
     // about 40% of single-target threat, top of the rotation on cooldown
@@ -249,15 +256,16 @@ void TankShamanAoeStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers
 
     // Pack order (community shaman tank guide): Stoneclaw first (cheap threat on every
     // mob), then Fire Nova — the tank's own pack pick, above the single-target
-    // Searing row so a pack never falls back to the filler — and Magma only
-    // while Fire Nova is on its 15 s cooldown, as the last resort.
+    // Searing row so a pack never falls back to the filler — and Magma for the
+    // fire slot's AoE totem. On the 1.12 data Nova is the drop and Magma only
+    // covers its cooldown; on the Forever data Nova bursts from the fire totem
+    // and Magma is the totem that makes the burst worth it.
     //
-    // The Nova row keys on the Nova's own detonation window (2+ attackers
-    // within FireNovaDropRange of the tank) rather than the 5 yd melee
-    // density, and its trigger carries the melee AoE pack gate and the
-    // breakable-CC interlock. It also stands down while a Nova totem is
-    // standing or the drop is cooling down, so the totem is never replaced
-    // before it detonates.
+    // The Nova row keys on the Nova's own burst window (2+ attackers within
+    // FireNovaDropRange of the tank) rather than the 5 yd melee density, and
+    // its trigger carries the melee AoE pack gate and the breakable-CC
+    // interlock. It also waits for its own cooldown (and, on the 1.12 data, a
+    // standing Nova totem's detonation so the drop is never replaced early).
     triggers.push_back(new TriggerNode(
         "tank fire nova",
         NextAction::array(0, new NextAction("fire nova", ACTION_HIGH + 2), NULL)));

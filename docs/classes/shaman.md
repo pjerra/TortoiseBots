@@ -28,6 +28,7 @@ The shaman tank spec is Not on ForeverCore yet.
 
 ### Restoration (Healer)
 - Casts *Chain Heal* when several nearby allies are injured.
+- Opens the low and medium wound bands with an instant *Riptide* (heal plus HoT) before the *Healing Wave* cast, and keeps *Riptide* on a wounded ally so its *Chain Heal* gets the bonus.
 - Deals off-spec damage (*Flame Shock*, *Lightning Bolt*, *Chain Lightning* into packs) per [healer off-DPS rules](overview.md#shared-bot-behaviors).
 
 ### Enhancement (Melee DPS)
@@ -50,6 +51,7 @@ Shamans maintain 4-element totem sets tailored to group composition:
 - **Earth Totem:** Drops *Strength of Earth Totem* if melee allies are present and the spell is known; otherwise the slot stays empty.
 - Reacts to fears with *Tremor Totem* and to runners with *Earthbind Totem*.
 - **Fire Totem:** Drops *Searing Totem* on single targets and *Magma Totem* on packs.
+- **Fire Nova:** a burst around whichever fire totem is standing (10 yd, 10 s cooldown), fired on packs. It leaves the totem up, so a tank can drop *Magma Totem* and burst from it.
 - **Water Totem:** Drops *Mana Spring Totem* if mana users are present; *Healing Stream Totem* otherwise. Reacts to poison and disease with cleansing totems.
 - **Air Totem:** Drops *Windfury Totem* for melee groups; drops *Grace of Air Totem* for casters. Reacts to incoming enemy spells with *Grounding Totem*.
 - **Out of Combat:** Totems drop in combat and in the pre-pull window (ready check / rebuff) only — never otherwise out of combat, so a following bot leaves no totems behind in town.
@@ -65,13 +67,15 @@ Shamans maintain 4-element totem sets tailored to group composition:
 ## Custom abilities
 
 - **Water Shield:** a shaman shield that restores mana; the elemental kit keeps it up.
+- **Riptide:** instant heal plus a HoT on a 12 s cooldown; the restoration ladder opens the low and medium bands with it.
+- **Fire Nova:** bursts fire damage around the active fire totem (10 yd, 10 s cooldown). It needs a totem standing; no totem, no burst.
 - **Totemic Recall:** refunds the standing totem set after a fight.
 - **Earthquake:** Not on ForeverCore yet.
 - **Lightning Strike:** Not on ForeverCore yet.
 - **Spirit Link:** Not on ForeverCore yet.
 - **Ancestral Swiftness:** Not on ForeverCore yet.
 - **Bloodlust:** Not on ForeverCore yet.
-- **Earthshaker Slam:** Not on ForeverCore yet.
+- **Earthshaker Slam:** Not on ForeverCore yet; the shaman tank kit has no taunt, so its lost-aggro answer is *Earth Shock*.
 
 ---
 

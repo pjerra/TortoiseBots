@@ -12,6 +12,7 @@
 
 using ai::FireNovaDropRange;
 using ai::FireNovaDropShouldFire;
+using ai::FireNovaPulseShouldFire;
 
 int main()
 {
@@ -28,6 +29,13 @@ int main()
     CHECK(FireNovaDropShouldFire(10.1f) == false);
     CHECK(FireNovaDropShouldFire(30.0f) == false);
     std::cout << "  [PASS] out-of-range targets veto the drop\n";
+
+    // Forever's burst needs a standing fire totem as well as the range.
+    CHECK(FireNovaPulseShouldFire(true, 5.0f) == true);
+    CHECK(FireNovaPulseShouldFire(true, 10.0f) == true);
+    CHECK(FireNovaPulseShouldFire(true, 10.1f) == false);
+    CHECK(FireNovaPulseShouldFire(false, 5.0f) == false);
+    std::cout << "  [PASS] the burst waits for a fire totem and its range\n";
 
     std::cout << "All shaman fire-gate policy checks PASSED!\n";
     return 0;

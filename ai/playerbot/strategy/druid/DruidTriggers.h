@@ -469,6 +469,24 @@ namespace ai
         bool IsActive() override;
     };
 
+    // Forever's bear rage dump: Primal Bite (407995, 20 rage, 6 s cooldown,
+    // high threat) from 20 rage or free under Clearcasting.
+    class PrimalBiteTrigger : public SpellCanBeCastedTrigger
+    {
+    public:
+        PrimalBiteTrigger(PlayerbotAI* ai) : SpellCanBeCastedTrigger(ai, "primal bite") {}
+        bool IsActive() override;
+    };
+
+    // Lacerate (1328617): stack the 15 s bleed to five, then refresh it only
+    // near expiry. Defined in DruidTriggers.cpp.
+    class LacerateTrigger : public SpellCanBeCastedTrigger
+    {
+    public:
+        LacerateTrigger(PlayerbotAI* ai) : SpellCanBeCastedTrigger(ai, "lacerate") {}
+        bool IsActive() override;
+    };
+
     BOOST_TRIGGER(BerserkTrigger, "berserk");
 
     class RebirthTrigger : public SpellTargetTrigger

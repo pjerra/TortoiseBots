@@ -13,8 +13,10 @@
 using ai::TankChainLightningShouldFire;
 using ai::TankEarthPickReplaceable;
 using ai::TankFightTargetIsBossOrElite;
+using ai::TankFireNovaPulseShouldFire;
 using ai::TankFireNovaShouldDrop;
 using ai::TankHardCastAllowed;
+using ai::TankMagmaPulseShouldDrop;
 using ai::TankMagmaShouldFollow;
 using ai::TankShamanTargetIsElite;
 using ai::TankShamanEarthShockFreeFire;
@@ -157,6 +159,22 @@ int main()
     CHECK(TankMagmaShouldFollow(false, false, 5, true) == true);
     CHECK(TankMagmaShouldFollow(false, false, 5, false) == false);
     std::cout << "  [PASS] magma stays the fallback on the nova cooldown\n";
+
+    // Forever: the burst needs the standing totem and its own cooldown; the
+    // totem stays up, so a standing one is the requirement, not a veto.
+    CHECK(TankFireNovaPulseShouldFire(true, true, true) == true);
+    CHECK(TankFireNovaPulseShouldFire(true, true, false) == false);
+    CHECK(TankFireNovaPulseShouldFire(true, false, true) == false);   // 10 s category cooldown
+    CHECK(TankFireNovaPulseShouldFire(false, true, true) == false);   // not trained
+    std::cout << "  [PASS] the burst fires around a standing fire totem\n";
+
+    // Forever: Magma is the AoE fire totem the burst pulses from, so a real
+    // pack earns it with mana to burn regardless of the burst cooldown.
+    CHECK(TankMagmaPulseShouldDrop(2, true) == false);
+    CHECK(TankMagmaPulseShouldDrop(3, true) == true);
+    CHECK(TankMagmaPulseShouldDrop(5, true) == true);
+    CHECK(TankMagmaPulseShouldDrop(5, false) == false);
+    std::cout << "  [PASS] magma drops into a real pack with mana\n";
 
     // Stable fight decision: an engaged elite keeps the fight a fight while
     // the tank switches between it and its normal-rank adds.
