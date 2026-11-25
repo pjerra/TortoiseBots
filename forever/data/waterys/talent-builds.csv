@@ -1,169 +1,167 @@
 client_build,class,spec,order,talent_id,rank,name,why
-70959 trait tree,warrior,arms,1,130,5,Deflection,kept from the old build
-70959 trait tree,warrior,arms,2,127,3,Improved Rend,kept from the old build
-70959 trait tree,warrior,arms,3,126,2,Improved Charge,kept from the old build
-70959 trait tree,warrior,arms,4,641,3,Improved Tactical Mastery,kept from the old build
-70959 trait tree,warrior,arms,5,131,2,Improved Overpower,kept from the old build
-70959 trait tree,warrior,arms,6,137,1,Anger Management,re-spent
-70959 trait tree,warrior,arms,7,121,3,Deep Wounds,kept from the old build
-70959 trait tree,warrior,arms,8,136,3,Two-Handed Weapon Specialization,kept from the old build
-70959 trait tree,warrior,arms,9,662,2,Impale,kept from the old build
-70959 trait tree,warrior,arms,10,133,1,Sweeping Strikes,kept from the old build
-70959 trait tree,warrior,arms,11,105944,5,Weaponmaster,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warrior,arms,12,168,2,Improved Slam,re-spent
-70959 trait tree,warrior,arms,13,135,1,Mortal Strike,kept from the old build
-70959 trait tree,warrior,arms,14,157,5,Cruelty,kept from the old build
-70959 trait tree,warrior,arms,15,159,5,Unbridled Wrath,kept from the old build
-70959 trait tree,warrior,arms,16,160,1,Piercing Howl,kept from the old build
-70959 trait tree,warrior,arms,17,661,3,Blood Craze,re-spent
-70959 trait tree,warrior,arms,18,155,4,Enrage,re-spent
-70959 trait tree,warrior,fury,1,157,5,Cruelty,kept from the old build
-70959 trait tree,warrior,fury,2,159,5,Unbridled Wrath,kept from the old build
-70959 trait tree,warrior,fury,3,160,1,Piercing Howl,kept from the old build
-70959 trait tree,warrior,fury,4,661,3,Blood Craze,kept from the old build
-70959 trait tree,warrior,fury,5,105953,3,Furious Precision,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warrior,fury,6,1581,5,Dual Wield Specialization,kept from the old build
-70959 trait tree,warrior,fury,7,1542,2,Improved Execute,kept from the old build
-70959 trait tree,warrior,fury,8,165,1,Death Wish,kept from the old build
-70959 trait tree,warrior,fury,9,1541,2,Improved Berserker Rage,re-spent
-70959 trait tree,warrior,fury,10,156,3,Flurry,kept from the old build
-70959 trait tree,warrior,fury,11,105977,2,Improved Whirlwind,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warrior,fury,12,167,1,Bloodthirst,kept from the old build
-70959 trait tree,warrior,fury,13,155,2,Enrage,re-spent
-70959 trait tree,warrior,fury,14,124,3,Improved Heroic Strike,re-spent
-70959 trait tree,warrior,fury,15,127,3,Improved Rend,kept from the old build
-70959 trait tree,warrior,fury,16,641,3,Improved Tactical Mastery,kept from the old build
-70959 trait tree,warrior,fury,17,131,2,Improved Overpower,kept from the old build
-70959 trait tree,warrior,fury,18,137,1,Anger Management,re-spent
-70959 trait tree,warrior,fury,19,121,3,Deep Wounds,kept from the old build
-70959 trait tree,warrior,fury,20,130,1,Deflection,kept from the old build
-70959 trait tree,warrior,protection,1,1601,5,Shield Specialization,kept from the old build
-70959 trait tree,warrior,protection,2,138,5,Anticipation,kept from the old build
-70959 trait tree,warrior,protection,3,144,3,Defiance,kept from the old build
-70959 trait tree,warrior,protection,4,105971,2,Master of Defense,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warrior,protection,5,146,3,Improved Sunder Armor,re-spent
-70959 trait tree,warrior,protection,6,105966,1,Vanguard,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warrior,protection,7,142,1,Improved Bloodrage,kept from the old build
-70959 trait tree,warrior,protection,8,152,1,Concussion Blow,kept from the old build
-70959 trait tree,warrior,protection,9,105961,3,Focused Rage,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warrior,protection,10,142,1,Improved Bloodrage,kept from the old build
-70959 trait tree,warrior,protection,11,702,5,Bastion,kept from the old build
-70959 trait tree,warrior,protection,12,148,1,Shield Slam,kept from the old build
-70959 trait tree,warrior,protection,13,147,3,Improved Revenge,kept from the old build
-70959 trait tree,warrior,protection,14,153,1,Last Stand,kept from the old build
-70959 trait tree,warrior,protection,15,128,3,Improved Thunder Clap,re-spent
-70959 trait tree,warrior,protection,16,149,1,Improved Shield Bash,kept from the old build
-70959 trait tree,warrior,protection,17,150,2,Improved Shield Wall,kept from the old build
-70959 trait tree,warrior,protection,18,124,3,Improved Heroic Strike,kept from the old build
-70959 trait tree,warrior,protection,19,130,2,Deflection,re-spent
-70959 trait tree,warrior,protection,20,641,3,Improved Tactical Mastery,kept from the old build
-70959 trait tree,warrior,protection,21,126,2,Improved Charge,re-spent
-70959 trait tree,paladin,holy,1,1432,5,Spiritual Focus,kept from the old build
-70959 trait tree,paladin,holy,2,1444,3,Healing Light,kept from the old build
-70959 trait tree,paladin,holy,3,110871,2,Reverence,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,4,1433,1,Divine Favor,re-spent
-70959 trait tree,paladin,holy,5,1461,5,Illumination,kept from the old build
-70959 trait tree,paladin,holy,6,105704,2,Holy Conduit,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,7,110873,2,Infusion of Light,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,8,105330,1,Oath of Light,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,9,105323,1,Holy Shock,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,10,113631,2,Boundless Light,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,11,105327,2,Purifying Power,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,12,1627,5,Holy Power,kept from the old build
-70959 trait tree,paladin,holy,13,105320,1,Light's Vigil,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,14,105324,2,Divine Precision,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,15,110872,1,Consecrated Ground,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,16,1449,5,Divine Intellect,kept from the old build
-70959 trait tree,paladin,holy,17,1425,2,Guardian's Favor,kept from the old build
-70959 trait tree,paladin,holy,18,105632,2,Sacred Duty,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,holy,19,1421,1,Redoubt,re-spent
-70959 trait tree,paladin,holy,20,1423,5,Toughness,kept from the old build
-70959 trait tree,paladin,holy,21,1521,1,Improved Hammer of Justice,re-spent
-70959 trait tree,paladin,protection,1,1421,5,Redoubt,kept from the old build
-70959 trait tree,paladin,protection,2,1630,3,Precision,kept from the old build
-70959 trait tree,paladin,protection,3,1425,2,Guardian's Favor,kept from the old build
-70959 trait tree,paladin,protection,4,105632,2,Sacred Duty,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,protection,5,1424,2,Shield Specialization,kept from the old build
-70959 trait tree,paladin,protection,6,1423,5,Toughness,kept from the old build
-70959 trait tree,paladin,protection,7,105625,1,Templar's Bulwark,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,protection,8,1501,3,Improved Righteous Fury,kept from the old build
-70959 trait tree,paladin,protection,9,1629,5,Anticipation,kept from the old build
-70959 trait tree,paladin,protection,10,1430,1,Holy Shield,kept from the old build
-70959 trait tree,paladin,protection,11,105639,2,Stoicism,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,protection,12,110879,3,Iron Creed,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,protection,13,110875,1,Shieldsworn,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,protection,14,1521,3,Improved Hammer of Justice,kept from the old build
-70959 trait tree,paladin,protection,15,110878,1,Swift Judgement,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,protection,16,1426,2,Reckoning,kept from the old build
-70959 trait tree,paladin,protection,17,1407,5,Benediction,kept from the old build
-70959 trait tree,paladin,protection,18,1631,2,Improved Judgement,kept from the old build
-70959 trait tree,paladin,protection,19,1403,3,Deflection,kept from the old build
-70959 trait tree,paladin,retribution,1,1407,5,Benediction,kept from the old build
-70959 trait tree,paladin,retribution,2,1631,2,Improved Judgement,kept from the old build
-70959 trait tree,paladin,retribution,3,1411,3,Conviction,kept from the old build
-70959 trait tree,paladin,retribution,4,1481,1,Seal of Command,kept from the old build
-70959 trait tree,paladin,retribution,5,1633,3,Vindication,re-spent
-70959 trait tree,paladin,retribution,6,1634,2,Pursuit of Justice,kept from the old build
-70959 trait tree,paladin,retribution,7,1410,3,Two-Handed Weapon Specialization,kept from the old build
-70959 trait tree,paladin,retribution,8,105700,1,Sacred Arbiter,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,retribution,9,1632,2,Eye for an Eye,kept from the old build
-70959 trait tree,paladin,retribution,10,1441,1,Repentance,kept from the old build
-70959 trait tree,paladin,retribution,11,1402,3,Vengeance,kept from the old build
-70959 trait tree,paladin,retribution,12,110882,5,Champion of the Light,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,retribution,13,105692,1,Unsealed Wrath,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,retribution,14,105701,3,Sanctified Judgement,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,paladin,retribution,15,1403,1,Deflection,kept from the old build
-70959 trait tree,paladin,retribution,16,1450,5,Divine Strength,kept from the old build
-70959 trait tree,paladin,retribution,17,1463,5,Improved Seals,re-spent
-70959 trait tree,paladin,retribution,18,1449,5,Divine Intellect,kept from the old build
-70959 trait tree,hunter,beastmastery,1,1382,5,Deadly Aspects,kept from the old build
-70959 trait tree,hunter,beastmastery,2,1389,5,Endurance Training,kept from the old build
-70959 trait tree,hunter,beastmastery,3,104975,2,Focused Fire,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,beastmastery,4,1391,1,Bestial Swiftness,kept from the old build
-70959 trait tree,hunter,beastmastery,5,1396,5,Unleashed Fury,kept from the old build
-70959 trait tree,hunter,beastmastery,6,1393,5,Ferocity,kept from the old build
-70959 trait tree,hunter,beastmastery,7,1385,2,Improved Mend Pet,kept from the old build
-70959 trait tree,hunter,beastmastery,8,1387,1,Intimidation,kept from the old build
-70959 trait tree,hunter,beastmastery,9,1388,2,Spirit Bond,kept from the old build
-70959 trait tree,hunter,beastmastery,10,1390,2,Bestial Discipline,kept from the old build
-70959 trait tree,hunter,beastmastery,11,1397,5,Frenzy,kept from the old build
-70959 trait tree,hunter,beastmastery,12,1386,1,Bestial Wrath,kept from the old build
-70959 trait tree,hunter,beastmastery,13,1344,5,Lethal Attacks,re-spent
-70959 trait tree,hunter,beastmastery,14,1342,5,Efficiency,kept from the old build
-70959 trait tree,hunter,beastmastery,15,1352,3,Hawk Eye,re-spent
-70959 trait tree,hunter,beastmastery,16,105005,2,Rapid Killing,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,marksmanship,1,1344,5,Lethal Attacks,kept from the old build
-70959 trait tree,hunter,marksmanship,2,1342,5,Efficiency,kept from the old build
-70959 trait tree,hunter,marksmanship,3,105008,5,Careful Aim,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,marksmanship,4,1346,5,Improved Arcane Shot,kept from the old build
-70959 trait tree,hunter,marksmanship,5,105004,1,Trueshot Aura,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,marksmanship,6,1349,5,Mortal Shots,kept from the old build
-70959 trait tree,hunter,marksmanship,7,1347,3,Barrage,kept from the old build
-70959 trait tree,hunter,marksmanship,8,1353,1,Scatter Shot,re-spent
-70959 trait tree,hunter,marksmanship,9,1362,5,Ranged Weapon Specialization,kept from the old build
-70959 trait tree,hunter,marksmanship,10,104997,1,Sniper Shot,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,marksmanship,11,1352,3,Hawk Eye,kept from the old build
-70959 trait tree,hunter,marksmanship,12,105005,1,Rapid Killing,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,marksmanship,13,1382,5,Deadly Aspects,kept from the old build
-70959 trait tree,hunter,marksmanship,14,1389,5,Endurance Training,re-spent
-70959 trait tree,hunter,marksmanship,15,104975,1,Focused Fire,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,survival,1,1311,5,Deflection,kept from the old build
-70959 trait tree,hunter,survival,2,1622,5,Survivalist,kept from the old build
-70959 trait tree,hunter,survival,3,1621,2,Savage Strikes,kept from the old build
-70959 trait tree,hunter,survival,4,1305,3,Improved Wing Clip,kept from the old build
-70959 trait tree,hunter,survival,5,1310,3,Surefooted,kept from the old build
-70959 trait tree,hunter,survival,6,1308,1,Deterrence,kept from the old build
-70959 trait tree,hunter,survival,7,1306,2,Clever Traps,kept from the old build
-70959 trait tree,hunter,survival,8,1322,2,Survival Tactics,kept from the old build
-70959 trait tree,hunter,survival,9,1312,1,Counterattack,kept from the old build
-70959 trait tree,hunter,survival,10,110861,5,Predator's Edge,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,survival,11,104985,2,Expose Prey,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,survival,12,110860,2,Survivalist's Discipline,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,survival,13,110859,5,Lightning Reflexes,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,survival,14,104984,1,Lacerating Strikes,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,hunter,survival,15,1304,2,Entrapment,kept from the old build
-70959 trait tree,hunter,survival,16,1389,5,Endurance Training,kept from the old build
-70959 trait tree,hunter,survival,17,1382,5,Deadly Aspects,re-spent
+70959 trait tree,warrior,arms,1,127,3,Improved Rend,aotc 60: 100.0% (usual 3/3)
+70959 trait tree,warrior,arms,2,130,3,Deflection,aotc 60: 72.2% (usual 3/5)
+70959 trait tree,warrior,arms,3,131,2,Improved Overpower,aotc 60: 99.0% (usual 2/2)
+70959 trait tree,warrior,arms,4,641,3,Improved Tactical Mastery,aotc 60: 97.6% (usual 3/3)
+70959 trait tree,warrior,arms,5,121,3,Deep Wounds,aotc 60: 100.0% (usual 3/3)
+70959 trait tree,warrior,arms,6,137,1,Anger Management,aotc 60: 95.3% (usual 1/1)
+70959 trait tree,warrior,arms,7,136,3,Two-Handed Weapon Specialization,aotc 60: 98.9% (usual 3/3)
+70959 trait tree,warrior,arms,8,662,2,Impale,aotc 60: 99.3% (usual 2/2)
+70959 trait tree,warrior,arms,9,133,1,Sweeping Strikes,aotc 60: 100.0% (usual 1/1)
+70959 trait tree,warrior,arms,10,105944,5,Weaponmaster,aotc 60: 100.0% (usual 5/5); trait node id
+70959 trait tree,warrior,arms,11,110524,2,Bloodthrill,aotc 60: 96.5% (usual 2/2); trait node id
+70959 trait tree,warrior,arms,12,105949,1,Spearing Strike,aotc 60: 78.1% (usual 1/1); trait node id
+70959 trait tree,warrior,arms,13,168,2,Improved Slam,aotc 60: 75.5% (usual 2/2)
+70959 trait tree,warrior,arms,14,135,1,Mortal Strike,aotc 60: 98.8% (usual 1/1)
+70959 trait tree,warrior,arms,15,157,5,Cruelty,aotc 60: 99.8% (usual 5/5)
+70959 trait tree,warrior,arms,16,159,5,Unbridled Wrath,aotc 60: 46.6% (usual 5/5)
+70959 trait tree,warrior,arms,17,155,5,Enrage,aotc 60: 95.0% (usual 5/5)
+70959 trait tree,warrior,arms,18,160,1,Piercing Howl,aotc 60: 51.6% (usual 1/1)
+70959 trait tree,warrior,arms,19,1542,2,Improved Execute,aotc 60: 49.4% (usual 2/2)
+70959 trait tree,warrior,arms,20,113636,1,Reckless Swings,aotc 60: 42.6% (usual 1/1); trait node id
+70959 trait tree,warrior,fury,1,157,5,Cruelty,aotc 60: 100.0% (usual 5/5)
+70959 trait tree,warrior,fury,2,159,5,Unbridled Wrath,aotc 60: 97.4% (usual 5/5)
+70959 trait tree,warrior,fury,3,155,5,Enrage,aotc 60: 96.5% (usual 5/5)
+70959 trait tree,warrior,fury,4,105953,3,Furious Precision,aotc 60: 95.9% (usual 3/3); trait node id
+70959 trait tree,warrior,fury,5,113636,1,Reckless Swings,aotc 60: 95.3% (usual 1/1); trait node id
+70959 trait tree,warrior,fury,6,1581,5,Dual Wield Specialization,aotc 60: 96.0% (usual 5/5)
+70959 trait tree,warrior,fury,7,165,1,Death Wish,aotc 60: 100.0% (usual 1/1)
+70959 trait tree,warrior,fury,8,156,3,Flurry,aotc 60: 100.0% (usual 3/3)
+70959 trait tree,warrior,fury,9,105977,2,Improved Whirlwind,aotc 60: 96.7% (usual 2/2); trait node id
+70959 trait tree,warrior,fury,10,1542,2,Improved Execute,aotc 60: 75.2% (usual 2/2)
+70959 trait tree,warrior,fury,11,1541,1,Improved Berserker Rage,aotc 60: 72.2% (usual 2/2)
+70959 trait tree,warrior,fury,12,167,1,Bloodthirst,aotc 60: 99.7% (usual 1/1)
+70959 trait tree,warrior,fury,13,124,3,Improved Heroic Strike,aotc 60: 73.1% (usual 3/3)
+70959 trait tree,warrior,fury,14,127,3,Improved Rend,aotc 60: 83.7% (usual 3/3)
+70959 trait tree,warrior,fury,15,641,3,Improved Tactical Mastery,aotc 60: 95.6% (usual 3/3)
+70959 trait tree,warrior,fury,16,131,2,Improved Overpower,aotc 60: 71.0% (usual 2/2)
+70959 trait tree,warrior,fury,17,137,1,Anger Management,aotc 60: 90.6% (usual 1/1)
+70959 trait tree,warrior,fury,18,121,3,Deep Wounds,aotc 60: 81.7% (usual 3/3)
+70959 trait tree,warrior,fury,19,662,2,Impale,aotc 60: 72.4% (usual 2/2)
+70959 trait tree,warrior,protection,1,1601,5,Shield Specialization,aotc 60: 100.0% (usual 5/5)
+70959 trait tree,warrior,protection,2,147,3,Improved Revenge,aotc 60: 99.8% (usual 3/3)
+70959 trait tree,warrior,protection,3,128,3,Improved Thunder Clap,aotc 60: 76.0% (usual 3/3)
+70959 trait tree,warrior,protection,4,105971,2,Master of Defense,aotc 60: 99.8% (usual 2/2); trait node id
+70959 trait tree,warrior,protection,5,144,3,Defiance,aotc 60: 95.0% (usual 3/3)
+70959 trait tree,warrior,protection,6,153,1,Last Stand,aotc 60: 98.3% (usual 1/1)
+70959 trait tree,warrior,protection,7,105966,1,Vanguard,aotc 60: 99.1% (usual 1/1); trait node id
+70959 trait tree,warrior,protection,8,138,2,Anticipation,aotc 60: 60.5% (usual 5/5)
+70959 trait tree,warrior,protection,9,152,1,Concussion Blow,aotc 60: 100.0% (usual 1/1)
+70959 trait tree,warrior,protection,10,105961,3,Focused Rage,aotc 60: 98.7% (usual 3/3); trait node id
+70959 trait tree,warrior,protection,11,150,2,Improved Shield Wall,aotc 60: 89.9% (usual 2/2)
+70959 trait tree,warrior,protection,12,702,5,Bastion,aotc 60: 99.9% (usual 5/5)
+70959 trait tree,warrior,protection,13,148,1,Shield Slam,aotc 60: 100.0% (usual 1/1)
+70959 trait tree,warrior,protection,14,157,5,Cruelty,aotc 60: 97.2% (usual 5/5)
+70959 trait tree,warrior,protection,15,159,5,Unbridled Wrath,aotc 60: 65.6% (usual 5/5)
+70959 trait tree,warrior,protection,16,155,5,Enrage,aotc 60: 82.6% (usual 5/5)
+70959 trait tree,warrior,protection,17,130,4,Deflection,aotc 60: 81.4% (usual 5/5)
+70959 trait tree,paladin,holy,1,1432,5,Spiritual Focus,aotc 60: 97.6% (usual 5/5)
+70959 trait tree,paladin,holy,2,1444,3,Healing Light,aotc 60: 98.6% (usual 3/3)
+70959 trait tree,paladin,holy,3,110871,2,Reverence,aotc 60: 99.9% (usual 2/2); trait node id
+70959 trait tree,paladin,holy,4,1433,1,Divine Favor,aotc 60: 98.7% (usual 1/1)
+70959 trait tree,paladin,holy,5,1461,5,Illumination,aotc 60: 98.8% (usual 5/5)
+70959 trait tree,paladin,holy,6,105327,1,Purifying Power,aotc 60: 78.5% (usual 2/2); trait node id
+70959 trait tree,paladin,holy,7,105324,2,Divine Precision,aotc 60: 85.0% (usual 2/2); trait node id
+70959 trait tree,paladin,holy,8,110873,1,Infusion of Light,aotc 60: 97.9% (usual 2/2); trait node id
+70959 trait tree,paladin,holy,9,105330,1,Oath of Light,aotc 60: 99.2% (usual 1/1); trait node id
+70959 trait tree,paladin,holy,10,105323,1,Holy Shock,aotc 60: 99.9% (usual 1/1); trait node id
+70959 trait tree,paladin,holy,11,113631,2,Boundless Light,aotc 60: 97.1% (usual 2/2); trait node id
+70959 trait tree,paladin,holy,12,110873,1,Infusion of Light,aotc 60: 97.9% (usual 2/2); trait node id
+70959 trait tree,paladin,holy,13,1627,5,Holy Power,aotc 60: 97.9% (usual 5/5)
+70959 trait tree,paladin,holy,14,105320,1,Light's Vigil,aotc 60: 96.7% (usual 1/1); trait node id
+70959 trait tree,paladin,holy,15,1449,5,Divine Intellect,aotc 60: 97.9% (usual 5/5)
+70959 trait tree,paladin,holy,16,1407,5,Benediction,aotc 60: 98.3% (usual 5/5)
+70959 trait tree,paladin,holy,17,1411,3,Conviction,aotc 60: 95.1% (usual 3/3)
+70959 trait tree,paladin,holy,18,105701,3,Sanctified Judgement,aotc 60: 60.2% (usual 3/3); trait node id
+70959 trait tree,paladin,holy,19,1634,2,Pursuit of Justice,aotc 60: 84.4% (usual 2/2)
+70959 trait tree,paladin,holy,20,105632,2,Sacred Duty,aotc 60: 45.3% (usual 2/2); trait node id
+70959 trait tree,paladin,protection,1,1421,5,Redoubt,aotc 60: 99.8% (usual 5/5)
+70959 trait tree,paladin,protection,2,1630,3,Precision,aotc 60: 99.5% (usual 3/3)
+70959 trait tree,paladin,protection,3,105632,2,Sacred Duty,aotc 60: 92.9% (usual 2/2); trait node id
+70959 trait tree,paladin,protection,4,1424,2,Shield Specialization,aotc 60: 99.8% (usual 2/2)
+70959 trait tree,paladin,protection,5,105625,1,Templar's Bulwark,aotc 60: 99.8% (usual 1/1); trait node id
+70959 trait tree,paladin,protection,6,1423,3,Toughness,aotc 60: 89.2% (usual 3/5)
+70959 trait tree,paladin,protection,7,110878,1,Swift Judgement,aotc 60: 97.7% (usual 1/1); trait node id
+70959 trait tree,paladin,protection,8,1501,3,Improved Righteous Fury,aotc 60: 99.7% (usual 3/3)
+70959 trait tree,paladin,protection,9,1629,5,Anticipation,aotc 60: 85.5% (usual 5/5)
+70959 trait tree,paladin,protection,10,1430,1,Holy Shield,aotc 60: 99.9% (usual 1/1)
+70959 trait tree,paladin,protection,11,1426,5,Reckoning,aotc 60: 98.9% (usual 5/5)
+70959 trait tree,paladin,protection,12,110879,3,Iron Creed,aotc 60: 99.5% (usual 3/3); trait node id
+70959 trait tree,paladin,protection,13,110875,1,Shieldsworn,aotc 60: 99.2% (usual 1/1); trait node id
+70959 trait tree,paladin,protection,14,1403,5,Deflection,aotc 60: 73.2% (usual 5/5)
+70959 trait tree,paladin,protection,15,1631,2,Improved Judgement,aotc 60: 93.1% (usual 2/2)
+70959 trait tree,paladin,protection,16,1411,3,Conviction,aotc 60: 81.8% (usual 3/3)
+70959 trait tree,paladin,protection,17,105701,3,Sanctified Judgement,aotc 60: 81.0% (usual 3/3); trait node id
+70959 trait tree,paladin,protection,18,1634,2,Pursuit of Justice,aotc 60: 86.4% (usual 2/2)
+70959 trait tree,paladin,protection,19,105700,1,Sacred Arbiter,aotc 60: 75.4% (usual 1/1); trait node id
+70959 trait tree,paladin,retribution,1,1407,5,Benediction,aotc 60: 90.3% (usual 5/5)
+70959 trait tree,paladin,retribution,2,1631,2,Improved Judgement,aotc 60: 99.0% (usual 2/2)
+70959 trait tree,paladin,retribution,3,1411,3,Conviction,aotc 60: 99.9% (usual 3/3)
+70959 trait tree,paladin,retribution,4,105701,3,Sanctified Judgement,aotc 60: 97.3% (usual 3/3); trait node id
+70959 trait tree,paladin,retribution,5,1634,2,Pursuit of Justice,aotc 60: 99.4% (usual 2/2)
+70959 trait tree,paladin,retribution,6,1481,1,Seal of Command,aotc 60: 100.0% (usual 1/1)
+70959 trait tree,paladin,retribution,7,1410,3,Two-Handed Weapon Specialization,aotc 60: 99.0% (usual 3/3)
+70959 trait tree,paladin,retribution,8,105700,1,Sacred Arbiter,aotc 60: 100.0% (usual 1/1); trait node id
+70959 trait tree,paladin,retribution,9,1402,3,Vengeance,aotc 60: 99.9% (usual 3/3)
+70959 trait tree,paladin,retribution,10,1441,1,Repentance,aotc 60: 97.8% (usual 1/1)
+70959 trait tree,paladin,retribution,11,1633,1,Vindication,aotc 60: 30.1% (usual 1/3)
+70959 trait tree,paladin,retribution,12,110882,5,Champion of the Light,aotc 60: 99.8% (usual 5/5); trait node id
+70959 trait tree,paladin,retribution,13,105692,1,Unsealed Wrath,aotc 60: 92.7% (usual 1/1); trait node id
+70959 trait tree,paladin,retribution,14,1450,5,Divine Strength,aotc 60: 95.8% (usual 5/5)
+70959 trait tree,paladin,retribution,15,1463,5,Improved Seals,aotc 60: 95.9% (usual 5/5)
+70959 trait tree,paladin,retribution,16,105704,2,Holy Conduit,aotc 60: 82.6% (usual 2/2); trait node id
+70959 trait tree,paladin,retribution,17,1449,5,Divine Intellect,aotc 60: 89.5% (usual 5/5)
+70959 trait tree,paladin,retribution,18,1630,3,Precision,aotc 60: 87.2% (usual 3/3)
+70959 trait tree,hunter,beastmastery,1,1382,5,Deadly Aspects,aotc 60: 98.2% (usual 5/5)
+70959 trait tree,hunter,beastmastery,2,104975,2,Focused Fire,aotc 60: 98.6% (usual 2/2); trait node id
+70959 trait tree,hunter,beastmastery,3,1389,1,Endurance Training,aotc 60: 98.1% (usual 1/5)
+70959 trait tree,hunter,beastmastery,4,1625,2,Improved Revive Pet,aotc 60: 59.2% (usual 2/2)
+70959 trait tree,hunter,beastmastery,5,1396,5,Unleashed Fury,aotc 60: 99.9% (usual 5/5)
+70959 trait tree,hunter,beastmastery,6,1391,1,Bestial Swiftness,aotc 60: 100.0% (usual 1/1)
+70959 trait tree,hunter,beastmastery,7,104966,1,Summon Hawk,aotc 60: 93.9% (usual 1/1); trait node id
+70959 trait tree,hunter,beastmastery,8,1393,5,Ferocity,aotc 60: 100.0% (usual 5/5)
+70959 trait tree,hunter,beastmastery,9,1387,1,Intimidation,aotc 60: 99.7% (usual 1/1)
+70959 trait tree,hunter,beastmastery,10,1390,2,Bestial Discipline,aotc 60: 97.0% (usual 2/2)
+70959 trait tree,hunter,beastmastery,11,1397,5,Frenzy,aotc 60: 99.8% (usual 5/5)
+70959 trait tree,hunter,beastmastery,12,1386,1,Bestial Wrath,aotc 60: 99.1% (usual 1/1)
+70959 trait tree,hunter,beastmastery,13,1344,5,Lethal Attacks,aotc 60: 99.0% (usual 5/5)
+70959 trait tree,hunter,beastmastery,14,105008,1,Careful Aim,aotc 60: 96.7% (usual 5/5); trait node id
+70959 trait tree,hunter,beastmastery,15,110870,3,Improved Stings,aotc 60: 53.9% (usual 3/3); trait node id
+70959 trait tree,hunter,beastmastery,16,105008,4,Careful Aim,aotc 60: 96.7% (usual 5/5); trait node id
+70959 trait tree,hunter,beastmastery,17,105005,2,Rapid Killing,aotc 60: 75.0% (usual 2/2); trait node id
+70959 trait tree,hunter,beastmastery,18,105004,1,Trueshot Aura,aotc 60: 81.5% (usual 1/1); trait node id
+70959 trait tree,hunter,beastmastery,19,1349,4,Mortal Shots,aotc 60: 74.5% (usual 4/5)
+70959 trait tree,hunter,marksmanship,1,1344,5,Lethal Attacks,aotc 60: 99.5% (usual 5/5)
+70959 trait tree,hunter,marksmanship,2,1352,3,Hawk Eye,aotc 60: 47.4% (usual 3/3)
+70959 trait tree,hunter,marksmanship,3,105008,5,Careful Aim,aotc 60: 99.9% (usual 5/5); trait node id
+70959 trait tree,hunter,marksmanship,4,105005,2,Rapid Killing,aotc 60: 93.3% (usual 2/2); trait node id
+70959 trait tree,hunter,marksmanship,5,110870,3,Improved Stings,aotc 60: 68.0% (usual 3/3); trait node id
+70959 trait tree,hunter,marksmanship,6,1342,5,Efficiency,aotc 60: 69.8% (usual 5/5)
+70959 trait tree,hunter,marksmanship,7,105004,1,Trueshot Aura,aotc 60: 99.6% (usual 1/1); trait node id
+70959 trait tree,hunter,marksmanship,8,1349,5,Mortal Shots,aotc 60: 99.1% (usual 5/5)
+70959 trait tree,hunter,marksmanship,9,105007,1,Lone Wolf,aotc 60: 86.5% (usual 1/1); trait node id
+70959 trait tree,hunter,marksmanship,10,1347,3,Barrage,aotc 60: 95.2% (usual 3/3)
+70959 trait tree,hunter,marksmanship,11,1362,5,Ranged Weapon Specialization,aotc 60: 81.8% (usual 5/5)
+70959 trait tree,hunter,marksmanship,12,104997,1,Sniper Shot,aotc 60: 76.7% (usual 1/1); trait node id
+70959 trait tree,hunter,marksmanship,13,104999,2,Rapid Recuperation,aotc 60: 88.1% (usual 2/2); trait node id
+70959 trait tree,hunter,marksmanship,14,1382,5,Deadly Aspects,aotc 60: 72.1% (usual 5/5)
+70959 trait tree,hunter,marksmanship,15,1623,5,Improved Tracking,aotc 60: 83.9% (usual 5/5)
+70959 trait tree,hunter,survival,1,1623,5,Improved Tracking,aotc 60: 92.0% (usual 5/5)
+70959 trait tree,hunter,survival,2,1621,2,Savage Strikes,aotc 60: 93.5% (usual 2/2)
+70959 trait tree,hunter,survival,3,1622,3,Survivalist,aotc 60: 64.0% (usual 3/5)
+70959 trait tree,hunter,survival,4,1310,3,Surefooted,aotc 60: 99.6% (usual 3/3)
+70959 trait tree,hunter,survival,5,1306,2,Clever Traps,aotc 60: 97.0% (usual 2/2)
+70959 trait tree,hunter,survival,6,110861,5,Predator's Edge,aotc 60: 93.2% (usual 5/5); trait node id
+70959 trait tree,hunter,survival,7,104981,1,Strider Kick,aotc 60: 98.6% (usual 1/1); trait node id
+70959 trait tree,hunter,survival,8,104983,2,Resourcefulness,aotc 60: 93.1% (usual 2/2); trait node id
+70959 trait tree,hunter,survival,9,104985,2,Expose Prey,aotc 60: 91.6% (usual 2/2); trait node id
+70959 trait tree,hunter,survival,10,110860,2,Survivalist's Discipline,aotc 60: 67.4% (usual 2/2); trait node id
+70959 trait tree,hunter,survival,11,110859,4,Lightning Reflexes,aotc 60: 67.8% (usual 5/5); trait node id
+70959 trait tree,hunter,survival,12,1382,5,Deadly Aspects,aotc 60: 62.0% (usual 5/5)
+70959 trait tree,hunter,survival,13,1344,5,Lethal Attacks,aotc 60: 95.4% (usual 5/5)
+70959 trait tree,hunter,survival,14,105008,5,Careful Aim,aotc 60: 76.6% (usual 5/5); trait node id
+70959 trait tree,hunter,survival,15,110870,3,Improved Stings,aotc 60: 31.3% (usual 3/3); trait node id
+70959 trait tree,hunter,survival,16,105005,2,Rapid Killing,aotc 60: 20.4% (usual 2/2); trait node id
 70959 trait tree,rogue,assassination,1,270,5,Malice,kept from the old build
 70959 trait tree,rogue,assassination,2,273,3,Ruthlessness,kept from the old build
 70959 trait tree,rogue,assassination,3,277,3,Improved Slice and Dice,kept from the old build

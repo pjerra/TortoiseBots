@@ -65,21 +65,25 @@ int main()
         check(steps.size() == 51, "warrior arms has 51 single-point steps");
         if (steps.size() >= 9)
         {
-            // Deflection 130 x5, Improved Rend 127 x3, then Improved Charge 126 (talent-builds.csv).
-            for (int i = 0; i < 5; ++i)
-                check(steps[i] == 130, "arms first 5 points are 130");
-            for (int i = 5; i < 8; ++i)
-                check(steps[i] == 127, "arms next 3 points are 127");
-            check(steps[8] == 126, "arms 9th point is 126");
+            // Improved Rend 127 x3, Deflection 130 x3, Improved Overpower 131 x2, then Improved Tactical Mastery
+            // 641 (talent-builds.csv: the order follows the level-group picks of real players).
+            for (int i = 0; i < 3; ++i)
+                check(steps[i] == 127, "arms first 3 points are 127");
+            for (int i = 3; i < 6; ++i)
+                check(steps[i] == 130, "arms next 3 points are 130");
+            for (int i = 6; i < 8; ++i)
+                check(steps[i] == 131, "arms next 2 points are 131");
+            check(steps[8] == 641, "arms 9th point is 641");
         }
 
-        // Partial progress: 3 points already in 130 -> next 2 should be 130, then 127.
-        std::unordered_map<uint32_t, uint8_t> partial = { { 130, 3 } };
+        // Partial progress: 3 points already in 127 -> next 3 should be 130, then 131.
+        std::unordered_map<uint32_t, uint8_t> partial = { { 127, 3 } };
         auto rem = PlanNextSteps(1, 0, partial);
         check(rem.size() == 48, "partial progress leaves 48 steps");
-        if (rem.size() >= 3)
+        if (rem.size() >= 4)
         {
-            check(rem[0] == 130 && rem[1] == 130 && rem[2] == 127, "partial progress resumes at point 4");
+            check(rem[0] == 130 && rem[1] == 130 && rem[2] == 130 && rem[3] == 131,
+                "partial progress resumes after the filled step");
         }
     }
 
