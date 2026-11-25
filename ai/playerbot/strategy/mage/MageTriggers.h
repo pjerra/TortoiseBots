@@ -209,10 +209,10 @@ namespace ai
 
     // Ice Lance is only worth its 8 s cooldown against a frozen target;
     // Fingers of Frost makes the next spell count as hitting one.
-    class IceLanceTrigger : public SpellTrigger
+    class IceLanceTrigger : public SpellCanBeCastedTrigger
     {
     public:
-        IceLanceTrigger(PlayerbotAI* ai) : SpellTrigger(ai, "ice lance") {}
+        IceLanceTrigger(PlayerbotAI* ai) : SpellCanBeCastedTrigger(ai, "ice lance") {}
         bool IsActive() override;
     };
 

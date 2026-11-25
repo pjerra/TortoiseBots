@@ -163,8 +163,11 @@ bool MissileBarrageTrigger::IsActive()
 
 bool IceLanceTrigger::IsActive()
 {
+    if (!SpellCanBeCastedTrigger::IsActive())
+        return false;
+
     Unit* target = GetTarget();
-    if (!target || !target->IsAlive() || !ai->HasSpell("ice lance"))
+    if (!target || !target->IsAlive())
         return false;
     return sServerFacade.IsFrozen(target) || ai->HasAura(FINGERS_OF_FROST_PROC, bot);
 }

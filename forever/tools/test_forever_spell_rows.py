@@ -148,6 +148,13 @@ class ForeverTriggerGatesTest(unittest.TestCase):
         self.assertIn('HealTopUpAllowedFor(ai, bot, tank)', fn)
         self.assertIn('ai->HasAura("drink", bot)', fn)
 
+    def test_ice_lance_asks_the_cast_check_like_every_cooldown_row(self):
+        header = read('ai/playerbot/strategy/mage/MageTriggers.h')
+        body = header[header.index('class IceLanceTrigger'):]
+        self.assertIn('public SpellCanBeCastedTrigger', body[:body.index('};')])
+        fn = function(read('ai/playerbot/strategy/mage/MageTriggers.cpp'), 'bool IceLanceTrigger::IsActive()')
+        self.assertLess(fn.index('SpellCanBeCastedTrigger::IsActive()'), fn.index('IsFrozen(target)'))
+
 
 if __name__ == '__main__':
     unittest.main()
