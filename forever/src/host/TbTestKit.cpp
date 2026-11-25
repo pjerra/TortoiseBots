@@ -466,9 +466,10 @@ bool HandleRemoveItem(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 }
 
 // ---- `.tb itemscan <bot> <item id>... [#token]` ----
-// For each id: whether the item exists on this server (ObjectMgr::GetItemTemplate) and whether THIS bot could equip it now, by the core's own check
-// with swap = true (an occupied slot does not count against it): Player::CanEquipNewItem (class, level, skill, slot, combat). Nothing is created or
-// changed (the check makes a temporary item and deletes it).
+// For each id: whether the item exists on this server (ObjectMgr::GetItemTemplate), how many the bot has on it (Player::GetItemCount: its worn
+// pieces and everything in its bags, never bank storage) and whether THIS bot could equip it now, by the core's own check with swap = true (an
+// occupied slot does not count against it): Player::CanEquipNewItem (class, level, skill, slot, combat). Nothing is created or changed (the check
+// makes a temporary item and deletes it).
 
 bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 {
@@ -503,7 +504,7 @@ bool HandleItemScan(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         if (ok)
             ++can;
         rec.B("exists", true).S("name", proto->GetName(LOCALE_enUS)).P("class", {std::to_string(proto->GetClass()), std::to_string(proto->GetSubClass())});
-        rec.N("inv", unsigned(proto->GetInventoryType())).N("req", proto->GetBaseRequiredLevel()).N("quality", proto->GetQuality()).N("ilvl", proto->GetBaseItemLevel());
+        rec.N("inv", bot->GetItemCount(id, false)).N("type", unsigned(proto->GetInventoryType())).N("req", proto->GetBaseRequiredLevel()).N("quality", proto->GetQuality()).N("ilvl", proto->GetBaseItemLevel());
         rec.B("canequip", ok);
         if (ok)
             rec.N("slot", unsigned(dest & 255));

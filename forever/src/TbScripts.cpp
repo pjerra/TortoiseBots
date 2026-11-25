@@ -1528,7 +1528,8 @@ public:
     }
 
     // .tb additem <bot> <item id> [count]: a new item into the bags (Player::StoreNewItemInBestSlots, Player.h:1627). The id is looked up
-    // with `.tb item <id>` first: no id is known from memory.
+    // with `.tb item <id>` first: no id is known from memory. The answer is GetItemCount(entry, false): the bot's worn pieces and everything
+    // in its bags, never bank storage, the same number `.tb itemscan` reads back as inv=.
     static bool HandleAddItem(ChatHandler* handler, std::string name, uint32 entry, Optional<uint32> count)
     {
         if (!RequireEngine(handler))
@@ -1541,7 +1542,7 @@ public:
         uint32 const n = std::max<uint32>(1u, count.value_or(1u));
         if (!bot->StoreNewItemInBestSlots(entry, n, ItemContext::NONE))
             return Fail(handler, name + ": the item was not stored (bags full?).");
-        handler->PSendSysMessage("TortoiseBots: %s now has %u of item %u.", name.c_str(), bot->GetItemCount(entry), entry);
+        handler->PSendSysMessage("TortoiseBots: %s now has %u of item %u.", name.c_str(), bot->GetItemCount(entry, false), entry);
         return true;
     }
 
