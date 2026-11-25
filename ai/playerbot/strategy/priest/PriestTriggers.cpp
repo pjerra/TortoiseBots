@@ -38,6 +38,16 @@ bool PrayerOfMendingTrigger::IsActive()
         sServerFacade.getDistance2d(bot, tank) > ai->GetRange("heal") || !sServerFacade.IsWithinLOSInMap(bot, tank))
         return false;
 
+    // Out of combat the prayer is a pre-pull cast, not a buff refreshed on an idle party: it waits for the tank to be fighting, for the
+    // top-up mana rule (mediumMana and a live heal reserve) to allow it, and for the bot not to be drinking or eating.
+    if (ai->IsStateActive(BotState::BOT_STATE_NON_COMBAT))
+    {
+        if (!tank->IsInCombat() || !HealTopUpAllowedFor(ai, bot, tank))
+            return false;
+        if (ai->HasAura("drink", bot) || ai->HasAura("food", bot))
+            return false;
+    }
+
     Group* group = bot->GetGroup();
     if (!group)
         return false;

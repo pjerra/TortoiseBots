@@ -133,5 +133,21 @@ class ForeverSpellRowsTest(unittest.TestCase):
         self.assertIn('CastSpellAction(ai, "fire nova")', text)
 
 
+def function(text, signature):
+    start = text.index(signature)
+    return text[start:text.index("\n}\n", start)]
+
+
+class ForeverTriggerGatesTest(unittest.TestCase):
+    """The new active rows keep their spell's own limits: cooldown, mana, the bot's own stack and its state."""
+
+    def test_prayer_of_mending_waits_for_a_fight_out_of_combat(self):
+        fn = function(read('ai/playerbot/strategy/priest/PriestTriggers.cpp'), 'bool PrayerOfMendingTrigger::IsActive()')
+        self.assertIn('IsStateActive(BotState::BOT_STATE_NON_COMBAT)', fn)
+        self.assertIn('tank->IsInCombat()', fn)
+        self.assertIn('HealTopUpAllowedFor(ai, bot, tank)', fn)
+        self.assertIn('ai->HasAura("drink", bot)', fn)
+
+
 if __name__ == '__main__':
     unittest.main()
