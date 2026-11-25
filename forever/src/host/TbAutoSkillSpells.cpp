@@ -4,6 +4,7 @@
 
 #include "DB2Stores.h"
 #include "DB2Structure.h"
+#include "Item.h"
 #include "Log.h"
 #include "Player.h"
 #include "SharedDefines.h"
@@ -82,6 +83,27 @@ std::vector<SkillLineAbilityEntry const*> const& RewardedRows()
     return rows;
 }
 
+// A hunter that knows no bow, gun or crossbow skill gets the one its ranged weapon
+// needs, or Bows for the Worn Shortbow the starter path and the spawn kit equip.
+// The core's own create pass seeds a weapon skill at 1 (Player::LearnDefaultSkill,
+// SKILL_RANGE_LEVEL); combat raises it from there.
+void EnsureHunterRangedSkill(Player* bot)
+{
+    if (!HunterRangedSkillOwed(bot->GetClass(), bot->GetPureSkillValue(SKILL_BOWS),
+            bot->GetPureSkillValue(SKILL_GUNS), bot->GetPureSkillValue(SKILL_CROSSBOWS)))
+        return;
+
+    std::uint32_t rangedWeaponSkill = 0;
+    if (Item* ranged = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED))
+        if (ItemTemplate const* proto = ranged->GetTemplate())
+            rangedWeaponSkill = proto->GetSkill();
+
+    std::uint32_t const skill = HunterRangedSkill(rangedWeaponSkill);
+    std::uint16_t const maxValue = bot->GetMaxSkillValueForLevel();
+    bot->SetSkill(skill, 0, 1, maxValue);
+    TC_LOG_INFO("tortoisebots", "skill spells: {} learned ranged weapon skill {} at level {}", bot->GetName(), skill, bot->GetLevel());
+}
+
 } // namespace
 
 std::uint32_t Sync(Player* bot, char const* why)
@@ -94,6 +116,10 @@ std::uint32_t Sync(Player* bot, char const* why)
     std::uint32_t const level = bot->GetLevel();
     std::uint32_t taught = 0;
     std::uint32_t kept = 0;
+
+    // Before the ability loop: a seeded skill line is what makes the world's own
+    // skill-rewarded rows (the weapon's shots) reachable for this bot.
+    EnsureHunterRangedSkill(bot);
 
     for (SkillLineAbilityEntry const* ability : RewardedRows())
     {
