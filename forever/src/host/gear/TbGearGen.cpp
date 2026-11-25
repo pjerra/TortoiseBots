@@ -7,6 +7,8 @@
 #include "Log.h"
 #include "ObjectMgr.h"
 #include "Player.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
 
 namespace
 {
@@ -18,6 +20,7 @@ inline void LogGearIndexBuilt(uint32 count, long long elapsedMs)
 
 #include "compat/botpch_forever.h"
 #include "host/gear/TbGearSourceTier.h"
+#include "host/TbSpecEnchant.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/policy/item/GearSetPolicy.h"
@@ -410,6 +413,28 @@ GearSetOutcome TopUpGearForTarget(Player* target, uint32 levelArg, uint32 slotMa
     return outcome;
 }
 
+// The level-60 spawn kit wears the enchant its spec's players commonly use (TbSpecEnchant), applied directly:
+// a fresh bot knows neither the enchant nor has its reagents. Below 60 the table has no rule.
+static void ApplySpecEnchant(Player* target, Item* item, std::string const& spec, uint8 slot)
+{
+    ItemTemplate const* proto = item->GetTemplate();
+    TortoiseBots::enchant::SpecEnchantDecision const choice = TortoiseBots::enchant::SpecEnchantFor(
+        uint8(target->GetClass()), spec, slot, target->GetLevel(), proto ? uint8(proto->GetQuality()) : uint8(1));
+    if (choice.verdict != TortoiseBots::enchant::SpecEnchantVerdict::Apply)
+        return;
+    SpellInfo const* spell = sSpellMgr->GetSpellInfo(choice.spellId, DIFFICULTY_NONE);
+    if (!spell)
+        return;
+    for (SpellEffectInfo const& effect : spell->GetEffects())
+        if (effect.Effect == SPELL_EFFECT_ENCHANT_ITEM && effect.MiscValue > 0)
+        {
+            target->ApplyEnchantment(item, PERM_ENCHANTMENT_SLOT, false);
+            item->SetEnchantment(PERM_ENCHANTMENT_SLOT, uint32(effect.MiscValue), 0, 0);
+            target->ApplyEnchantment(item, PERM_ENCHANTMENT_SLOT, true);
+            return;
+        }
+}
+
 GearSetOutcome SeedGearForTarget(Player* target, uint32 levelArg)
 {
     GearSetOutcome outcome;
@@ -590,6 +615,7 @@ GearSetOutcome SeedGearForTarget(Player* target, uint32 levelArg)
                 alreadyPicked.push_back(cand.itemId);
                 if (slot == EQUIPMENT_SLOT_MAINHAND)
                     mainHandIsTwoHanded = twoHander;
+                ApplySpecEnchant(target, check, canonicalSpec, slot);
                 ++outcome.equipped;
                 break;
             }
