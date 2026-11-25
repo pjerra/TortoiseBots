@@ -38,6 +38,7 @@
 #include "host/run/TbRunHooks.h"
 #include "host/run/TbRunLiquid.h"
 #include "host/gear/TbGearGen.h"
+#include "host/gear/TbGearSourceTier.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostWorldPvp.h"
 #include "host/TbHostRitualFill.h"
@@ -369,6 +370,7 @@ public:
                 LoadEngineConfig();
                 TortoiseBots::RunTraceService::Instance().Initialize();   // mark summaries the last server never finalised
                 TortoiseBots::gear::InitGearIndex();
+                TortoiseBots::gear::InitGearSourceIndex();
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
                 TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
