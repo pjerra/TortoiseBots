@@ -30,7 +30,7 @@ gear part prints what is missing and why it needs the server's item data.
 Usage:
   python3 forever/tools/check_gear_weights.py
   python3 forever/tools/check_gear_weights.py --items armory_item.tsv
-  python3 forever/tools/check_gear_weights.py --items armory_item.tsv --top 5 --show all
+  python3 forever/tools/check_gear_weights.py --weights <other.sql> --items armory_item.tsv --top 10
 """
 import argparse
 import csv
