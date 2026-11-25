@@ -155,6 +155,12 @@ class ForeverTriggerGatesTest(unittest.TestCase):
         fn = function(read('ai/playerbot/strategy/mage/MageTriggers.cpp'), 'bool IceLanceTrigger::IsActive()')
         self.assertLess(fn.index('SpellCanBeCastedTrigger::IsActive()'), fn.index('IsFrozen(target)'))
 
+    def test_lacerate_reads_its_own_aura_and_a_signed_duration(self):
+        fn = function(read('ai/playerbot/strategy/druid/DruidTriggers.cpp'), 'bool LacerateTrigger::IsActive()')
+        self.assertIn('ai->GetAura(spellId, target, true)', fn)
+        self.assertIn('int32 const duration', fn)
+        self.assertIn('duration > 0 ? uint32(duration) : 0u', fn)
+
 
 if __name__ == '__main__':
     unittest.main()
