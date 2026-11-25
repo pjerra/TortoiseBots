@@ -254,7 +254,8 @@ These switch the host-side life of free bots. `.reload config` re-reads them.
 | `TortoiseBots.World.Fishing` | `1` | Free bots fish near where they stand, one session an hour, at most five casts in five minutes. |
 | `TortoiseBots.World.GroupQuests` | `1` | Free bots with the same group quest form a party nearby and disband when done. |
 | `TortoiseBots.World.CapitalErrands` | `1` | Bank, mailbox, trainer and auction errands, bot duels, and learning riding and buying a mount at 40/60. |
-| `TortoiseBots.World.Guilds` | `1` | Guild invites, the 1000-member line and the owner's guild whispers. |
+| `TortoiseBots.World.Guilds` | `1` | Guild invites in both directions, the 1000-member line and the owner's guild whispers. |
+| `TortoiseBots.World.GuildAcceptPlayers` | `0` | A guildless player's whisper asks a bot-run guild for an invite; off by default, needs `Guilds = 1`. |
 | `TortoiseBots.World.GuildForming` | `0` | Free bots above level 10 found `<Bot> Guild` from their own purse. |
 | `TortoiseBots.World.GuildMail` | `1` | Bot guilds mail surplus gold and unused materials among their members. |
 | `TortoiseBots.World.GuildMail.AllowMixedGuild` | `0` | Allows that mail in a guild that also holds real players. |

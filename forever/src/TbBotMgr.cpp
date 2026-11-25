@@ -256,6 +256,7 @@ void BotMgr::LoadConfig()
     _guildMailAllowMixed = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildMail.AllowMixedGuild", false);
     _guildsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Guilds", true);
     _guildFormingEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildForming", false);
+    _guildAcceptPlayers = sConfigMgr->GetBoolDefault("TortoiseBots.World.GuildAcceptPlayers", false);
     _groupQuestsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.GroupQuests", true);
     _professionsEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Professions", false);
     _fishingEnabled = sConfigMgr->GetBoolDefault("TortoiseBots.World.Fishing", true);

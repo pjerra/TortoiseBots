@@ -1,7 +1,10 @@
 #include "host/TbHostGuild.h"
 #include "host/TbHostGuildOrderAccess.h"
 #include "host/TbHostGuildPure.h"
+#include "host/pool/TbPoolRegistry.h"
 
+#include "AccountMgr.h"
+#include "CharacterCache.h"
 #include "Creature.h"
 #include "GameObject.h"
 #include "Guild.h"
@@ -11,15 +14,18 @@
 #include "Log.h"
 #include "Mail.h"
 #include "MailPackets.h"
+#include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "PetitionMgr.h"
 #include "PetitionPackets.h"
 #include "Player.h"
+#include "SocialMgr.h"
 #include "World.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
 #include "playerbot/policy/town/TownErrandPolicy.h"
+#include "playerbot/policy/world/PoolRegistryPolicy.h"
 
 namespace tbhost
 {
@@ -158,19 +164,61 @@ bool IsMemberOnline(uint64_t guildId, ObjectGuid const& memberGuid)
     return member && member->IsOnline();
 }
 
-bool InviteByName(Player* inviter, std::string const& targetName, std::string* failReason)
+// The account test of host/TbHostThievery.cpp without its manager shortcut: the leader's ACCOUNT is the pool's, so an
+// owned alt leading a player's guild is not a pool character and its guild is not bot-run (TBF #30).
+bool IsPoolCharacter(ObjectGuid const& guid)
 {
+    if (guid.IsEmpty())
+        return false;
+    uint32_t const accountId = sCharacterCache->GetCharacterAccountIdByGuid(guid);
+    if (!accountId)
+        return false;
+    if (TortoiseBots::pool::AccountRegistered(accountId))
+        return true;
+    std::string accountName;
+    return AccountMgr::GetName(accountId, accountName) && TortoiseBots::world::IsPoolAccountName(accountName);
+}
+
+InviteOutcome InviteByName(Player* inviter, std::string const& targetName, std::string* failReason)
+{
+    auto const fail = [failReason](InviteOutcome outcome)
+    {
+        if (failReason)
+            *failReason = InviteOutcomeCode(outcome);
+        return outcome;
+    };
+
     if (!inviter || !inviter->GetSession() || !inviter->IsInWorld())
-        return SetFail(failReason, "not-in-world");
+        return fail(InviteOutcome::NotInWorld);
     if (inviter->GetGuildId() == 0)
-        return SetFail(failReason, "not-in-guild");
-    if (targetName.empty())
-        return SetFail(failReason, "empty-target");
+        return fail(InviteOutcome::NotInGuild);
+    std::string name = targetName;
+    if (!normalizePlayerName(name))
+        return fail(InviteOutcome::EmptyTarget);
+
+    // Guild::HandleInviteMember answers the inviter for each of these and sends nothing at all for an ignore, so the
+    // seam checks the same conditions in the same order and returns which one would have fired.
+    Player* invitee = ObjectAccessor::FindPlayerByName(name);
+    if (!invitee)
+        return fail(InviteOutcome::TargetNotFound);
+    if (invitee->GetSocial()->HasIgnore(inviter->GetGUID(), inviter->GetSession()->GetAccountGUID()))
+        return fail(InviteOutcome::TargetIgnoring);
+    if (!sWorld->getBoolConfig(CONFIG_ALLOW_TWO_SIDE_INTERACTION_GUILD) && invitee->GetTeam() != inviter->GetTeam())
+        return fail(InviteOutcome::WrongFaction);
+    if (invitee->GetGuildId())
+        return fail(InviteOutcome::TargetInGuild);
+    if (invitee->GetGuildIdInvited())
+        return fail(InviteOutcome::TargetAlreadyInvited);
+    if (!HasAnyRankRight(inviter->GetGuildId(), inviter->GetGUID(), GR_RIGHT_INVITE))
+        return fail(InviteOutcome::NoInviteRight);
 
     WorldPackets::Guild::GuildInviteByName packet{ WorldPacket(CMSG_GUILD_INVITE_BY_NAME) };
-    packet.Name = targetName;
+    packet.Name = name;
     inviter->GetSession()->HandleGuildInviteByName(packet);
-    return true;
+
+    if (invitee->GetGuildIdInvited() != inviter->GetGuildId())
+        return fail(InviteOutcome::CoreRefused);
+    return InviteOutcome::Ok;
 }
 
 bool AcceptInvite(Player* invitee, uint64_t guildId, std::string* failReason)

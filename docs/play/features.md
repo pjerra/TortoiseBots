@@ -100,6 +100,7 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Free bots mail lockboxes to a guild rogue and get the contents back | Yes | `TortoiseBots.World.LockboxMail = 1` | [Social](../world/social.md) |
 | Nearby free bots form a party for a shared group quest | Yes | `TortoiseBots.World.GroupQuests = 1` | [Social](../world/social.md) |
 | Free bots take part in guilds (accept an invite, answer guild whispers) | Yes | `TortoiseBots.World.Guilds = 1` | [Social](../world/social.md) |
+| A player asks a bot-run guild for an invite by whisper | No | `TortoiseBots.World.GuildAcceptPlayers = 0` (needs `TortoiseBots.World.Guilds = 1`) | [Social](../world/social.md) |
 | Free bots found their own guilds | No | `TortoiseBots.World.GuildForming = 0` | [Social](../world/social.md) |
 | Free bots who are in a guild mail surplus gold and materials to guildmates | Yes | `TortoiseBots.World.GuildMail = 1` | [Social](../world/social.md) |
 | Free bots seek world PvP | Yes | `AiPlayerbot.WorldPvpSeek = 2`, `AiPlayerbot.WorldPvpSeekBotPercent = 25` | [PvP](../world/queues.md) |

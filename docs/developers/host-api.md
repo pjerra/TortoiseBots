@@ -114,7 +114,7 @@ The module is inert when `TortoiseBots.Enable = 0`: no bot is created or logged 
 | :--- | :--- | :--- |
 | Pool | `pool/TbPoolCreate`, `TbPoolRegistry`, `TbPoolReset`, `TbPoolScheduler` | Pool accounts/characters, the registry, reset, and the login/logout scheduler. |
 | Commander/orders | `cmd/TbCmdBinding`, `TbCmdOrders`, `TbCmdFeeds`, `TbPlace`, `TbOrders` | Commander bindings, party orders, position feeds, placement, stored orders. |
-| Guild | `TbHostGuild`, `TbHostGuildJoin`, `TbHostGuildMail`, `TbHostGuildOrders*`, `TbHostGuildOrder*` | Guild participation, mail, order board, farm/craft/enchant/disenchant/fish services. |
+| Guild | `TbHostGuild`, `TbHostGuildJoin`, `TbHostGuildMail`, `TbHostGuildOrders*`, `TbHostGuildOrder*` | Guild participation, the player-asked invite into a bot-run guild, mail, order board, farm/craft/enchant/disenchant/fish services. |
 | Auction house | `TbHostAuction`, `TbHostAhMarket*` | Market reading/supply and the seller/buyer service the engine consumes. |
 | Errands/professions | `TbHostCapitalErrands`, `TbHostProfession`, `TbHostFishing`, `TbHostThievery` | Capital errands, profession travel/craft, fishing, pickpocketing. |
 | LFG fill | `TbHostLfgFill` | Module-owned dungeon-finder fill (the client has no dungeon list; nothing writes `sLFGMgr`). |

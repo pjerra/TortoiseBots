@@ -39,6 +39,7 @@ Welcome to the TortoiseBots documentation catalog for **ForeverCore**. This know
 | Handle a wipe and get back to the instance | [Dead bots and wipes](play/dungeons-and-raids.md#dead-bots) |
 | Fill a missing tank or healer role with free bots | [Dungeon fill](play/commands/roster-and-hiring.md) and [Queues](world/queues.md) |
 | Send a bot in my guild to farm, buy or craft for the bank | [Guild orders](play/guild-orders.md) |
+| Join a bot-run guild by whispering one of its bots | [Social](world/social.md#guilds) |
 | See how bots use the auction house | [Living AH](world/economy.md#living-auction-house) |
 | Summon a lost or stuck companion | [Summon](play/commands/roster-and-hiring.md#summon) |
 | Understand the class AI | [Class overview](classes/overview.md) |

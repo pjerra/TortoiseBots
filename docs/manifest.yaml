@@ -107,7 +107,7 @@ nodes:
   - id: play-commands-whispers
     path: play/commands/whispers.md
     category: play
-    summary: "The words a bot obeys when you whisper it or speak in its party, the permission tiers behind them, and what Forever does not answer yet."
+    summary: "The words a bot obeys when you whisper it or speak in its party, the permission tiers behind them, the guild-invite requests a bot-run guild answers, and what Forever does not answer yet."
   - id: play-commands-addon
     path: play/commands/addon.md
     category: play
@@ -153,7 +153,7 @@ nodes:
   - id: world-social
     path: world/social.md
     category: world
-    summary: How pool bots greet players, buff them, group for shared quests, join and run guilds, and trade with their owner.
+    summary: How pool bots greet players, buff them, group for shared quests, join and run guilds, answer a whisper asking a bot-run guild for an invite, and trade with their owner.
   - id: world-queues
     path: world/queues.md
     category: world

@@ -2,7 +2,7 @@
 id: play-commands-whispers
 title: Whisper Commands
 category: play
-summary: The words a bot obeys when you whisper it or speak in its party, the permission tiers behind them, and what Forever does not answer yet.
+summary: The words a bot obeys when you whisper it or speak in its party, the permission tiers behind them, the guild-invite requests a bot-run guild answers, and what Forever does not answer yet.
 tags: [commands, whispers, delegation]
 relates_to:
   - play-commands
@@ -16,11 +16,11 @@ You can command one bot directly by whispering it (`/w <BotName> <words>`). In t
 
 ## Who a bot listens to
 
-A bot reads only a whisper, a party line or a party-leader line:
+For the command words below, a bot reads only a whisper, a party line or a party-leader line:
 
 - The sender must be a **real player** in the world. A bot, a creature or the console cannot order a bot.
-- The sender must be the bot's **master**, the **commander** it is bound to, or a **member of the bot's group**. A stranger's whisper is dropped.
-- The bot must be a **host bot running the AI engine**. Bots without an engine do nothing with chat.
+- The sender must be the bot's **master**, the **commander** it is bound to, or a **member of the bot's group**. A stranger's whisper is dropped, except the [guild-join request](#guild-invite-requests) a bot-run guild answers.
+- The bot must be a **host bot running the AI engine**. Bots without an engine do nothing with these chat commands.
 - Lines longer than **255 bytes** are dropped, and addon-channel messages never command a bot.
 - The bot's `chat` strategy must be on. Every class kit gets it, so an ordinary bot always has it.
 
@@ -175,9 +175,33 @@ The module's guild driver answers these whispers itself, before the AI command l
 
 A bot refuses any of these with `Only my owner can manage my guild.` when the sender is neither its master nor a GM.
 
+<a id="guild-invite-requests"></a>
+### Asking a bot-run guild for an invite
+
+On a server that turns `TortoiseBots.World.GuildAcceptPlayers` on, a guildless player can ask a bot of a bot-run guild (a guild whose leader is a pool bot) to join it. Unlike the management words above, any real player may ask; the bot's master is not needed. The guild driver answers the line before the AI engine, so no permission tier applies and the bot needs no chat strategy.
+
+The whole whisper must be one of `ginv`, `ginvite`, `guild inv`, `can i join`, `can i join your guild`, `can i join the guild`, `invite me`, `invite me to your guild`, `invite me to the guild` or `inv me to guild`. Case, extra spaces, and a trailing `?`, `!`, `.`, `please` or `pls` do not matter. The switch is `TortoiseBots.World.GuildAcceptPlayers` (off by default; a server turns it on by setting it to `1`), and it works only while `TortoiseBots.World.Guilds` is on (default `1`).
+
+The bot sends the core's normal guild invite: itself when it is a free bot whose rank may invite, otherwise the online free bot of the lowest rank in the guild (the leader first; a player's owned alt is never used). It answers with exactly one whisper:
+
+| Answer | When |
+| :--- | :--- |
+| `Sent you an invite to <Guild>.` | The whispered bot sent it. |
+| `I asked <Officer> to invite you to <Guild>.` | Another online bot of the guild sent it. |
+| `You are already in a guild.` | You are in a guild. |
+| `Our guild is full.` | The guild holds 1000 members. |
+| `We only take <Alliance\|Horde> members.` | You are on the other side and two-side guild interaction is off. |
+| `No officer of <Guild> is online, try later.` | No online bot of the guild may invite. |
+| `I am not in a guild.` | The whispered bot is in no guild. |
+| `My guild does not take members this way.` | The guild's leader is a player's own character, not a pool bot. |
+| `You are ignoring <name>, so the invite cannot reach you.` / `You already have a guild invite; accept or decline it first.` / `No one in <Guild> can invite you right now, try later.` | The core refused the invite for that reason. |
+| `I cannot find you right now.` / `I could not invite you right now.` | The core could not deliver the invite (you left the world, or another refusal). |
+
+One handled request per player per 20 seconds; a repeat inside that window is answered silently. A handled request never reaches the bot's AI command list. A guild invite does not make the bot your companion; it keeps its own life, as [Getting started](../getting-started.md#guilds) explains.
+
 ## Not on ForeverCore yet
 
-These words belong to the Turtle build and are not answered here: the `.bot command <Bot> ...` proxy, `hire`, `portal`, `cast`, `castnc`, `talents`, `save ai`, `load ai`, `list ai`, `ll`, `ss`, `bank`, `gbank`, `craft`, `outfit`, `keep`, `t`, `nt`, `wts`, `talk`, `doquest`, `skill`, `faction`, `flag`, `go`, `move style`, `grind`, `home`, `taxi`, `invite`, `join`, `lfg`, `summon`, `bg free`, `give leader`, `warning`, `stance`, `chat`, `emote`, `buff`, `ready`, `focus heal`, `buff target`, `revive target`, `boost target`, `rebuff`, `guard` and `runaway`.
+These words belong to the Turtle build and are not answered here: the `.bot command <Bot> ...` proxy, `hire`, `portal`, `cast`, `castnc`, `talents`, `save ai`, `load ai`, `list ai`, `ll`, `ss`, `bank`, `gbank`, `craft`, `outfit`, `keep`, `t`, `nt`, `wts`, `talk`, `doquest`, `skill`, `faction`, `flag`, `go`, `move style`, `grind`, `home`, `taxi`, `invite`, `join`, `lfg`, `summon`, `bg free`, `give leader`, `warning`, `stance`, `chat`, `emote`, `buff`, `ready`, `focus heal`, `buff target`, `revive target`, `boost target`, `rebuff`, `guard` and `runaway`. The bare words `invite` and `join` are not answered; `invite me` and `can i join` above are the bot-run guild's join request, not these Turtle commands.
 
 ## See also
 

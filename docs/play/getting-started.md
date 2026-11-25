@@ -88,6 +88,8 @@ Free bots quest, grind, loot, vendor, repair, train, run capital errands, fish, 
 
 A free bot may accept `/ginvite` from your guild when it has no guild (`TortoiseBots.World.Guilds = 1`, on by default). It keeps living its own life. A server admin gives it [guild orders](guild-orders.md) with `.tb` (a guild leader who has no GM rights cannot): farm, buy or craft an item for the guild bank, or mail it an item to disenchant.
 
+A server that turns on `TortoiseBots.World.GuildAcceptPlayers` (off by default) gets the other direction too: whisper a bot of a bot-run guild (its leader is a pool bot) `ginv`, `invite me`, `can i join` or another of the phrases on the [Whisper Commands](commands/whispers.md#guild-invite-requests) page, and it sends the normal guild invite (with `TortoiseBots.World.Guilds` on).
+
 A guild invite does **not** make the bot your companion: you cannot order it with `.bot` commands unless it is one of your own characters or the server has bound it to you as a commander.
 
 ## Levelling, spells and gear

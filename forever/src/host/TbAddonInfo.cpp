@@ -66,6 +66,7 @@ Feature const kFeatures[] = {
     { "group-quests", "TortoiseBots.World.GroupQuests", true, 1, "Group quests" },
     { "capital-errands", "TortoiseBots.World.CapitalErrands", true, 1, "Capital errands" },
     { "guild-mail", "TortoiseBots.World.GuildMail", true, 1, "Guild mail" },
+    { "guild-accept-players", "TortoiseBots.World.GuildAcceptPlayers", true, 0, "Join bot guilds by whisper" },
     { "world-pickpocket", "TortoiseBots.World.Pickpocket", true, 1, "Rogue pickpocket" },
     { "world-lockboxes", "TortoiseBots.World.Lockboxes", true, 1, "Rogue lockbox opening" },
     { "world-lockbox-mail", "TortoiseBots.World.LockboxMail", true, 1, "Lockbox by guild mail" },

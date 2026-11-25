@@ -24,7 +24,7 @@ This page is the index of the command surfaces the Forever build actually has. E
 | Channel | How you use it | What it carries |
 | :--- | :--- | :--- |
 | **`.bot` chat** | Typed in chat or bound to a macro | Ownership, movement, the party toggles and the panel verbs listed below. Handled by the module's player entry. |
-| **Whisper or party chat** | `/w <BotName> <words>`, or the same words in the bot's party | The bot's own command list (loot, vendors, quests, strategies, training). See [Whisper Commands](whispers.md). |
+| **Whisper or party chat** | `/w <BotName> <words>`, or the same words in the bot's party | The bot's own command list (loot, vendors, quests, strategies, training), plus, on a server that enables it, a guildless player's request to join a bot-run guild. See [Whisper Commands](whispers.md). |
 | **Addon (TBM channel)** | The TortoiseBotsForeverManager addon | Party-wide orders (`action`), roster, inventory, behaviour, blessing, choice, totem, service, loot history, guild orders and run status. See [Addon](addon.md). |
 | **`.tb` console** | A GameMaster in chat, or the server console | Host commands: bot login and group, pool, plans and runs, orders, gear, talents, traces and test helpers. |
 
@@ -90,7 +90,7 @@ The addon talks to the server as addon messages prefixed `TBM`, and the server a
 
 ## Whispers
 
-The words a bot obeys by whisper or party chat, their tiers and their parameters are on the [Whisper Commands](whispers.md) page. The `.bot command <BotName> ...` proxy of the Turtle build is not on ForeverCore yet.
+The words a bot obeys by whisper or party chat, their tiers and their parameters are on the [Whisper Commands](whispers.md) page. On a server that turns on `TortoiseBots.World.GuildAcceptPlayers`, a guildless player can also ask a bot of a bot-run guild for an invite by whispering it `ginv`, `can i join` or `invite me`; that request is answered before the command list and has no tier. The `.bot command <BotName> ...` proxy of the Turtle build is not on ForeverCore yet.
 
 ## Party-wide commands elsewhere
 

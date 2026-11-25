@@ -30,5 +30,11 @@ void ForgetBot(ObjectGuid const& botGuid);
 // commands never see it; false for every other line.
 bool HandleWhisper(Player* bot, Player* sender, std::string const& text);
 
+// The other direction (TBF #30): a real player's whisper asking a bot of a bot-run guild for an invite ("ginv",
+// "invite me to your guild", ...). True when the line is a request and is answered here - the invite goes through the
+// guild host seam and the bot answers in one whisper - so the line never joins the engine's inbox; false for every
+// other line. The rules are in host/TbHostGuildRequestPure.h.
+bool HandleJoinRequest(Player* bot, Player* asker, std::string const& text);
+
 } // namespace guildjoin
 } // namespace tbhost

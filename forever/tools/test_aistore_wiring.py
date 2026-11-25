@@ -73,9 +73,10 @@ class Registration(unittest.TestCase):
         generated = CTX.read_text()
         self.assertIn('creators["manual saved string"] = [](PlayerbotAI* ai) { return new StringManualSetSavedValue(ai); };', generated)
         # The "following party" value (quest travel gates answer for a free bot's own party, merged in #256)
-        # raised the registered value count from 269 to 270; BG2's "enemy flag carrier" and "team flag carrier" (row 4) took it to 272.
-        self.assertIn("ValueContext (272 of its keys)", generated)
-        self.assertIn("kValues = 272", generated)
+        # raised the registered value count from 269 to 270; BG2's "enemy flag carrier" and "team flag carrier" (row 4) took it to 272;
+        # the emote and mount animation rows took it to 274.
+        self.assertIn("ValueContext (274 of its keys)", generated)
+        self.assertIn("kValues = 274", generated)
 
 
 class StoreWiring(unittest.TestCase):

@@ -2,7 +2,7 @@
 id: world-social
 title: Social interaction & guilds
 category: world
-summary: How pool bots greet players, buff them, group for shared quests, join and run guilds, and trade with their owner.
+summary: How pool bots greet players, buff them, group for shared quests, join and run guilds, answer a whisper asking a bot-run guild for an invite, and trade with their owner.
 tags: [world, social, guilds, trading, greetings, buffs]
 relates_to:
   - world-living-world
@@ -50,11 +50,12 @@ Bots do not invite players into groups, and they do not start roaming parties of
 Bots take part in guild life when `TortoiseBots.World.Guilds` is on (it is on by default):
 
 - **Accepting invites:** a free bot accepts a guild invite from its own faction, and declines one from the other side or one whose guild already holds 1000 members. An unreadable invitation is cleared rather than left hanging.
+- **Asking for an invite:** with `TortoiseBots.World.GuildAcceptPlayers` on (off by default), a guildless player whispers a bot of a bot-run guild (a guild whose leader is a pool bot) `ginv`, `ginvite`, `guild inv`, `can i join`, `can i join your guild`, `can i join the guild`, `invite me`, `invite me to your guild`, `invite me to the guild` or `inv me to guild`, and gets the core's normal guild invite. The whispered bot sends it when it is a free bot whose rank may invite; otherwise the online free bot of the lowest rank in the guild sends it (an owned alt in the guild is never used). The bot answers with one whisper: the invite, or the reason it was not sent (you are already in a guild, the guild is full, other faction, no officer online, the bot is in no guild, the guild is led by a player's own character). If the core still refuses the invite, the bot says why (you ignore it, you already have an invite pending, or no one can invite right now). It needs `TortoiseBots.World.Guilds` on; one request per player per 20 seconds, and a repeat is answered silently. See [Guild invite requests](../play/commands/whispers.md#guild-invite-requests).
 - **The 1000-member line:** at 1000 members a pool bot leaves the guild, so bots never fill the last seats a real player could use. The number is built in, not a setting.
 - **Founding their own guilds:** off by default (`TortoiseBots.World.GuildForming`). When it is on, a free bot above level 10 with the charter price in its own purse, no guild and no pending invite buys a charter at a nearby petitioner, gathers signatures from nearby free bots of its own faction and turns it in, founding `<Bot> Guild`.
 - **Guild whispers:** the bot's master (or a GameMaster) can whisper it `guild invite <name>`, `guild join`, `guild leave`, `guild promote <name>`, `guild demote <name>`, `guild leader <name>` and `guild remove <name>`. Inviting, promoting, demoting and removing need the bot to hold the matching rank right; passing leadership needs the bot to be the guild leader. Anybody else is told to ask the owner. See [Whisper commands](../play/commands/whispers.md#guild-management).
 - **Guild mail:** with `TortoiseBots.World.GuildMail` on (default), free bots in a bot guild mail surplus gold to the poorest online bot member and unused crafting materials to the bot crafters who use them. Real players' mail is never read or touched, and a guild that also holds real players is skipped unless `TortoiseBots.World.GuildMail.AllowMixedGuild` is turned on.
-- **Pool resets keep player guilds:** a pool reset stops when a guild led by a pool bot has even one member outside the pool. See [Pool reset safety](../server/bot-pool.md#safety-guarantees--multi-phase-execution).
+- **Pool resets keep player guilds:** a pool reset stops when a guild led by a pool bot has even one member outside the pool, for example a player who joined it by asking. See [Pool reset safety](../server/bot-pool.md#safety-guarantees--multi-phase-execution).
 
 <a id="trading-with-pool-bots"></a>
 ## Trading with a bot you own

@@ -9,6 +9,7 @@
 #include "host/cmd/TbCmdBinding.h"
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 #include "host/TbH3.h"          // h3::Rec, for the `.tb state` block
+#include "host/TbHostGuildJoin.h"   // TBF #30: a player's whisper asking a bot-run guild for an invite
 #endif
 
 #include "Group.h"
@@ -171,6 +172,15 @@ void Resolve(Arrival const& line)
         Player* receiver = ObjectAccessor::FindConnectedPlayer(targetGuid);
         if (!receiver || !BotMgr::Instance().IsBot(receiver->GetGUID()))
             return;
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        // TBF #30: a real player asking a bot of a bot-run guild for an invite. A handled request is answered here
+        // (invite or one refusal whisper) and never joins the inbox, so the engine's chat commands never see the
+        // phrase; the owner's `guild <verb>` whispers are not phrases and still reach them.
+        if (line.kind == KindWhisper && line.lang != LangAddon && line.lang != LangAddonLogged
+            && RealPlayer(sender) && !BotMgr::Instance().IsBot(sender->GetGUID())
+            && tbhost::guildjoin::HandleJoinRequest(receiver, sender, line.text))
+            return;
+#endif
         Consider(receiver, sender, line.kind, line.lang, line.text, false);
         return;
     }

@@ -1032,6 +1032,18 @@ Free (pool) bots take part in guilds under `TortoiseBots.World.Guilds` (default 
   `[W9] guild-whisper bot=<bot> from=<sender> cmd=<verb> target=<name> result=ok|fail:<code>`.
 * **Guild chat.** `/w <bot> speak /g <text>` makes the bot say the line in its guild chat, through the guild's real
   speak right (a rank without `GR_RIGHT_GCHATSPEAK` says nothing).
+* **Asking for an invite.** Under `TortoiseBots.World.GuildAcceptPlayers` (off by default; turn it on by setting it to
+  `1`), with `Guilds = 1`, a guildless player whispers a bot of a bot-run guild (its leader is a pool bot) one of `ginv`,
+  `ginvite`, `guild inv`, `can i join`, `can i join your guild`, `can i join the guild`, `invite me`,
+  `invite me to your guild`, `invite me to the guild`, `inv me to guild` (case, extra spaces and a trailing `?!.`/`please`/`pls` do not matter)
+  and gets the core's normal guild invite: from the whispered bot when its rank may invite, else the online pool
+  bot of the lowest rank sends it (a player's owned alt in the guild is never used). The bot answers with one whisper
+  (`Sent you an invite to <Guild>.`, `I asked <Officer> to invite you to <Guild>.`, or a refusal that says what
+  happened: already in a guild, full, other faction, no officer online, not in a guild, not a bot-run guild; and, when
+  the invite itself is refused, its own reason: ignoring the inviter, an invite already waiting, no one able to invite
+  right now, or `I could not invite you right now.`). One request per player per 20 s; repeats are answered silently
+  and the line never reaches the engine's chat commands. Log: `[W9] guild-request bot=<bot> from=<player> guild=<id>
+  inviter=<name|-> result=invited|<code>`.
 
 ## Diagnostics (#142)
 

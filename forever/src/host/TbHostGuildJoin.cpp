@@ -4,6 +4,7 @@
 #include "host/TbHostGuildJoin.h"
 #include "host/TbHostGuild.h"
 #include "host/TbHostGuildJoinPure.h"
+#include "host/TbHostGuildRequestPure.h"
 #include "TbBotMgr.h"
 
 #include "CharacterCache.h"
@@ -27,6 +28,7 @@
 #include <list>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace tbhost
 {
@@ -307,7 +309,7 @@ bool RunWhisperCommand(Player* bot, Whisper const& whisper, std::string& reason,
                 reason = "no-such-player";
                 return false;
             }
-            return tbhost::guild::InviteByName(bot, targetName, &reason);
+            return tbhost::guild::InviteSucceeded(tbhost::guild::InviteByName(bot, targetName, &reason));
         }
         case Command::Join:
         {
@@ -380,6 +382,71 @@ char const* CommandName(Command command)
     return "none";
 }
 
+// ---- TBF #30: the join-by-whisper request; the rules are in host/TbHostGuildRequestPure.h ----
+
+// The askers that made a handled request and when: world thread only, like the guild timers.
+RequestCooldowns& RequestTimes()
+{
+    static RequestCooldowns times;
+    return times;
+}
+
+// The guild's side as the asker has to match it: a bot in the guild is of the guild's faction.
+char const* GuildSideWord(Player* bot)
+{
+    return bot->GetTeam() == TEAM_ALLIANCE ? "Alliance" : "Horde";
+}
+
+// The inviter: the whispered bot when its own rank may invite; else the online pool bot member with that right and
+// the lowest rank (the guild master's is the lowest). A player's owned alt is never an inviter even when it has the
+// right: it is not a pool bot, so only the fleet's own bots speak for the guild.
+Player* PickInviter(Player* bot, uint64_t guildId, Guild* guild)
+{
+    auto const& mgr = TortoiseBots::BotMgr::Instance();
+    std::vector<InviterCandidate> candidates;
+    std::vector<Player*> players;
+    for (auto const& entry : guild->GetMembers())
+    {
+        ObjectGuid const& guid = entry.first;
+        InviterCandidate candidate;
+        candidate.preferred = guid == bot->GetGUID();
+        candidate.bot = mgr.IsFreeBot(guid);
+        std::uint8_t rank = 0;
+        candidate.canInvite = tbhost::guild::GetMemberRankId(guildId, guid, rank)
+            && tbhost::guild::HasAnyRankRight(guildId, guid, GR_RIGHT_INVITE);
+        candidate.rank = rank;
+        Player* member = candidate.bot ? mgr.FindBot(guid) : nullptr;
+        candidate.online = member && member->IsInWorld() && tbhost::guild::IsMemberOnline(guildId, guid);
+        candidates.push_back(candidate);
+        players.push_back(member);
+    }
+    int const picked = PickInviterIndex(candidates);
+    return picked < 0 ? nullptr : players[std::size_t(picked)];
+}
+
+// The one whisper a request is answered with; empty for the silent and not-handled verdicts.
+std::string RequestAnswer(RequestVerdict verdict, std::string const& guildName, char const* side,
+    Player* inviter, Player* bot)
+{
+    switch (verdict)
+    {
+        case RequestVerdict::NotInGuild: return "I am not in a guild.";
+        case RequestVerdict::NotBotRun: return "My guild does not take members this way.";
+        case RequestVerdict::AlreadyInGuild: return "You are already in a guild.";
+        case RequestVerdict::WrongFaction: return std::string("We only take ") + side + " members.";
+        case RequestVerdict::Full: return "Our guild is full.";
+        case RequestVerdict::NoOfficer: return "No officer of " + guildName + " is online, try later.";
+        case RequestVerdict::Invite:
+            if (!inviter || inviter == bot)
+                return "Sent you an invite to " + guildName + ".";
+            return "I asked " + inviter->GetName() + " to invite you to " + guildName + ".";
+        case RequestVerdict::NotHandled:
+        case RequestVerdict::Silent:
+            break;
+    }
+    return std::string();
+}
+
 } // namespace
 
 void TickFreeBotGuild(Player* bot, bool formingEnabled)
@@ -433,6 +500,80 @@ bool HandleWhisper(Player* bot, Player* sender, std::string const& text)
         Tell(bot, sender, DoneText(whisper.command, targetName));
     else
         Tell(bot, sender, "I cannot do that: " + reason + ".");
+    return true;
+}
+
+bool HandleJoinRequest(Player* bot, Player* asker, std::string const& text)
+{
+    if (!bot || !asker || bot == asker)
+        return false;
+
+    auto const& mgr = TortoiseBots::BotMgr::Instance();
+    RequestFacts facts;
+    facts.featureOn = mgr.GuildAcceptPlayersEnabled() && mgr.GuildsEnabled();
+    facts.isRequest = IsJoinRequest(text);
+    if (!facts.featureOn || !facts.isRequest)
+        return false;
+
+    // One handled request per asker per cooldown, keyed by the asker's guid counter; a repeat inside it is handled
+    // silently, and either way the line never joins the inbox (also for an owner).
+    uint32_t const askerKey = asker->GetGUID().GetCounter();
+    uint32_t const nowMs = GameTime::GetGameTimeMS();
+    facts.rateLimited = !RequestTimes().Admit(askerKey, nowMs);
+    if (facts.rateLimited)
+    {
+        TC_LOG_INFO("tortoisebots", "[W9] guild-request bot={} from={} guild={} inviter=- result=silent",
+            bot->GetName(), asker->GetName(), bot->GetGuildId());
+        return true;
+    }
+
+    uint64_t const guildId = bot->GetGuildId();
+    Guild* guild = guildId ? sGuildMgr->GetGuildById(guildId) : nullptr;
+    facts.botInGuild = guild != nullptr;
+    facts.askerInGuild = asker->GetGuildId() != 0;
+    if (guild)
+    {
+        facts.guildBotRun = tbhost::guild::IsPoolCharacter(guild->GetLeaderGUID());
+        facts.sameTeam = static_cast<uint32_t>(bot->GetTeam()) == asker->GetTeam();
+        facts.twoSideGuilds = sWorld->getBoolConfig(CONFIG_ALLOW_TWO_SIDE_INTERACTION_GUILD);
+        facts.memberCount = guild->GetMembersCount();
+    }
+
+    // The inviter is looked for only once every other check passed; the pure policy keeps its NoOfficer verdict for
+    // a caller that has no inviter at all.
+    facts.inviterFound = true;
+    RequestVerdict verdict = DecideRequest(facts);
+    Player* inviter = nullptr;
+    if (verdict == RequestVerdict::Invite)
+    {
+        inviter = PickInviter(bot, guildId, guild);
+        if (!inviter)
+            verdict = RequestVerdict::NoOfficer;
+    }
+
+    std::string const guildName = guild ? guild->GetName() : std::string();
+    char const* const side = GuildSideWord(bot);
+
+    if (verdict == RequestVerdict::Invite)
+    {
+        std::string why;
+        tbhost::guild::InviteOutcome const outcome = tbhost::guild::InviteByName(inviter, asker->GetName(), &why);
+        if (!tbhost::guild::InviteSucceeded(outcome))
+        {
+            TC_LOG_INFO("tortoisebots", "[W9] guild-request bot={} from={} guild={} inviter={} result=invite-refused reason={}",
+                bot->GetName(), asker->GetName(), guildId, inviter->GetName(), tbhost::guild::InviteOutcomeCode(outcome));
+            Tell(bot, asker, InviteRefusalAnswer(outcome, guildName, side, inviter->GetName()));
+            return true;
+        }
+        Tell(bot, asker, RequestAnswer(RequestVerdict::Invite, guildName, side, inviter, bot));
+        TC_LOG_INFO("tortoisebots", "[W9] guild-request bot={} from={} guild={} inviter={} result=invited",
+            bot->GetName(), asker->GetName(), guildId, inviter->GetName());
+        return true;
+    }
+
+    Tell(bot, asker, RequestAnswer(verdict, guildName, side, nullptr, bot));
+    TC_LOG_INFO("tortoisebots", "[W9] guild-request bot={} from={} guild={} inviter=- result={}",
+        bot->GetName(), asker->GetName(), guildId, RequestCode(verdict));
     return true;
 }
 

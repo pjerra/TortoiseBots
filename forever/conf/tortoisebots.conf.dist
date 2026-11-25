@@ -381,6 +381,23 @@ TortoiseBots.World.Guilds = 1
 TortoiseBots.World.GuildForming = 0
 
 #
+#    TortoiseBots.World.GuildAcceptPlayers
+#        Description: Answer a guildless player's whisper asking a bot-run guild (a guild whose leader is a pool bot)
+#                     for an invite: "ginv", "ginvite", "guild inv", "can i join", "can i join your guild",
+#                     "can i join the guild", "invite me", "invite me to your guild", "invite me to the guild",
+#                     "inv me to guild". The bot that may invite sends the core's normal guild invite, or asks an
+#                     online officer bot of the same guild to send it, and the player gets one short whisper: the
+#                     invite, or why not (already in a guild, our guild is full, other faction, no officer online).
+#                     One request per player per 20 seconds (repeats are answered silently). A guild led by a
+#                     character of a player's own account is not bot-run and never invites this way.
+#                     Off by default: a server turns this on by setting it to 1.
+#                     Effective only with TortoiseBots.World.Guilds = 1.
+#        Default:     0
+#
+
+TortoiseBots.World.GuildAcceptPlayers = 0
+
+#
 #    TortoiseBots.World.GuildOrderBotRank
 #        Description: Guild orders: give every module-owned bot in a guild that also has a real player one shared
 #                     guild rank, so the master can open guild bank tabs to it (`.tb guildorder rank <rank>`).

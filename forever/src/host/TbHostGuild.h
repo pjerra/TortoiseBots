@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ObjectGuid.h"
+#include "host/TbHostGuildInvitePure.h"
 
 #include <cstdint>
 #include <string>
@@ -27,9 +28,11 @@ bool GetMemberRankId(uint64_t guildId, ObjectGuid const& memberGuid, uint8_t& ou
 bool HasAnyRankRight(uint64_t guildId, ObjectGuid const& memberGuid, uint32_t rights);
 bool CanEditOfficerNotes(uint64_t guildId, ObjectGuid const& memberGuid);
 bool IsMemberOnline(uint64_t guildId, ObjectGuid const& memberGuid);
+// A pool (bot) character by account: the guild leader test that tells a bot-run guild from a player's own (TBF #30).
+bool IsPoolCharacter(ObjectGuid const& guid);
 
 // Membership and ranks.
-bool InviteByName(Player* inviter, std::string const& targetName, std::string* failReason = nullptr);
+InviteOutcome InviteByName(Player* inviter, std::string const& targetName, std::string* failReason = nullptr);
 bool AcceptInvite(Player* invitee, uint64_t guildId, std::string* failReason = nullptr);
 bool DeclineInvite(Player* invitee, std::string* failReason = nullptr);
 bool SetMemberRank(Player* setter, ObjectGuid const& targetGuid, uint8_t rankOrder, std::string* failReason = nullptr);

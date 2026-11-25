@@ -7,14 +7,14 @@ LIFECYCLE	host	BotMgr owns bot records and sessions: login, create, logout, mast
 COMMANDS-TB	commands	Console/GM .tb command table and its handlers	yes	forever/src/TbScripts.cpp command table; handlers in forever/src/host	table is the only .tb surface
 COMMANDS-BOT	commands	Player .bot words, inline on the world thread; declines without the engine or with the module off	yes; body needs the engine	forever/src/host/player/TbPlayerCmd.cpp	PlayerScript::OnCommand hook
 ADDON-TBM	commands	TBM addon channel: bounded requester/text queue, world-tick drain, Send/Ack/Err answers	yes; answers need the engine	forever/src/host/TbAddonChannel.cpp, TbAddonPure.h	PlayerScript::OnAddonMessageSent hook
-CHAT-IN	commands	Copies player whispers/party lines into bot inboxes; the engine chat strategy turns registered words into actions	yes; inbox needs the engine	forever/src/host/chat/TbChatIn.cpp	PlayerScript::OnChat hook
+CHAT-IN	commands	Copies player whispers/party lines into bot inboxes; the engine chat strategy turns registered words into actions. A guild-join request to a bot-run guild is answered before the inbox.	yes; inbox needs the engine	forever/src/host/chat/TbChatIn.cpp	PlayerScript::OnChat hook
 CHAT-GRAMMAR	engine	Chat words whose trigger/action keys are registered in the slice (PC chat rounds A/B)	yes (slice)	forever/src/slice/SliceAiObjectContext.cpp; generator PC_CHAT_KEYS/PC_CHAT_B_KEYS	generator key lists
 POOL	host	Pool accounts and characters, registry, startup reset, login/logout scheduler	yes; tables in forever/sql	forever/src/host/pool/*	tables created idempotently; scheduler in the world tick
 CLASS-KITS	engine	Per-class strategy contexts; warrior always, the other eight as the slice lists land	yes (slice)	ai/playerbot/strategy/<class>/*	slice list forever/SLICE-W4.txt; registry keys in the generator
 TRAVEL	engine	Travel destinations, node graph, walking, stuck rescue	yes (slice)	ai/playerbot/TravelMgr.cpp, TravelNode.cpp, TravelValues.cpp	travel tables in forever/sql
 QUESTS	engine	Quest accept/turn-in/share/drop and quest travel objectives	yes (slice)	quest action/trigger/value keys in the generator	slice list
 LOOT-ROLL	engine	Corpse looting, item use, group loot votes and won-roll reporting	yes (slice)	loot/roll keys; forever/src/host/TbRollVote, TbRollWon	slice list; generator SLICE9_KEYS
-GUILD	host	Guild participation, mail, order board, farm/craft/enchant/disenchant/fish services	yes (slice); tables in forever/sql	forever/src/host/TbHostGuild*, TbHostGuildOrder*	guarded characters-DB reads
+GUILD	host	Guild participation (accept, found, player-asked invite), mail, order board, farm/craft/enchant/disenchant/fish services	yes (slice); tables in forever/sql	forever/src/host/TbHostGuild*, TbHostGuildOrder*	guarded characters-DB reads
 AH	host	Auction-house market reading/supply and seller/buyer service	yes (slice)	forever/src/host/TbHostAhMarket*, TbHostAuction	module-owned, no direct core auction writes
 LFG	host	Dungeon-finder fill: module-owned queue groups a player with bots; nothing writes sLFGMgr	yes (slice)	forever/src/host/TbHostLfgFill.cpp, TbLfgFillPure.h	client has no dungeon list
 BG	host	Battleground queue fill, invites, leaves and spirit-healer handling	yes	forever/src/host/bg/TbBgQueue.cpp, TbBgMapData.cpp	world-tick service
