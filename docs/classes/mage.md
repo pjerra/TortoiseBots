@@ -27,6 +27,7 @@ Mages provide high-burst ranged spell DPS, dependable crowd control (*Polymorph*
 ### Frost Mage
 - Defaults to *Frostbolt* in combat; pulls open with Shoot (wand).
 - If enemies close within 8 yards and attack the mage, turns away and casts *Blink* to reset distance. With `.bot behavior <bot> noblink on` it never casts *Blink* inside a dungeon or raid and keeps fighting instead.
+- Casts *Ice Lance* on a frozen target or a Fingers of Frost proc; instant, on its own 8-second cooldown, so it never replaces the Frostbolt filler.
 - Roots attackers with *Frost Nova* — only when a mob within reach is attacking the mage itself, skipping targets already frozen or immune.
 - Casts *Arcane Explosion* when 3 or more enemies cluster inside 10 yards and none of them is loose on the party.
 - Casts *Flamestrike* on 3 or more grouped enemies, layering channeled *Blizzard* over the burning zone (6-second window); a running *Blizzard* is cancelled when a mob under the party's crowd control stands in it.
@@ -44,7 +45,9 @@ Mages provide high-burst ranged spell DPS, dependable crowd control (*Polymorph*
 - Automatically falls back to *Frostbolt* when facing fire-immune enemies (via the generic school-immunity veto).
 
 ### Arcane Mage
-- Channels *Arcane Missiles* while the empowerment buff holds.
+- Casts *Arcane Blast* as the primary filler (short cast, 15% base mana, and its cost climbs with each stack of its own buff); falls back to *Arcane Missiles* while the blast is not learned yet or out of mana reach.
+- Consumes a *Missile Barrage* proc with a shorter, cheaper *Arcane Missiles* channel before the next blast.
+- Spends *Arcane Wrath* whenever its 6-second cooldown is ready; the nuke scales with maximum mana.
 - Uses *Presence of Mind* for instant burst spells.
 - Casts *Arcane Explosion* at point-blank range when enemies close in (no density or crowd-control gate, unlike Frost and Fire).
 

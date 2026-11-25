@@ -9,7 +9,13 @@ using namespace ai;
 
 ai::NextAction** DestructionWarlockStrategy::GetDefaultCombatActions()
 {
-    return NextAction::array(0, new NextAction("shadow bolt", ACTION_IDLE), NULL);
+    // Incinerate (talent node 105874) is the Forever destruction nuke, extra
+    // damage while Immolate ticks. Shadow Bolt stays the fallback before the
+    // node is spent and for fire-immune targets (the school veto).
+    return NextAction::array(0,
+        new NextAction("incinerate", 5.6f),
+        new NextAction("shadow bolt", 5.5f),
+        NULL);
 }
 
 void DestructionWarlockStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)

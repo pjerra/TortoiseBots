@@ -232,6 +232,7 @@ namespace ai
                 creators["immolate on attacker"] = [](PlayerbotAI* ai) { return new ImmolateOnAttackerTrigger(ai); };
                 creators["amplify curse"] = [](PlayerbotAI* ai) { return new AmplifyCurseTrigger(ai); };
                 creators["siphon life"] = [](PlayerbotAI* ai) { return new SiphonLifeTrigger(ai); };
+                creators["wrack"] = [](PlayerbotAI* ai) { return new WrackTrigger(ai); };
                 creators["siphon life on attacker"] = [](PlayerbotAI* ai) { return new SiphonLifeOnAttackerTrigger(ai); };
                 creators["death coil interrupt"] = [](PlayerbotAI* ai) { return new DeathCoilInterruptTrigger(ai); };
                 creators["death coil on enemy healer"] = [](PlayerbotAI* ai) { return new DeathCoilInterruptTHealerTrigger(ai); };
@@ -313,6 +314,7 @@ namespace ai
                 creators["corruption"] = [](PlayerbotAI* ai) { return new CastCorruptionAction(ai); };
                 creators["corruption on attacker"] = [](PlayerbotAI* ai) { return new CastCorruptionOnAttackerAction(ai); };
                 creators["siphon life"] = [](PlayerbotAI* ai) { return new CastSiphonLifeAction(ai); };
+                creators["wrack"] = [](PlayerbotAI* ai) { return new CastWrackAction(ai); };
                 creators["siphon life on attacker"] = [](PlayerbotAI* ai) { return new CastSiphonLifeOnAttackerAction(ai); };
                 creators["curse of agony"] = [](PlayerbotAI* ai) { return new CastCurseOfAgonyAction(ai); };
                 creators["curse of agony on attacker"] = [](PlayerbotAI* ai) { return new CastCurseOfAgonyOnAttackerAction(ai); };
@@ -331,6 +333,7 @@ namespace ai
                 creators["create soul shard"] = [](PlayerbotAI* ai) { return new CastCreateSoulShardAction(ai); };
                 creators["destroy soul shard"] = [](PlayerbotAI* ai) { return new DestroySoulShardAction(ai); };
                 creators["shadow bolt"] = [](PlayerbotAI* ai) { return new CastShadowBoltAction(ai); };
+                creators["incinerate"] = [](PlayerbotAI* ai) { return new CastIncinerateAction(ai); };
                 creators["drain mana"] = [](PlayerbotAI* ai) { return new CastDrainManaAction(ai); };
                 creators["health funnel"] = [](PlayerbotAI* ai) { return new CastHealthFunnelAction(ai); };
                 creators["drain life"] = [](PlayerbotAI* ai) { return new CastDrainLifeAction(ai); };

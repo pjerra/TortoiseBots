@@ -19,6 +19,13 @@ void FrostMageStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "frostbolt",
         NextAction::array(0, new NextAction("frostbolt", ACTION_NORMAL + 1), NULL)));
 
+    // Forever Ice Lance (talent node 105767): instant, 8 s cooldown, triple
+    // damage on a frozen target (or on a Fingers of Frost proc). Above
+    // Frostbolt: it is instant, so it never costs the filler a cast.
+    triggers.push_back(new TriggerNode(
+        "ice lance",
+        NextAction::array(0, new NextAction("ice lance", ACTION_NORMAL + 2), NULL)));
+
     triggers.push_back(new TriggerNode(
         "icicles channel check",
         NextAction::array(0, new NextAction("cancel channel", ACTION_HIGH + 3), NULL)));

@@ -107,6 +107,14 @@ namespace ai
         bool IsActive() override;
     };
 
+    // Channeled: the aura is the channel, so the row re-arms when it ends and
+    // the affliction rotation keeps its DoTs ticking faster.
+    class WrackTrigger : public DebuffTrigger
+    {
+    public:
+        WrackTrigger(PlayerbotAI* ai) : DebuffTrigger(ai, "wrack", 1, true) {}
+    };
+
     INTERRUPT_TRIGGER(DeathCoilInterruptTrigger, "death coil");
     INTERRUPT_HEALER_TRIGGER(DeathCoilInterruptTHealerTrigger, "death coil");
     SNARE_TRIGGER(DeathCoilSnareTrigger, "death coil");

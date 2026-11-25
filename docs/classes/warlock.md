@@ -18,7 +18,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 | :--- | :--- | :--- |
 | **Affliction** | Ranged DPS | Multi-target DoT spreading and Drain Life sustain. |
 | **Demonology** | Ranged DPS / Tanky | Heavy demon empowerment, Soul Link damage sharing, Demonic Sacrifice, and high durability. |
-| **Destruction** | Ranged DPS | Fire burst damage, Shadow Bolt nukes, and instant Conflagrate explosions. |
+| **Destruction** | Ranged DPS | Fire burst damage, Incinerate nukes, and instant Conflagrate explosions. |
 
 ---
 
@@ -27,6 +27,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 ### Affliction
 - Applies and maintains *Curse of Agony*, *Siphon Life*, and *Immolate* on primary targets. *Corruption* upkeep runs through the shared warlock rotation.
 - Spreads *Corruption*, *Siphon Life*, and *Immolate* across secondary attackers under the AoE strategy.
+- Channels *Wrack* between DoT refreshes; while it channels, *Corruption*, *Siphon Life* and *Bane of Agony* tick faster.
 - Uses *Life Tap* (own health) to replenish mana.
 - Channels *Drain Life* for self-sustain and *Drain Soul* on dying enemies (at or below 20% health) to harvest shards.
 
@@ -39,7 +40,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 ### Destruction
 - Defaults to *Curse of the Elements* once trained, *Curse of Agony* before that (gated by the spellbook, no level check in the bot). The curse outranks *Immolate*, so the curse — not Immolate — lands first.
 - Delivers burst damage using *Conflagrate* (only while Immolate ticks with 7 seconds or less left) and *Shadowburn*.
-- Casts *Shadow Bolt* as primary nuke and channels *Rain of Fire* on packs of 3 or more clustered enemies. *Shadowburn* fires through the shared warlock rotation on dying targets.
+- Casts *Incinerate* as the primary nuke (extra damage while Immolate ticks) and *Shadow Bolt* before Incinerate is learned and against fire-immune enemies. Channels *Rain of Fire* on packs of 3 or more clustered enemies. *Shadowburn* fires through the shared warlock rotation on dying targets.
 - Cancels *Rain of Fire* channels if fewer than 2 enemies remain in the target area, or a mob under the party's crowd control stands in it.
 
 <details>

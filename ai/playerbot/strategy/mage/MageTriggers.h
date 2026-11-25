@@ -195,6 +195,26 @@ namespace ai
     // ACTION_IDLE and fell through to the wand fallback (Issue #221).
     CAN_CAST_TRIGGER(FrostboltTrigger, "frostbolt");
     CAN_CAST_TRIGGER(FireBlastTrigger, "fire blast");
+    CAN_CAST_TRIGGER(ArcaneBlastTrigger, "arcane blast");
+    CAN_CAST_TRIGGER(ArcaneWrathTrigger, "arcane wrath");
+
+    // Two Forever talents grant a proc aura with the same name as the
+    // passive that produces it, so the trigger reads the proc ids.
+    class MissileBarrageTrigger : public Trigger
+    {
+    public:
+        MissileBarrageTrigger(PlayerbotAI* ai) : Trigger(ai, "missile barrage") {}
+        bool IsActive() override;
+    };
+
+    // Ice Lance is only worth its 8 s cooldown against a frozen target;
+    // Fingers of Frost makes the next spell count as hitting one.
+    class IceLanceTrigger : public SpellTrigger
+    {
+    public:
+        IceLanceTrigger(PlayerbotAI* ai) : SpellTrigger(ai, "ice lance") {}
+        bool IsActive() override;
+    };
 
     class IciclesTrigger : public SpellCanBeCastedTrigger
     {

@@ -34,6 +34,10 @@ bool BlinkBackTrigger::IsActive()
 
 namespace
 {
+// Forever proc auras. Both talents name their passive and their proc aura
+// alike, so a name check would read the permanent passive instead.
+uint32 const MISSILE_BARRAGE_PROC = 400589;  // Missile Barrage talent, 15 s
+uint32 const FINGERS_OF_FROST_PROC = 400669; // Fingers of Frost talent, 15 s
 // Too little mana for this nuke (NukeUnaffordable, WandPolicy.h); false for
 // a spell the bot does not know or one that costs no mana.
 bool ManaShortForNuke(PlayerbotAI* ai, Player* bot, std::string const& nuke)
@@ -147,6 +151,22 @@ bool ManaShieldTrigger::IsActive()
         return false;
 
     return !ai->HasAura("mana shield", bot) && AI_VALUE2(uint8, "mana", "self target") > sPlayerbotAIConfig.mediumMana;
+}
+
+bool MissileBarrageTrigger::IsActive()
+{
+    Unit* target = AI_VALUE(Unit*, "current target");
+    if (!target || !target->IsAlive() || !ai->HasSpell("arcane missiles"))
+        return false;
+    return ai->HasAura(MISSILE_BARRAGE_PROC, bot);
+}
+
+bool IceLanceTrigger::IsActive()
+{
+    Unit* target = GetTarget();
+    if (!target || !target->IsAlive() || !ai->HasSpell("ice lance"))
+        return false;
+    return sServerFacade.IsFrozen(target) || ai->HasAura(FINGERS_OF_FROST_PROC, bot);
 }
 
 bool HotStreakTrigger::IsActive()
