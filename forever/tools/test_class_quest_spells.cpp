@@ -292,28 +292,33 @@ static void TestCase10()
 static void TestCase11()
 {
     BeginCase(kCase11);
-    // 9691 "Return to Silvermoon" teaches Sense Undead (5502, paladin only) and carries no class mask.
-    Q::QuestRaw const senseUndead{ 9691, 0, false, 0, 5503, { 5502 }, {}, 0, {} };
-    CHECK(kCase11, Q::CollectTaught(senseUndead, 2) == std::vector<uint32_t>{ 5502 });
-    CHECK(kCase11, Q::CollectTaught(senseUndead, 5).empty());
-    CHECK(kCase11, Q::CollectTaught(senseUndead, 9).empty());
+    // 94441 "A Lesson in Divinity" teaches Redemption (7328, paladin only) and carries no class mask (world.sql quest_template_addon).
+    Q::QuestRaw const lesson{ 94441, 0, false, 12, 7329, { 7328 }, {}, 0, {} };
+    CHECK(kCase11, Q::CollectTaught(lesson, 2) == std::vector<uint32_t>{ 7328 });
+    CHECK(kCase11, Q::CollectTaught(lesson, 1).empty());
+    CHECK(kCase11, Q::CollectTaught(lesson, 5).empty());
 
-    Q::QuestRaw const repeatable{ 9692, 0, true, 0, 5503, { 5502 }, {}, 0, {} };
+    // 94013 "Taming the Beast" teaches the hunter pet kit and carries no class mask either.
+    Q::QuestRaw const taming{ 94013, 0, false, 10, 1579, { 1515, 883, 2641 }, {}, 0, {} };
+    CHECK(kCase11, Q::CollectTaught(taming, 3) == (std::vector<uint32_t>{ 1515, 883, 2641 }));
+    CHECK(kCase11, Q::CollectTaught(taming, 2).empty());
+
+    Q::QuestRaw const repeatable{ 94442, 0, true, 12, 7329, { 7328 }, {}, 0, {} };
     CHECK(kCase11, Q::CollectTaught(repeatable, 2).empty());
 
-    Q::QuestRaw const unrelated{ 9693, 0, false, 0, 0, { 133 }, {}, 0, {} };
+    Q::QuestRaw const unrelated{ 94443, 0, false, 0, 0, { 133 }, {}, 0, {} };
     CHECK(kCase11, Q::CollectTaught(unrelated, 2).empty());
     CHECK(kCase11, Q::CollectTaught(unrelated, 8).empty());
 
-    Q::AllowedSpell const* row = Q::FindRow(2, 5502);
+    Q::AllowedSpell const* row = Q::FindRow(2, 7328);
     CHECK(kCase11, row != nullptr);
     if (row)
     {
-        std::vector<Q::Candidate> const cands{ { 9691, true, 20 } };
-        Q::Decision const d = Q::Decide(*row, 20, cands, false, true);
+        std::vector<Q::Candidate> const cands{ { 94441, true, 12 } };
+        Q::Decision const d = Q::Decide(*row, 12, cands, false, true);
         CHECK(kCase11, d.verdict == Q::Verdict::Teach);
-        CHECK(kCase11, d.gate == 20);
-        CHECK(kCase11, d.questId == 9691);
+        CHECK(kCase11, d.gate == 12);
+        CHECK(kCase11, d.questId == 94441);
     }
 }
 
