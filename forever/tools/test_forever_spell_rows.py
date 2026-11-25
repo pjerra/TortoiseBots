@@ -18,6 +18,22 @@ ROWS = {
     'ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp': ['shadow of death', 'mark for death', 'smoke bomb'],
 }
 
+# Forever actives the class line teaches (no talent needed): trigger -> action.
+FOREVER_ROWS = {
+    'ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp': [('mutilate', 'mutilate'), ('death mark', 'death mark')],
+    'ai/playerbot/strategy/rogue/CombatRogueStrategy.cpp': [('death mark', 'death mark')],
+    'ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp': [('death mark', 'death mark')],
+    'ai/playerbot/strategy/priest/DisciplinePriestStrategy.cpp': [
+        ('party member low health', 'penance on party'),
+        ('prayer of mending', 'prayer of mending on tank'),
+        ('tank needs renew', 'renew on tank'),
+    ],
+    'ai/playerbot/strategy/priest/HolyPriestStrategy.cpp': [
+        ('prayer of mending', 'prayer of mending on tank'),
+        ('tank needs renew', 'renew on tank'),
+    ],
+}
+
 
 def guarded(text, action):
     """True when every NextAction("<action>") sits between the Forever guard and its #endif."""
@@ -36,6 +52,12 @@ def guarded(text, action):
     return found
 
 
+def has_row(text, trigger, action):
+    """A TriggerNode for trigger whose NextAction array contains the action."""
+    pattern = r'"%s"\s*,\s*NextAction::array\([^;]*?"%s"' % (re.escape(trigger), re.escape(action))
+    return re.search(pattern, text, re.S) is not None
+
+
 class ForeverSpellRowsTest(unittest.TestCase):
     def test_turtle_only_rows_are_guarded(self):
         for rel, actions in ROWS.items():
@@ -46,6 +68,17 @@ class ForeverSpellRowsTest(unittest.TestCase):
     def test_guard_detects_an_unguarded_row(self):
         text = 'triggers.push_back(new TriggerNode("x", NextAction::array(0, new NextAction("envenom", 1), NULL)));'
         self.assertFalse(guarded(text, 'envenom'))
+
+    def test_forever_actives_have_rows(self):
+        for rel, rows in FOREVER_ROWS.items():
+            text = open(os.path.join(ROOT, rel)).read()
+            for trigger, action in rows:
+                self.assertTrue(has_row(text, trigger, action),
+                    '%s: no "%s" -> "%s" row' % (rel, trigger, action))
+
+    def test_row_matcher_requires_the_pair(self):
+        text = 'new TriggerNode("tank needs renew", NextAction::array(0, new NextAction("renew on party", 1), NULL))'
+        self.assertFalse(has_row(text, 'tank needs renew', 'renew on tank'))
 
 
 if __name__ == '__main__':

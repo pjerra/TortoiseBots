@@ -32,9 +32,9 @@ Rogues deliver exceptional single-target physical melee DPS, pre-combat crowd co
 - A stealthed rogue still ends a pull's join window on time.
 
 ### Combo Points & Finisher Priority
-- **Builders:** Uses *Sinister Strike* (Combat), *Backstab* (Assassination), or *Hemorrhage* (Subtlety).
+- **Builders:** Uses *Sinister Strike* (Combat), *Mutilate* with a *Backstab* fallback (Assassination, once Mutilate is trained at 40), or *Hemorrhage* (Subtlety).
 - **Slice and Dice:** Combat prioritizes *Slice and Dice* above *Eviscerate*; Assassination and Subtlety prioritize *Eviscerate*.
-- **Spenders:** At 4 or more combo points, casts *Eviscerate*; *Rupture* fires at 4 combo points for Combat and at 3 or more for Assassination and Subtlety. Dumps banked combo points (1+) into *Eviscerate* if the target falls below 25% health.
+- **Spenders:** At 4 or more combo points, casts *Eviscerate*; *Rupture* fires at 4 combo points for Combat and at 3 or more for Assassination and Subtlety. Dumps banked combo points (1+) into *Eviscerate* if the target falls below 25% health. With a full combo bar, *Death Mark* outranks *Eviscerate* on targets above 30% health, storing the damage for six seconds before it lands.
 - *Expose Armor* is withheld if the target already carries *Sunder Armor*.
 
 ### Cooldowns & Defensive Play
@@ -57,7 +57,8 @@ When enabled via configuration, rogues in 5-man dungeons use the same threat-dro
 
 ## Custom abilities
 
-- **Death Mark:** learned by the Subtlety preset; the bot does not cast it yet.
+- **Death Mark:** Forever's delayed-detonation finisher. Spent at a full combo bar on targets above 30% health; the stored damage lands six seconds later.
+- **Mutilate:** Forever's Assassination builder, learned from the class line and the trainer at 40; it replaces Backstab, which stays as the fallback.
 - **Surprise Attack, Noxious Assault, Envenom, Shadow of Death and Mark for Death:** Not on ForeverCore yet.
 
 ---

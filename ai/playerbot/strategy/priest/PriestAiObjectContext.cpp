@@ -190,6 +190,8 @@ namespace ai
                 creators["party member low health loose pack"] = [](PlayerbotAI* ai) { return new PartyMemberLowHealthLoosePackTrigger(ai); };
                 creators["party member medium health loose pack"] = [](PlayerbotAI* ai) { return new PartyMemberMediumHealthLoosePackTrigger(ai); };
                 creators["party member fast damage"] = [](PlayerbotAI* ai) { return new PartyMemberFastDamageTrigger(ai); };
+                creators["tank needs renew"] = [](PlayerbotAI* ai) { return new TankRenewTrigger(ai); };
+                creators["prayer of mending"] = [](PlayerbotAI* ai) { return new PrayerOfMendingTrigger(ai); };
                 creators["low health loose pack"] = [](PlayerbotAI* ai) { return new LowHealthLoosePackTrigger(ai); };
                 creators["prayer of healing party"] = [](PlayerbotAI* ai) { return new PrayerOfHealingPartyTrigger(ai); };
                 creators["ascendance"] = [](PlayerbotAI* ai) { return new AscendanceTrigger(ai); };
@@ -259,6 +261,9 @@ namespace ai
                 creators["power word: shield on party"] = [](PlayerbotAI* ai) { return new CastPowerWordShieldOnPartyAction(ai); };
                 creators["renew"] = [](PlayerbotAI* ai) { return new CastRenewAction(ai); };
                 creators["renew on party"] = [](PlayerbotAI* ai) { return new CastRenewOnPartyAction(ai); };
+                creators["renew on tank"] = [](PlayerbotAI* ai) { return new CastRenewOnTankAction(ai); };
+                creators["penance on party"] = [](PlayerbotAI* ai) { return new CastPenanceOnPartyAction(ai); };
+                creators["prayer of mending on tank"] = [](PlayerbotAI* ai) { return new CastPrayerOfMendingOnTankAction(ai); };
                 creators["greater heal"] = [](PlayerbotAI* ai) { return new CastGreaterHealAction(ai); };
                 creators["greater heal on party"] = [](PlayerbotAI* ai) { return new CastGreaterHealOnPartyAction(ai); };
                 creators["heal"] = [](PlayerbotAI* ai) { return new CastHealAction(ai); };

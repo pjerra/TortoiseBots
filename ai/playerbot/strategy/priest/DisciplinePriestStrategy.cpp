@@ -29,6 +29,7 @@ void DisciplinePriestStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
     triggers.push_back(new TriggerNode(
         "party member critical health",
         NextAction::array(0, new NextAction("power word: shield on party", ACTION_CRITICAL_HEAL + 1),
+                             new NextAction("penance on party", ACTION_CRITICAL_HEAL + 0.5f),
                              new NextAction("flash heal on party", ACTION_CRITICAL_HEAL), NULL)));
 
     // Shields sit above Inner Focus (MEDIUM+3) so the order is shield,
@@ -36,6 +37,7 @@ void DisciplinePriestStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
     triggers.push_back(new TriggerNode(
         "party member low health",
         NextAction::array(0, new NextAction("power word: shield on party", ACTION_MEDIUM_HEAL + 4),
+                             new NextAction("penance on party", ACTION_MEDIUM_HEAL + 2),
                              new NextAction("greater heal on party", ACTION_MEDIUM_HEAL + 1), NULL)));
 
     // Fast damage with enough healer mana: flash heal lands before the bar
@@ -70,6 +72,17 @@ void DisciplinePriestStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
         NextAction::array(0, new NextAction("power word: shield on party", ACTION_LIGHT_HEAL + 3),
                              new NextAction("renew on party", ACTION_LIGHT_HEAL), NULL)));
 
+    // The two Forever heal rows: the prayer lands on the tank as an instant
+    // heal waiting for the next hit, and Renew covers the tank while the
+    // party HoT row above follows somebody more wounded.
+    triggers.push_back(new TriggerNode(
+        "prayer of mending",
+        NextAction::array(0, new NextAction("prayer of mending on tank", ACTION_LIGHT_HEAL + 1), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "tank needs renew",
+        NextAction::array(0, new NextAction("renew on tank", ACTION_LIGHT_HEAL - 1), NULL)));
+
     // Pre-cast above the heal rows so the next heal crits; the trigger
     // self-gates on the trained spell, the cooldown, mana and a target.
     triggers.push_back(new TriggerNode(
@@ -95,6 +108,7 @@ void DisciplinePriestStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& tr
     triggers.push_back(new TriggerNode(
         "party member low health",
         NextAction::array(0, new NextAction("power word: shield on party", ACTION_HIGH + 2),
+            new NextAction("penance on party", ACTION_HIGH + 1.5f),
             new NextAction("greater heal on party", ACTION_HIGH + 1),
             new NextAction("heal on party", ACTION_HIGH),
             new NextAction("lesser heal on party", ACTION_HIGH - 1), NULL)));
@@ -108,6 +122,14 @@ void DisciplinePriestStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& tr
     triggers.push_back(new TriggerNode(
         "party member almost full health",
         NextAction::array(0, new NextAction("renew on party", ACTION_NORMAL), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "prayer of mending",
+        NextAction::array(0, new NextAction("prayer of mending on tank", ACTION_NORMAL + 1), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "tank needs renew",
+        NextAction::array(0, new NextAction("renew on tank", ACTION_NORMAL - 1), NULL)));
 
     triggers.push_back(new TriggerNode(
         "party member to heal out of spell range",
