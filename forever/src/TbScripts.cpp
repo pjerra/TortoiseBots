@@ -104,6 +104,7 @@
 #include "host/TbThrown.h"
 #include "host/cmd/TbTestTargetPure.h"
 #include "host/TbIgnore.h"
+#include "host/TbLosQuery.h"     // #308: `.tb los <a> <b> [map=<id>]`, the server line-of-sight query
 #include "host/TbChatLinkCmd.h"
 #include "host/TbHostLfgFill.h"
 #include "host/chat/TbChatCmd.h"
@@ -711,6 +712,7 @@ public:
             { "cmd",      TortoiseBots::cmd::HandleCmd,       rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "quest",     TortoiseBots::h3::HandleQuest,      rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "ignore", TortoiseBots::i13::HandleIgnore, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "los",    TortoiseBots::losq::HandleLos,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // #308: `.tb los <a> <b> [map=<id>]` (host/TbLosQuery.cpp)
             { "free",   HandleFree,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "link",   TortoiseBots::chatlink::HandleLink, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // S1-R1: `.tb link <text> [#token]` (host/TbChatLinkCmd.cpp, both builds)
             { "hear",   TortoiseBots::chatin::HandleHear, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },     // S1-R2: `.tb hear <bot> <sender> whisper|party <text> [#token]` (host/chat/TbChatCmd.cpp, engine build)

@@ -60,6 +60,7 @@ Welcome to the TortoiseBots documentation catalog for **ForeverCore**. This know
 | [Bot panel](play/commands/bot-panel.md) | Inspection, gear, inventory and behaviour toggles. |
 | [Whisper commands](play/commands/whispers.md) | One-to-one bot orders grouped by combat, rest, trade and town. |
 | [Addon (TortoiseBotsForeverManager)](play/commands/addon.md) | The `/tbfm` UI and the `TBM:` message protocol. |
+| [Line of sight query](play/commands/los-query.md) | Ask the server whether two units can see each other, with the distance: `.tb los`. |
 | [Guild orders](play/guild-orders.md) | Sending a bot in your guild to farm, buy or craft; order states and delivery. |
 | [Dungeons and raids](play/dungeons-and-raids.md) | Pulling, CC, interrupts, hazards, wipes, loot and the GameMaster run leader. |
 | [Dungeon reference](play/dungeon-reference.md) | Creature IDs and events of Turtle WoW 5-mans; layouts only for Forever. |

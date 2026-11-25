@@ -128,7 +128,7 @@ Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src
 
 * **Lines.** A reply line is words separated by ONE space. The first word is the record kind (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `statcensus`, `ignore`, `link`, `error`). Every other word is `key=value`.
   The LAST word of every line of a tokened command is `#<token>` (the caller's last word of the command, `#` and 1 to 32 characters of `A-Za-z0-9_.:-`; a malformed one is refused with a note in the error's `msg=`).
-* **Markers.** ONLY `error` is a one-line reply. Every other tokened reply, an order's answer to one bot included, starts with `<command>-begin #token` and ends with `<command>-end count=<lines between> records=<records> ... #token`;
+* **Markers.** ONLY `error` and the `los` diagnostic record (section 24: one line, the answer of every `.tb los` query, a stable interface for tools) are one-line replies. Every other tokened reply, an order's answer to one bot included, starts with `<command>-begin #token` and ends with `<command>-end count=<lines between> records=<records> ... #token`;
   the markers are named after the COMMAND (`state`, `party`, `threat`, `order`, `role`, `master`, `learn`, `equip`, `itemscan`, `statcensus`, `grammar`, `ignore`, `link`, `hear`), the data lines between them carry their own record kind as first word. `count=` counts every line between the markers, continuation lines included; `records=` counts the lines that are not continuations. Other totals on an end line (`bots=`, `resting=`) count records.
 * **Keys** are `[a-z][a-z0-9_]{0,23}`; a key appears at most once per line.
 * **Values are percent-encoded**: every byte outside `[A-Za-z0-9._-]` is written `%XX` (upper-case hex): space `%20`, `=` `%3D`, `:` `%3A`, `;` `%3B`, `,` `%2C`, `#` `%23`, `|` `%7C`, `%` `%25`, `+` `%2B`; `_` stays literal.
@@ -1187,3 +1187,89 @@ Config keys (`forever/conf/tortoisebots.conf.dist`): `TortoiseBots.SpellSchool.E
 switches, and no spell name is looked up) and `TortoiseBots.SpellSchool.VulnerableMinPct` (default `10`; how many percentage
 points above the main school's taken percent a fallback school must take before a caster leaves its main school; `0` to
 `1000`).
+
+## 24. Issue #308: the server line of sight, `.tb los <a> <b> [map=<id>]`
+
+The agent's plan tools estimate sight with a flat navmesh ray, which disagrees with the server both ways. This command asks
+the SERVER, with the same core call the bots' own attack-target visibility check makes, and answers with the distance so a
+plan scout can record true sight for a pull stand. READ ONLY: no movement, no target change, no combat state is touched.
+
+### The sides
+
+Each side is one word:
+
+| Side | Form | Notes |
+|---|---|---|
+| a character or bot | `Mtank` | an in-world character by name (`FindOnline`); the console may name any of them |
+| the caller's selection | `target` | refused as `bad-argument` when the caller has no selection (the console has none) |
+| a guid | `0000000000000000000000000000002A` or `0x0000000000000000000000000000002A` | the 32 hex digits the module prints (`.tb state`), or the core's `0x` form. A player is found in the whole world; a creature on the caller's map, then on the other side's map |
+| a position | `-601.25,-4250.5,38.9` | three numbers `x,y,z` on the other side's map |
+
+Two positions are on no side's map, so a position-position query needs `map=<id>` (1-65535: the loaded copy of that map,
+instance 0 or else the lowest instance id; the answer comes from that copy, so a position-position query cannot name
+another instance). `map=` with a unit side is refused: the unit's own map and instance are the ones queried, and a
+position side borrows them.
+
+### The answer
+
+ONE line, whatever happened (this format is a stable interface for tools):
+
+```
+los a=<name|guid|x,y,z> b=<...> map=<id> los=<0|1> dist=<yards, one decimal> same_map=<0|1> in_world=<0|1> [reason=<code>]
+```
+
+| Key | Meaning |
+|---|---|
+| `a`, `b` | the side as resolved: a unit's name, a guid's 32 hex digits when it did not resolve, the word as typed for an unresolved name or `target`, `x,y,z` with two decimals for a position |
+| `map` | side a's map id (a position-position query: the `map=` word); empty when no side was placed |
+| `los` | `1` when the server's line of sight between the two is clear, else `0` (also `0` on a refusal) |
+| `dist` | the horizontal distance in yards, one decimal, with height never added: between units the number the bots' attack gate compares (`GetDistance2d`, both combat reaches subtracted), between a unit and a position only the unit's combat reach subtracted, between two positions the plain centre-to-centre distance; empty on a refusal before both sides were placed |
+| `same_map` | `1` only when both sides are on one map AND in the same instance of it; `0` for two copies of one dungeon; empty otherwise |
+| `in_world` | `1` when both sides are in the world (a position: its map is loaded), else `0`; empty when a side was not resolved |
+| `reason` | present only on a refusal: `bad-argument`, `unknown-unit` (GameMaster and console only), `not-in-world`, `different-maps` (a different map, or two instances of the same map), `no-access` or `rate`; on `no-access` the world keys are empty and only the typed words show |
+
+The caller's `#token` is the last word, as everywhere else. A refusal does not print `error`: the `los` line is the answer,
+so a tool reads the same record either way.
+
+```
+los a=Mtank b=Kobold map=389 los=1 dist=12.3 same_map=1 in_world=1
+los a=Mtank b=00000000F1300E80000000000000002A map=389 los=0 dist=31.7 same_map=1 in_world=1
+los a=1.00,2.00,3.00 b=4.00,5.00,6.00 map=389 los=0 dist=4.2 same_map=1 in_world=1
+los a=Nobody b=Mtank map= los=0 dist= same_map= in_world= reason=unknown-unit
+```
+
+### Which core call, and why it is the bots' answer
+
+`a` and `b` as units: `IsWithinLOSInMapCompat(a, b, true)` — the shared compat pair over the core's
+`WorldObject::IsWithinLOSInMap(to, LINEOFSIGHT_ALL_CHECKS, VMAP::ModelIgnoreFlags::Nothing)` (ForeverCore
+`Object.h:364`). That is exactly the filter behind "I dont see my rti attack target": the `rti target` value drops a marked
+unit when `bot->IsWithinLOSInMap(unit)` is false (`ai/playerbot/strategy/values/RtiTargetValue.h:97`), and the action then
+answers that line (`ai/playerbot/strategy/actions/AttackAction.cpp:163`). The flags are the core's default:
+`LINEOFSIGHT_ALL_CHECKS` = static VMAP geometry plus game-object models (when the server's gobject-LOS option is on), with
+no model ignored. The core's height offsets apply: the ray starts and ends at a player's z + collision height, or at a
+creature's hit-sphere point toward the other side (`Object.cpp:534-558`).
+
+A unit and a position: `IsWithinLOSCompat(unit, x, y, z, true)` — the bots' own point check (movement, flee and stance
+code use it), cast FROM the unit, so the unit's height offsets apply at its end. Two positions:
+`IsInLineOfSightCompat(map, x1, y1, z1, x2, y2, z2, true)`, the same core call without a viewer; its phase is the empty
+one, and a stretch of map that is not loaded answers `los=0` (no data is never read as clear).
+
+The query answers GEOMETRY only. The attack gate's other rules (distance, friendliness, dead, evade, aura immunity) are not
+applied; `dist=` is there so the caller can compare with its own sight distance.
+
+### Who may ask
+
+The console and a GameMaster (security level 2 and up) always. Anyone else only for a unit of their own — their own
+character, or a host bot in a run or party they lead or observe, through the shared `.tb run` checks
+(`CheckRunObserverAccess` / `CheckPartyLeadAccess`) — and never for another player's character: that side answers
+`no-access`, so the command cannot be used to probe players. A creature is nobody's, and two positions name no unit at all,
+so a non-GM caller needs at least one unit of its own in the query.
+
+A caller below GameMaster cannot tell an online foreign character from a name that resolved to nothing: both answer the
+same `no-access`, and a `no-access` answer shows only the words it typed — `a=`, `b=` as typed, and `map=`,
+`same_map=`, `in_world=` empty — never a resolved name, a map id or a world state. So the command is no presence, map or
+guid oracle. A GameMaster and the console keep the precise `unknown-unit`.
+
+Rate: five queries a second per caller (a five-token bucket, one token back every 200 ms). A caller is a character; the
+console and SOAP have none, so every tool call shares one bucket and together they get five a second. The sixth answers
+`reason=rate`; a refused query still costs its token, so a spammer cannot mint answers faster than five a second.

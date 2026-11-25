@@ -126,6 +126,7 @@ Decision capture is not a command: it starts with a run when `AiPlayerbot.Decisi
 | `.tb item <item id>`, `.tb itemscan`, `.tb gear <bot>`, `.tb equip <bot> <item id> [replace]`, `.tb additem <bot> <item id>`, `.tb removeitem <bot> <item id>` | Item templates, bot gear and bags. |
 | `.tb level <bot> <level>`, `.tb train <bot>`, `.tb mount <bot>`, `.tb hurt <bot> <damage>`, `.tb power <bot> <type> <amount>` | Test-kit state changes. |
 | `.tb onyxia <bot> observe <boss-guid>\|ground <boss-guid> <tank>\|status\|off` | The Onyxia ground/observer test kit. |
+| `.tb los <a> <b> [map=<id>]` | The server's own line of sight between two units, a unit and a position, or two positions, with the distance. Read-only; see [Line of Sight Query](../play/commands/los-query.md). |
 
 ## Configuration reload
 

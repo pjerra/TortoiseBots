@@ -112,6 +112,10 @@ nodes:
     path: play/commands/addon.md
     category: play
     summary: Installing the TortoiseBotsForeverManager addon, what its tabs do, and the TBM messages the server answers.
+  - id: play-commands-los-query
+    path: play/commands/los-query.md
+    category: play
+    summary: The GameMaster command that asks the server whether two units can see each other, with the distance, for planning pull stands and diagnosing sight problems.
   - id: play-guild-orders
     path: play/guild-orders.md
     category: play

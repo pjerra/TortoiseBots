@@ -11,6 +11,7 @@ relates_to:
   - play-commands-bot-panel
   - play-commands-whispers
   - play-commands-addon
+  - play-commands-los-query
   - server-admin-commands
 ---
 
@@ -78,10 +79,10 @@ A refused `.bot` line answers `TortoiseBots: <verb>: refused <code>: <text>`.
 | Dungeon plans and runs | `.tb plan list`, `.tb plan <plan> info`, `.tb plan <plan> check <character>`, `.tb plan reload`, `.tb run start\|stop\|pause\|resume\|status\|events` |
 | Commander bonds | `.tb commander status [<commander>]`, `.tb cmd ...`, `.tb master ...`, `.tb party ...` |
 | Orders, gear and talents | `.tb order`, `.tb craftorder`, `.tb guildorder`, `.tb gear`, `.tb equip`, `.tb spec`, `.tb talents` |
-| Diagnostics | `.tb perf`, `.tb state`, `.tb threat`, `.tb trace`, `.tb why`, `.tb unported`, `.tb onyxia` |
+| Diagnostics | `.tb perf`, `.tb state`, `.tb threat`, `.tb trace`, `.tb why`, `.tb los <a> <b>`, `.tb unported`, `.tb onyxia` |
 | Test helpers | `.tb level`, `.tb train`, `.tb mount`, `.tb cast`, `.tb additem`, `.tb setskill`, `.tb knock`, `.tb speed` |
 
-The full row-by-row list, with every argument and refusal, is `forever/docs/TB-COMMANDS.md`. `.tb plan` and `.tb run` are documented on the [Dungeon Run Leader](../dungeon-run-leader.md) page.
+The full row-by-row list, with every argument and refusal, is `forever/docs/TB-COMMANDS.md`. `.tb plan` and `.tb run` are documented on the [Dungeon Run Leader](../dungeon-run-leader.md) page; `.tb los` (the server line-of-sight query) is on the [Line of Sight Query](los-query.md) page.
 
 ## Addon channel (TBM)
 
