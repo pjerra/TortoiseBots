@@ -371,8 +371,8 @@ public:
                 LoadEngineConfig();
                 TortoiseBots::RunTraceService::Instance().Initialize();   // mark summaries the last server never finalised
                 TortoiseBots::gear::InitGearIndex();
-                TortoiseBots::enchant::LoadSpecEnchants();   // the level-60 enchant choice, one world table read
                 TortoiseBots::gear::InitGearSourceIndex();
+                TortoiseBots::enchant::LoadSpecEnchants();   // the level-60 enchant choice, one world table read
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
                 TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
