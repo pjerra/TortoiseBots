@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 377 keys, 368 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 328 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 378 keys, 369 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 327 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -481,6 +481,9 @@ AiPlayerbot.LevelLadderBandSize = 5
 
 # AiPlayerbot.LevelLadderMaxLevelShare  (int, PlayerbotAIConfig.cpp:839)
 AiPlayerbot.LevelLadderMaxLevelShare = 10
+
+# AiPlayerbot.LevelLadderLogMinutes  (int, PlayerbotAIConfig.cpp:841)
+AiPlayerbot.LevelLadderLogMinutes = 5
 
 # AiPlayerbot.LineagePerHour  (int, PlayerbotAIConfig.cpp:844)
 AiPlayerbot.LineagePerHour = 10
