@@ -93,6 +93,29 @@ class Creation(unittest.TestCase):
             self.assertIn(refused, POLICY_TEST)
         self.assertIn("perRace[race] >= 12 && perRace[race] <= 13", POLICY_TEST)
 
+    def test_a_refused_composition_is_skipped_not_fatal(self):
+        # A race the realm's client data cannot create must not abort `.tb pool create`: the claim is dropped, the race is
+        # retired for the rest of the job, the pair is logged once, and the next tick rolls another composition.
+        body = func(CREATE, "Step MakeOne(")
+        self.assertIn("world::CensusCompositionAt(s.serial, urand(0, 0xffff), urand(0, 0xffff), urand(0, 999), s.retiredRaces)", body)
+        self.assertIn("world::CompositionAt(s.serial, urand(0, 0xffff), s.retiredRaces)", body)
+        self.assertIn("if (!composition.race)", body)
+        self.assertIn("s.retiredRaces |= world::CompositionRaceBit(composition.race);", body)
+        self.assertIn("s.loggedRefusals.insert(key).second", body)
+        self.assertIn("s.loggedNoRace.insert(key).second", body)
+        self.assertIn("kCompositionRefusalTries", body)
+        use = body.index("BotMgr::Instance().CreateCharacter(")
+        self.assertLess(body.index("DeleteCharacterRow(name);", use), body.index("return Step::Retry;", use))
+        self.assertNotIn('s.stop = "the core refused to create " + name', body)
+        start = func(CREATE, "CreateStart StartCreate(")
+        for text in ("s.retiredRaces = 0;", "s.refusals = 0;", "s.loggedRefusals.clear();", "s.loggedNoRace.clear();"):
+            self.assertIn(text, start)
+        self.assertEqual(func(CREATE, "void CreateUpdate(").count("s.refusals = 0;"), 2)   # Made and Queued
+        for text in ("CompositionRaceBit(", "retiredRaces", "kCompositionAllRaces"):
+            self.assertIn(text, POLICY)
+        self.assertIn("CensusCompositionAt(0, 200, 0, 0)", POLICY_TEST)
+        self.assertIn("CompositionAt(0, 0, human)", POLICY_TEST)
+
     def test_accounts_come_from_the_core_and_the_password_is_never_logged_or_stored(self):
         body = func(CREATE, "ChosenAccount AccountFor(")
         # The stamp is the account's e-mail: the one field AccountMgr reads back, so a row can prove its account is still its own.

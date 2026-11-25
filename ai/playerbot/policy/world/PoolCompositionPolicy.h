@@ -100,16 +100,42 @@ inline bool IsVanillaPair(std::uint8_t race, std::uint8_t klass)
     return false;
 }
 
+// Every race a composition can roll, one bit each: the host retires a race whose character creation the core refused, for the
+// rest of that job. 0 for a race outside the table.
+inline std::uint16_t CompositionRaceBit(std::uint8_t race)
+{
+    static std::uint8_t const races[] = { RaceHuman, RaceDwarf, RaceNightElf, RaceGnome, RaceSkyborneAlliance,
+        RaceOrc, RaceUndead, RaceTauren, RaceTroll, RaceSkyborneHorde };
+    for (std::size_t i = 0; i < sizeof(races) / sizeof(races[0]); ++i)
+        if (races[i] == race)
+            return std::uint16_t(1u << i);
+    return 0;
+}
+
+inline constexpr std::uint16_t kCompositionAllRaces = std::uint16_t((1u << 10) - 1u);
+
 // The next character of the sequence: `serial` 0, 1, 2 ... (the pool's character count, so a restart continues it), and any
 // class roll (it only chooses within the race's list). The faction alternates with the serial, so serials 0..99 are 50/50.
-inline PoolComposition CompositionAt(std::uint32_t serial, std::uint32_t classRoll)
+// A race in `retiredRaces` (the core refused to create it) is skipped for the next one of the faction's rotation; when every
+// race of the faction is retired the composition has no race (0), and the caller skips it.
+inline PoolComposition CompositionAt(std::uint32_t serial, std::uint32_t classRoll, std::uint16_t retiredRaces = 0)
 {
     static std::uint8_t const alliance[] = { RaceHuman, RaceDwarf, RaceNightElf, RaceGnome };
     static std::uint8_t const horde[] = { RaceOrc, RaceUndead, RaceTauren, RaceTroll };
     bool const allianceSide = (serial % 2u) == 0u;
     std::uint8_t const (&races)[4] = allianceSide ? alliance : horde;
     PoolComposition pick;
-    pick.race = races[(serial / 2u) % 4u];
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        std::uint8_t const race = races[((serial / 2u) + i) % 4u];
+        if (!(retiredRaces & CompositionRaceBit(race)))
+        {
+            pick.race = race;
+            break;
+        }
+    }
+    if (!pick.race)
+        return pick;
     std::uint8_t count = 0;
     std::uint8_t const* classes = ClassesOfRace(pick.race, count);
     pick.klass = classes[classRoll % count];
@@ -241,9 +267,11 @@ struct CensusPoolComposition
 
 // The next character in census order: class first (`classRoll`), then a race of the serial's faction that can be that class
 // (`raceRoll`), then the gender from the class's female share (`genderRoll` in 0..999). A roll that finds no valid race
-// cannot happen: every class has a race in each faction, and the unit test checks it. The faction still alternates with the
-// serial, so any even pool is 50/50.
-inline CensusPoolComposition CensusCompositionAt(std::uint32_t serial, std::uint32_t classRoll, std::uint32_t raceRoll, std::uint32_t genderRoll)
+// cannot happen: every class has a race in each faction, and the unit test checks it. Races in `retiredRaces` (the core
+// refused to create them) are not rolled; when none of the class's races is left the composition has no race (0) and the
+// caller skips it. The faction still alternates with the serial, so any even pool is 50/50.
+inline CensusPoolComposition CensusCompositionAt(std::uint32_t serial, std::uint32_t classRoll, std::uint32_t raceRoll,
+    std::uint32_t genderRoll, std::uint16_t retiredRaces = 0)
 {
     std::uint8_t const faction = (serial % 2u) == 0u ? 0 : 1;
     CensusShare const* classes = faction ? kCensusHordeClasses : kCensusAllianceClasses;
@@ -270,14 +298,14 @@ inline CensusPoolComposition CensusCompositionAt(std::uint32_t serial, std::uint
 
     total = 0;
     for (std::size_t i = 0; i < raceCount; ++i)
-        if (IsCensusPair(races[i].id, pick.klass))
+        if (IsCensusPair(races[i].id, pick.klass) && !(retiredRaces & CompositionRaceBit(races[i].id)))
             total += races[i].permille;
     if (total)
     {
         roll = raceRoll % total;
         for (std::size_t i = 0; i < raceCount; ++i)
         {
-            if (!IsCensusPair(races[i].id, pick.klass))
+            if (!IsCensusPair(races[i].id, pick.klass) || (retiredRaces & CompositionRaceBit(races[i].id)))
                 continue;
             if (roll < races[i].permille)
             {

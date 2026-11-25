@@ -398,9 +398,10 @@ std::string BuildPoolCensus()
            << ",\"count\":" << races[race] << ",\"census_pm\":" << census << '}';
     }
     ss << "],\"genders\":[";
-    std::uint32_t censusFemale = 0;
+    std::uint32_t censusFemaleNum = 0;
     for (std::uint8_t const klass : kClasses)
-        censusFemale += ((world::CensusClassSharePm(0, klass) + world::CensusClassSharePm(1, klass)) / 2) * world::CensusFemaleSharePm(klass) / 1000;
+        censusFemaleNum += (world::CensusClassSharePm(0, klass) + world::CensusClassSharePm(1, klass)) * world::CensusFemaleSharePm(klass);
+    std::uint32_t const censusFemale = (censusFemaleNum + 1000) / 2000;
     ss << "{\"id\":0,\"count\":" << genders[0] << ",\"census_pm\":" << (1000 - censusFemale) << "},"
        << "{\"id\":1,\"count\":" << genders[1] << ",\"census_pm\":" << censusFemale << "}";
     ss << "],\"specs\":[";

@@ -62,6 +62,7 @@ void Reset()
     fakeCharacterCache.clear();
     fakeBotMgrState = FakeBotMgrState();
     fakeNextCharacterGuid = 1;
+    fakeFailNextCreates = 0;
     fakePendingCreations.clear();
     fakeLoginHeld.clear();
     fakePoolEvents.clear();
@@ -82,6 +83,14 @@ void Reset()
 void Name(std::string name)
 {
     TortoiseBots::fakeBotNames = { std::move(name) };
+    TortoiseBots::fakeBotNameIndex = 0;
+}
+
+void ManyNames(int count)
+{
+    TortoiseBots::fakeBotNames.clear();
+    for (int i = 0; i < count; ++i)
+        TortoiseBots::fakeBotNames.push_back("Alarick" + std::to_string(i));
     TortoiseBots::fakeBotNameIndex = 0;
 }
 
@@ -813,6 +822,36 @@ void TestTheNameIsCheckedBeforeAnAccountIsMade()
     CHECK(CharacterDatabase.accounts.size() == 1);
 }
 
+// A composition the core refuses (a race the realm's client data cannot create) is skipped, not fatal: the race is retired
+// for the rest of the job and the request finishes another way. Only a core that refuses everything stops the job, and then
+// after more than one attempt.
+void TestARefusedCompositionIsSkippedNotFatal()
+{
+    // (a) one refused creation: the job retires that composition's race, tries another, and finishes the request.
+    Reset();
+    ManyNames(300);
+    fakeFailNextCreates = 1;
+    CHECK(pool::StartCreate(1).started);
+    RunJob();
+    CHECK(!pool::Creating());
+    CHECK(pool::StopReason() == "the request is complete");
+    CHECK(fakeBotMgrState.createCalls == 2);
+    CHECK(CharacterDatabase.characters.size() == 1);
+    CHECK(At(CharacterDatabase.characters, 0).state == "ready");
+
+    // (b) a core that refuses every creation: the job keeps trying (the first refusal is not fatal) and then stops.
+    Reset();
+    ManyNames(300);
+    fakeBotMgrState.failCreate = true;
+    CHECK(pool::StartCreate(1).started);
+    RunJob();
+    CHECK(!pool::Creating());
+    CHECK(pool::StopReason().find("refused") != std::string::npos);
+    CHECK(fakeBotMgrState.createCalls >= 5);
+    CHECK(CharacterDatabase.characters.empty());
+    CHECK(CharacterDatabase.accounts.size() == 1);            // the one account is reused, never multiplied
+}
+
 // One character per account, so the account rows follow the characters: a pool of three is three accounts and the
 // character cap is also the account cap; an empty pool account is reused first.
 void TestThePoolAccountsFollowTheCharacters()
@@ -1084,6 +1123,7 @@ int main()
     TestTheCapCountsFailedAndStaleRowsAndPresentCharacters();
     TestAFailedAuthLookupMarksNothingStale();
     TestTheNameIsCheckedBeforeAnAccountIsMade();
+    TestARefusedCompositionIsSkippedNotFatal();
     TestThePoolAccountsFollowTheCharacters();
     TestAJobSnapshotsItsConfigAndStopsWhenTheKeyIsTurnedOff();
     TestACacheReloadDuringAJobKeepsOneAccountPerCharacter();
