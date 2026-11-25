@@ -9,7 +9,9 @@
 //   5. target lowered from 200 to 50 logs out the newest first.
 // Plus the rules the cases rest on: alternation by faction, oldest last_logout first, one session per account (ten characters
 // on an account share it), the dead wait and a fight's wait, the shutdown's no-login, the rolled session and offline lengths,
-// the track a vanished row must not lose, and the pass cost (under 0.5 ms over 2000 bots).
+// the track a vanished row must not lose, the level ladder (its band math, rounding and edge cases, the online target split
+// over the bands, the level cap's hard share at 0/10/100 percent, the pick order and its off switch), and the pass cost
+// (under 0.5 ms over 2000 bots).
 //
 // The simulator applies a pass the way the host scheduler does: a login becomes Loading (it holds a slot) and its session ends
 // after a rolled length; a logout becomes Leaving (no second logout). It is the smallest model in which "logs out once" has a
@@ -735,6 +737,190 @@ int main()
         in.bots = &plainBots;
         in.nowMs = 10 * kMinute;
         CHECK(w::PlanPoolPass(in).logouts.size() == 1);
+    }
+
+    // (8g) the level ladder's band math: bands of BandSize, the level cap alone in the last band, and every band's target a
+    // share of the online target that adds up to it. MaxLevelShare is a hard cap at 0, 10 and 100 percent.
+    {
+        CHECK(w::PoolLadderBandCount(60, 5) == 13);
+        CHECK(w::PoolLadderBandOf(1, 60, 5) == 0);
+        CHECK(w::PoolLadderBandOf(5, 60, 5) == 0);
+        CHECK(w::PoolLadderBandOf(6, 60, 5) == 1);
+        CHECK(w::PoolLadderBandOf(55, 60, 5) == 10);
+        CHECK(w::PoolLadderBandOf(59, 60, 5) == 11);
+        CHECK(w::PoolLadderBandOf(60, 60, 5) == 12);
+        CHECK(w::PoolLadderBandOf(0, 60, 5) == 0);               // unknown or below one reads as level 1
+        CHECK(w::PoolLadderBandOf(255, 60, 5) == 12);            // above the cap reads as the cap
+        CHECK(w::PoolLadderBandName(0, 60, 5) == "1-5");
+        CHECK(w::PoolLadderBandName(1, 60, 5) == "6-10");
+        CHECK(w::PoolLadderBandName(11, 60, 5) == "56-59");
+        CHECK(w::PoolLadderBandName(12, 60, 5) == "60");
+
+        // 100 online, 10 percent: ten max-level, ninety over the twelve low bands (six of eight, six of seven).
+        std::uint32_t total = 0;
+        for (std::uint32_t band = 0; band < 13; ++band)
+        {
+            std::uint32_t const target = w::PoolLadderBandTarget(band, 100, 60, 5, 10);
+            CHECK(target == (band == 12 ? 10u : (band < 6 ? 8u : 7u)));
+            total += target;
+        }
+        CHECK(total == 100);                                     // the bands add up to the online target, always
+        for (std::uint32_t band = 0; band < 12; ++band)
+            CHECK(w::PoolLadderBandTarget(band, 100, 60, 5, 0) == (band < 4 ? 9u : 8u));
+        CHECK(w::PoolLadderBandTarget(12, 100, 60, 5, 0) == 0);   // 0 percent: the cap is never logged in
+        for (std::uint32_t band = 0; band < 12; ++band)
+            CHECK(w::PoolLadderBandTarget(band, 100, 60, 5, 100) == 0);
+        CHECK(w::PoolLadderBandTarget(12, 100, 60, 5, 100) == 100);
+        CHECK(w::PoolLadderBandTarget(12, 100, 60, 5, 250) == 100);   // past 100 clamps
+        CHECK(w::PoolLadderBandTarget(0, 0, 60, 5, 10) == 0);     // a zero target logs nobody in
+        CHECK(w::PoolLadderBandTarget(0, 9, 60, 5, 10) == 1);     // rounding: the cap's share floors, the rest goes low
+
+        // BandSize edge cases: 0 and 1, the widest band, and a single low band beside the cap.
+        CHECK(w::PoolLadderBandCount(60, 1) == 60);
+        CHECK(w::PoolLadderBandOf(60, 60, 1) == 59);
+        CHECK(w::PoolLadderBandName(0, 60, 1) == "1-1");
+        CHECK(w::PoolLadderBandName(58, 60, 1) == "59-59");
+        CHECK(w::PoolLadderBandName(59, 60, 1) == "60");
+        CHECK(w::PoolLadderBandCount(60, 0) == 60);              // 0 clamps to one level a band
+        CHECK(w::PoolLadderBandCount(60, 59) == 2);
+        CHECK(w::PoolLadderBandCount(60, 500) == 2);             // past the cap-1 clamps: 1-59 and 60
+        CHECK(w::PoolLadderBandName(0, 60, 59) == "1-59");
+        CHECK(w::PoolLadderBandCount(2, 5) == 2);               // a two-level server still has a low band and the cap
+        CHECK(w::PoolLadderBandOf(1, 2, 5) == 0);
+        CHECK(w::PoolLadderBandOf(2, 2, 5) == 1);
+        CHECK(w::PoolLadderLevel(0, 60) == 1);
+        CHECK(w::PoolLadderLevel(60, 60) == 60);
+        CHECK(w::PoolLadderLevel(99, 60) == 60);
+    }
+
+    // (8h) the ladder's pick order: the band with the largest shortfall first, and inside it the highest level first; a band
+    // already at its target yields to a band still short. One login per pass, as the spec caps it, so a simulated pass per pick.
+    {
+        Sim sim;
+        sim.settings.targetOnline = 24;                          // 2 max-level, 22 over twelve low bands
+        sim.now = 100 * kMinute;
+        sim.bots.push_back(OfflineBot(1, 1, 0));                 // level 3, band 0
+        sim.bots.push_back(OfflineBot(2, 1, 0));                 // level 4, band 0
+        sim.bots.push_back(OfflineBot(3, 1, 0));                 // level 12, band 2
+        sim.bots[0].level = 3;
+        sim.bots[1].level = 4;
+        sim.bots[2].level = 12;
+        w::PoolPass first = sim.Pass();
+        CHECK(first.logins.size() == 1 && first.logins[0] == 3); // bands 0 and 2 are both short by two: the higher level goes
+        sim.Apply(first);
+        sim.Sync();
+        w::PoolPass second = sim.Pass();
+        CHECK(second.logins.size() == 1 && second.logins[0] == 2);   // band 0 is still short by two: its highest level
+        sim.Apply(second);
+        sim.Sync();
+        w::PoolPass third = sim.Pass();
+        CHECK(third.logins.size() == 1 && third.logins[0] == 1);
+
+        // Highest level inside one band, and among equal levels the bot offline longest (the old ring's order).
+        Sim inside;
+        inside.settings.targetOnline = 24;
+        inside.now = 100 * kMinute;
+        inside.bots.push_back(OfflineBot(11, 1, 1 * kMinute));   // the oldest of the three, but the lowest level
+        inside.bots.push_back(OfflineBot(12, 1, 5 * kMinute));
+        inside.bots.push_back(OfflineBot(13, 1, 2 * kMinute));
+        inside.bots[0].level = 6;                                // band 1
+        inside.bots[1].level = 10;                               // band 1
+        inside.bots[2].level = 10;                               // band 1
+        w::PoolPass const pick = inside.Pass();
+        CHECK(pick.logins.size() == 1 && pick.logins[0] == 13);  // the level-6 bot waits; of the two level 10s, guid 13 is older
+    }
+
+    // (8i) the cap's band is a hard cap: two level-60 slots for a target of 20 at 10 percent, the rest stay offline as the
+    // reserve; a level-60 slot only opens while its band is short.
+    {
+        Sim sim;
+        sim.settings.targetOnline = 20;
+        sim.now = 100 * kMinute;
+        for (std::uint64_t i = 0; i < 3; ++i)
+        {
+            sim.bots.push_back(OfflineBot(20 + i, 1, 0));
+            sim.bots.back().level = 60;
+        }
+        sim.bots.push_back(OfflineBot(10, 2, 0));
+        sim.bots.back().level = 30;                              // band 5, target 2
+        w::PoolPass cap1 = sim.Pass();
+        CHECK(cap1.logins.size() == 1 && cap1.logins[0] == 20);  // the cap's band ties with band 5 and its level wins
+        sim.Apply(cap1);
+        sim.Sync();
+        w::PoolPass cap2 = sim.Pass();
+        CHECK(cap2.logins.size() == 1 && cap2.logins[0] == 10);  // band 5 is now the largest shortfall
+        sim.Apply(cap2);
+        sim.Sync();
+        w::PoolPass cap3 = sim.Pass();
+        CHECK(cap3.logins.size() == 1 && cap3.logins[0] == 21);  // the cap's second slot
+        sim.Apply(cap3);
+        sim.Sync();
+        sim.bots.push_back(OfflineBot(30, 1, 0));
+        sim.bots.back().level = 1;                               // a low band: the overflow goes there, not to a third 60
+        w::PoolPass after = sim.Pass();
+        CHECK(after.logins.size() == 1 && after.logins[0] == 30);
+        // With only max-level characters left and the cap full, the pass plans no login at all.
+        std::vector<w::PoolBotState> capped;
+        for (std::uint64_t i = 0; i < 3; ++i)
+        {
+            w::PoolBotState bot = OfflineBot(40 + i, 1, 0);
+            bot.level = 60;
+            capped.push_back(bot);
+        }
+        std::vector<w::PoolBotState> twoOnline{ OnlineBot(50, 1, 0, sim.now + kMinute), OnlineBot(51, 1, 0, sim.now + kMinute) };
+        twoOnline[0].level = 60;
+        twoOnline[1].level = 60;
+        capped.insert(capped.end(), twoOnline.begin(), twoOnline.end());
+        w::PoolPassInput in;
+        in.bots = &capped;
+        in.settings = sim.settings;
+        in.nowMs = sim.now;
+        in.recentLoginsMs = nullptr;
+        in.recentLogoutsMs = nullptr;
+        CHECK(w::PlanPoolPass(in).logins.empty());
+
+        // 0 percent: no max-level character ever logs in; 100 percent: only they do.
+        w::PoolScheduleSettings noSixty = sim.settings;
+        noSixty.levelLadderMaxLevelSharePct = 0;
+        in.settings = noSixty;
+        CHECK(w::PlanPoolPass(in).logins.empty());
+        w::PoolScheduleSettings allSixty = sim.settings;
+        allSixty.levelLadderMaxLevelSharePct = 100;
+        in.settings = allSixty;
+        w::PoolPass const only = w::PlanPoolPass(in);
+        CHECK(only.logins.size() == 1);                          // the cap's band holds the whole target
+        CHECK(only.counted == 2);                                // and the target is already met by the two online
+    }
+
+    // (8j) the ladder off is the round's old order: the faction's bot offline longest, whatever its level.
+    {
+        Sim sim;
+        sim.settings.targetOnline = 24;
+        sim.settings.levelLadder = false;
+        sim.now = 100 * kMinute;
+        sim.bots.push_back(OfflineBot(1, 1, 0));
+        sim.bots.push_back(OfflineBot(2, 1, 50 * kMinute));
+        sim.bots[0].level = 3;
+        sim.bots[1].level = 60;
+        w::PoolPass const pick = sim.Pass();
+        CHECK(pick.logins.size() == 1 && pick.logins[0] == 1);
+    }
+
+    // (8k) the level the host feeds the track: a known level is clamped into 1..maxLevel, an unknown one keeps the track's.
+    {
+        w::PoolScheduleSettings settings;
+        w::PoolBotState bot = OfflineBot(1, 1, 0);
+        bot.level = 7;
+        w::PoolBotFacts facts;
+        facts.level = 42;
+        w::PoolSyncBot(bot, facts, settings, 0, [] { return 1u; });
+        CHECK(bot.level == 42);
+        facts.level = 0;
+        w::PoolSyncBot(bot, facts, settings, 0, [] { return 1u; });
+        CHECK(bot.level == 42);
+        facts.level = 200;
+        w::PoolSyncBot(bot, facts, settings, 0, [] { return 1u; });
+        CHECK(bot.level == 60);
     }
 
     // (9) the pass over a 2000-bot pool stays under 0.5 ms (the spec's budget: one pass per second).

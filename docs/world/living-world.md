@@ -106,7 +106,7 @@ Teleports are never routine movement. There is no taxi travel yet: the flight-pa
 <a id="initial-skills--professions"></a>
 ## Progression
 
-Pool characters are created at level 1 and level up by playing. There is no level seeding and no level ladder on this build; bots start where a new character starts and earn their levels.
+Pool characters are created at level 1 and level up by playing. There is no level seeding: bots start where a new character starts and earn their levels. The level ladder (`AiPlayerbot.LevelLadder`, on) only decides which level bands are online at a time; it never changes a bot's level. See [the bot pool](../server/bot-pool.md#the-level-ladder).
 
 | What bots get | Setting |
 | :--- | :--- |

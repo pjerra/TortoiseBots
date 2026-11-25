@@ -23,9 +23,11 @@
 #include "ai/playerbot/policy/world/PoolSchedulePolicy.h"
 
 #include "Config.h"
+#include "CharacterCache.h"
 #include "Log.h"
 #include "ObjectGuid.h"
 #include "Player.h"
+#include "playerbot/PlayerbotAIConfig.h"
 #include "Random.h"
 #include "StringFormat.h"
 #include "World.h"
@@ -73,6 +75,9 @@ struct State
     bool warnedReset = false;
     std::uint32_t accMs = 0;
     world::PoolScheduleSettings settings;
+    std::uint32_t levelLadderLogMinutes = 5;   // host-only: the cadence of the per-band log line
+    std::int64_t nextLadderBandLogMs = 0;
+    std::int64_t nextLadderPassLogMs = 0;
     world::PoolFaction nextFaction = world::PoolFaction::Alliance;
     std::unordered_map<std::uint64_t, Tracked> bots;
     std::vector<std::int64_t> logins;     // when the scheduler started a login (the 60 s window)
@@ -167,6 +172,8 @@ void Sync(State& s, Tracked& track, std::int64_t now)
         facts.inCombat = player->IsInCombat();
         facts.inBg = player->InBattleground();   // BG: hold the session through a match, not a queue entry
     }
+    // The ladder's input: the world's answer while the bot is in it, the character cache (kept on level-up) while it is not.
+    facts.level = player ? std::uint32_t(player->GetLevel()) : std::uint32_t(sCharacterCache->GetCharacterLevelByGuid(guid));
     facts.free = facts.logged && BotMgr::Instance().IsFreeBot(guid);
     facts.hasMaster = facts.logged && !BotMgr::Instance().MasterOf(guid).IsEmpty();
 
@@ -245,6 +252,59 @@ std::uint32_t Draining(State const& s)
     return count;
 }
 
+// The ladder's two lines: a pass line a minute while the pool is short (so a live check can see why nothing logs in), and the
+// online/target(pool) count per band every LevelLadderLogMinutes. Both read the tracks once per line, never per login.
+void LadderLog(State& s, world::PoolPass const& plan, std::int64_t now)
+{
+    if (!s.settings.levelLadder)
+        return;
+    std::uint32_t const bands = world::PoolLadderBandCount(s.settings.maxLevel, s.settings.levelLadderBandSize);
+    if (plan.counted < s.settings.targetOnline && now >= s.nextLadderPassLogMs)
+    {
+        s.nextLadderPassLogMs = now + world::kPoolMinuteMs;
+        TC_LOG_INFO("tortoisebots", "TortoiseBots: level ladder pass: online {}/{}, added {}, offline eligible {}", plan.counted,
+            s.settings.targetOnline, std::uint32_t(plan.logins.size()), plan.eligible);
+    }
+    if (now < s.nextLadderBandLogMs)
+        return;
+    s.nextLadderBandLogMs = now + std::int64_t(std::max<std::uint32_t>(1, s.levelLadderLogMinutes)) * world::kPoolMinuteMs;
+    std::vector<std::uint32_t> online(bands, 0), pool(bands, 0);
+    std::uint32_t reserve = 0, highest = 0;
+    for (auto const& [guid, track] : s.bots)
+    {
+        world::PoolBotState const& bot = track.state;
+        std::uint32_t const band = world::PoolLadderBandOf(bot.level, s.settings.maxLevel, s.settings.levelLadderBandSize);
+        ++pool[band];
+        highest = std::max(highest, std::uint32_t(bot.level));
+        if (!bot.bound && bot.phase != world::PoolPhase::Offline)
+            ++online[band];
+        else
+            ++reserve;
+    }
+    std::string line;
+    for (std::uint32_t b = 0; b < bands; ++b)
+    {
+        if (b)
+            line += ' ';
+        line += world::PoolLadderBandName(b, s.settings.maxLevel, s.settings.levelLadderBandSize) + ":" + std::to_string(online[b]) + "/"
+            + std::to_string(world::PoolLadderBandTarget(b, s.settings.targetOnline, s.settings.maxLevel,
+                s.settings.levelLadderBandSize, s.settings.levelLadderMaxLevelSharePct))
+            + "(" + std::to_string(pool[b]) + ")";
+    }
+    TC_LOG_INFO("tortoisebots", "TortoiseBots: level ladder online/target(pool) per band {} | reserve {}, highest level {}", line,
+        reserve, highest);
+}
+
+// The ladder's four knobs are the engine config's (AiPlayerbot.LevelLadder*), and the engine reads aiplayerbot.conf lazily on
+// its first brain: read them on every pass, not only at LoadConfig, so a key set in that file applies without a pool restart.
+void ApplyLadderConfig(State& s)
+{
+    s.settings.levelLadder = sPlayerbotAIConfig.levelLadder;
+    s.settings.levelLadderBandSize = sPlayerbotAIConfig.levelLadderBandSize;
+    s.settings.levelLadderMaxLevelSharePct = std::min<std::uint32_t>(100, sPlayerbotAIConfig.levelLadderMaxLevelSharePct);
+    s.levelLadderLogMinutes = std::max<std::uint32_t>(1, sPlayerbotAIConfig.levelLadderLogMinutes);
+}
+
 // One pass: the states in, the policy's plan out, the core's Login/Logout and the registry's stamps. Returns true when a login
 // was started.
 bool Pass(State& s)
@@ -290,7 +350,13 @@ bool Pass(State& s)
         world::PoolStartSession(bot, s.settings, now, rand32());
         s.logins.push_back(now);
         MarkLogin(track.name, UnixNow());
-        TC_LOG_INFO("tortoisebots", "TortoiseBots: pool login {} ({})", track.name, FactionName(bot.faction));
+        if (s.settings.levelLadder)
+            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool login {} ({}, level {}, band {})", track.name, FactionName(bot.faction),
+                std::uint32_t(bot.level),
+                world::PoolLadderBandName(world::PoolLadderBandOf(bot.level, s.settings.maxLevel, s.settings.levelLadderBandSize),
+                    s.settings.maxLevel, s.settings.levelLadderBandSize));
+        else
+            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool login {} ({})", track.name, FactionName(bot.faction));
         loggedIn = true;
     }
 
@@ -326,6 +392,7 @@ bool Pass(State& s)
         s.stopping = false;
         TC_LOG_INFO("tortoisebots", "TortoiseBots: the pool stopped: no pool bot is left in the world");
     }
+    LadderLog(s, plan, now);
     return loggedIn;
 }
 
@@ -347,6 +414,12 @@ void LoadConfig()
     s.settings.offlineMaxMs = MinutesMs(sConfigMgr->GetIntDefault("TortoiseBots.Pool.OfflineMinutes.Max", 20));
     if (s.settings.offlineMaxMs < s.settings.offlineMinMs)
         s.settings.offlineMaxMs = s.settings.offlineMinMs;
+    // The ladder's band math is built on the server's own level cap, never a hard-coded 60: a server with another cap splits
+    // its levels the same way. Its four knobs are the engine's own (AiPlayerbot.LevelLadder*), already read on this build.
+    s.settings.maxLevel = std::uint32_t(std::clamp<int32>(sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL), 2, 255));
+    ApplyLadderConfig(s);
+    s.nextLadderBandLogMs = 0;
+    s.nextLadderPassLogMs = 0;
 }
 
 bool Update(std::uint32_t diff)
@@ -390,6 +463,7 @@ bool Update(std::uint32_t diff)
     if (s.accMs < 1000)
         return false;
     s.accMs = 0;                          // one pass a second, whatever the tick's diff was
+    ApplyLadderConfig(s);
     return Pass(s);
 }
 

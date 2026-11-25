@@ -58,12 +58,36 @@ Once a second, the scheduler keeps `TortoiseBots.Pool.TargetOnline` pool bots of
 | `TortoiseBots.Pool.SessionMinutes.Min` / `.Max` | 30 / 90 | A session's rolled length in minutes. A living bot in combat keeps its session until the fight ends. |
 | `TortoiseBots.Pool.OfflineMinutes.Min` / `.Max` | 5 / 20 | How long a bot stays away after its session. |
 | `TortoiseBots.Pool.PopulationLow` / `.PopulationHigh` | 10 / 50 | The presets behind `.tb pool population low\|high`. |
+| `AiPlayerbot.LevelLadder` | 1 | `aiplayerbot.conf`: pick logins by level band instead of longest offline. 0 restores the old order. |
+| `AiPlayerbot.LevelLadderBandSize` | 5 | `aiplayerbot.conf`: levels per band, 1-5, 6-10, ... 56-59, and the level cap alone. Clamped to 1..(`MaxPlayerLevel` - 1). |
+| `AiPlayerbot.LevelLadderMaxLevelShare` | 10 | `aiplayerbot.conf`: percent of `TargetOnline` the level cap's band may hold, 0 to 100. A hard cap: the rest stay offline as a reserve. |
+| `AiPlayerbot.LevelLadderLogMinutes` | 5 | `aiplayerbot.conf`: how often the ladder logs the online/target(pool) count of every band. |
 
 - Logins alternate factions and take the bot that has been offline longest first, and only on an account without a session.
 - A bot that gets a master is **bound**: it leaves the online count and the pool never logs it out. Its account is out of reach until the binding ends, so the pool may need more characters than its target to refill that slot. `.tb pool status` says `capped by accounts: N` when the target is above the accounts left.
 - A lowered target logs out the newest sessions first, never a dead or fighting bot.
 - `.tb pool stop` drains every pool bot at five logouts per second. A bot held in a running battleground is released when the match ends or after `TortoiseBots.Bg.MaxMinutes`.
 - No login is planned while the core's shutdown countdown runs.
+
+### The level ladder
+
+With `AiPlayerbot.LevelLadder = 1` (the default, in `aiplayerbot.conf`) the level decides which bot logs in next, not only the offline time:
+
+- The levels are cut into bands of `LevelLadderBandSize` (1-5, 6-10, ... 56-59), and the server's level cap (`MaxPlayerLevel`, 60 on the shipped data) stands alone in the last band.
+- The `TargetOnline` slots are split over the bands: each low band gets an equal share (one level of difference at most, the lower bands taking the remainder first) and the cap's band gets `LevelLadderMaxLevelShare` percent of the target, rounded down. The shares always add up to the target.
+- The band with the largest shortfall logs in first; inside a band the highest level goes first, and among equal levels the bot offline longest. A band already at its share yields to one still short, and once every band is covered the overflow goes to the highest levels.
+- The cap's share is a **hard cap**: beyond it, no max-level character logs in, however many the pool holds. They stay offline as a reserve for `.tb bot add`, hired bots and players; a lowered target or `MaxCharacters` reset hands them no slot.
+- The level comes from the character itself while it is in the world, from the core's character cache while it is not (the cache is kept on level-up). A character with no known level counts as level 1.
+- This decides logins only. Session ends, a lowered target and `.tb pool stop` log out exactly as before.
+- `LevelLadder = 0` restores the plain order: the faction's bot offline longest logs in first.
+
+Every `LevelLadderLogMinutes` the scheduler logs one line with the online count, the band's target and the pool size per band, plus the offline reserve and the highest level in the pool:
+
+```text
+TortoiseBots: level ladder online/target(pool) per band 1-5:1/1(6) 6-10:0/1(5) ... 56-59:0/1(3) 60:1/1(4) | reserve 18, highest level 60
+```
+
+While the pool is short of its target it also logs `level ladder pass: online X/Y, added A, offline eligible E` once a minute; with the band line it shows why nothing logs in (nothing due yet, a session on the account, or the cap's band full while no low band needs a bot).
 
 ## Pruning failed rows
 

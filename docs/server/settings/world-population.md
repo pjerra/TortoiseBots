@@ -29,9 +29,13 @@ Free pool bots run the bot engine automatically once `TortoiseBots.Enable = 1` a
 | `TortoiseBots.Pool.SessionMinutes.Min` / `.Max` | `30` / `90` | A session's length, rolled per login. |
 | `TortoiseBots.Pool.OfflineMinutes.Min` / `.Max` | `5` / `20` | How long a bot stays away between sessions. |
 | `TortoiseBots.Pool.PopulationLow` / `.PopulationHigh` | `10` / `50` | The presets behind `.tb pool population low` and `high`. |
+| `AiPlayerbot.LevelLadder` | `1` | `aiplayerbot.conf`: chooses logins by level band, not only by the bot offline longest. `0` restores the plain order. |
+| `AiPlayerbot.LevelLadderBandSize` | `5` | `aiplayerbot.conf`: levels per band, 1-5, 6-10, ... 56-59, and the level cap alone. |
+| `AiPlayerbot.LevelLadderMaxLevelShare` | `10` | `aiplayerbot.conf`: percent of `TargetOnline` the level cap's band may hold; a hard cap, the rest stay offline as a reserve. |
+| `AiPlayerbot.LevelLadderLogMinutes` | `5` | `aiplayerbot.conf`: how often the online/target/pool count of every band is logged. |
 | `TortoiseBots.Pool.Reset` | `"off"` | Rebuilds the pool on world startup. Read only at startup. |
 
-The scheduler logs in one bot per second at most, alternates factions and takes the bot that has been offline longest first. One session per account is the rule, so the online count is capped by the number of accounts the pool sits on. A bot that gets a master leaves the count and is never logged out by the pool. A lowered target logs out the newest sessions first, never a dead or fighting bot. Characters, commands and the reset's safety checks are in [The bot pool](../bot-pool.md). `.reload config` re-reads every pool key except `TortoiseBots.Pool.Reset`, which is read only at world startup.
+The scheduler logs in one bot per second at most, alternates factions and takes the bot that has been offline longest first. The level ladder (on by default) puts the band with the largest shortfall first and the highest level inside it, with the level cap's band held to its percent of the target as a reserve of offline max-level characters; `LevelLadder = 0` turns it off. One session per account is the rule, so the online count is capped by the number of accounts the pool sits on. A bot that gets a master leaves the count and is never logged out by the pool. A lowered target logs out the newest sessions first, never a dead or fighting bot. Characters, commands and the reset's safety checks are in [The bot pool](../bot-pool.md). `.reload config` re-reads every pool key except `TortoiseBots.Pool.Reset`, which is read only at world startup.
 
 ## Free-bot behaviour (`aiplayerbot.conf`)
 
@@ -283,10 +287,6 @@ The generated [key census](../config-keys.md) lists every advertised key and whe
 | `AiPlayerbot.RandomBotAccountPrefix` | The pool creates its own accounts (the `TBPOOL<nnnn>` pattern). |
 | `AiPlayerbot.PinnedBots` | No rotation table reads it. |
 | `AiPlayerbot.RandomBotStartLevelMin` / `RandomBotStartLevelMax` | Pool characters are created at level 1 and level up by playing. |
-| `AiPlayerbot.LevelLadder` | Nothing acts on it; the dashboard only reports its value. There is no level ladder on this build. |
-| `AiPlayerbot.LevelLadderBandSize` | See `LevelLadder`. |
-| `AiPlayerbot.LevelLadderMaxLevelShare` | See `LevelLadder`. |
-| `AiPlayerbot.LevelLadderLogMinutes` | See `LevelLadder`. |
 | `AiPlayerbot.RandomBotLineage` | There are no lineage alts on this build. |
 | `AiPlayerbot.LineageLowBandReserve` | See `RandomBotLineage`. |
 | `AiPlayerbot.LineagePerHour` | See `RandomBotLineage`. |

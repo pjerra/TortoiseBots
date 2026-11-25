@@ -505,9 +505,11 @@ TortoiseBots.Pool.MaxCharacters = 50
 #                     the pool's characters sit on. A bot that got a master keeps its account for as long as the binding lasts,
 #                     and the pool cannot end it: that account is out of reach, so the pool needs more characters (and so accounts)
 #                     than the target to refill the slot of a bound bot. `.tb pool status` adds `capped by accounts: N` when
-#                     the target is above the accounts left. Logins alternate factions and take the bot offline longest first;
-#                     a bot that got a master leaves the count. A lowered target logs out the newest sessions first, never a
-#                     dead or fighting bot.
+#                     the target is above the accounts left. Logins take the level ladder's order (`AiPlayerbot.LevelLadder*`
+#                     in aiplayerbot.conf: the band with the largest shortfall first, the highest level inside it, the level
+#                     cap's band held to a share of this target) and alternate factions; with the ladder off the bot offline
+#                     longest goes first. A bot that got a master leaves the count. A lowered target logs out the newest
+#                     sessions first, never a dead or fighting bot.
 #                     0 to 5000.
 #                     `.tb pool population <n|low|high>` changes the target at runtime; `.reload config` puts this value back.
 #        Default:     0

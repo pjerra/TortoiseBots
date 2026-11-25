@@ -22,6 +22,7 @@ SCHED_H = (ROOT / "forever/src/host/pool/TbPoolScheduler.h").read_text()
 SCHED = (ROOT / "forever/src/host/pool/TbPoolScheduler.cpp").read_text()
 SCHED_POLICY = (ROOT / "ai/playerbot/policy/world/PoolSchedulePolicy.h").read_text()
 SCHED_TEST = (ROOT / "forever/tools/test_pool_schedule_policy.cpp").read_text()
+CONFIG_CPP = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
 MGR_H = (ROOT / "forever/src/TbBotMgr.h").read_text()
 REGISTRY_POLICY = (ROOT / "ai/playerbot/policy/world/PoolRegistryPolicy.h").read_text()
 REGISTRY_POLICY_TEST = (ROOT / "forever/tools/test_pool_registry_policy.cpp").read_text()
@@ -593,6 +594,34 @@ class Scheduler(unittest.TestCase):
         load = func(SCHED, "void LoadConfig()")
         self.assertIn("if (s.settings.sessionMaxMs < s.settings.sessionMinMs)", load)
         self.assertIn("if (s.settings.offlineMaxMs < s.settings.offlineMinMs)", load)
+
+    def test_the_level_ladder_keys_and_its_policy(self):
+        # The ladder reuses the engine's four keys (read into PlayerbotAIConfig, defaults on/5/10/5), so the pool and the
+        # Turtle build share one set of knobs; the pool maps them on every pass and reads the server's level cap.
+        ladder_cfg = func(SCHED, "void ApplyLadderConfig(")
+        self.assertIn("sPlayerbotAIConfig.levelLadder;", ladder_cfg)
+        self.assertIn("sPlayerbotAIConfig.levelLadderBandSize;", ladder_cfg)
+        self.assertIn("sPlayerbotAIConfig.levelLadderMaxLevelSharePct", ladder_cfg)
+        self.assertIn("sPlayerbotAIConfig.levelLadderLogMinutes", ladder_cfg)
+        self.assertIn("ApplyLadderConfig(s);", func(SCHED, "void LoadConfig()"))
+        self.assertIn("ApplyLadderConfig(s);", func(SCHED, "bool Update("))
+        self.assertIn("getIntConfig(CONFIG_MAX_PLAYER_LEVEL)", func(SCHED, "void LoadConfig()"))
+        for line in ("levelLadder = config.GetBoolDefault(\"AiPlayerbot.LevelLadder\", true)",
+                     "levelLadderBandSize = config.GetIntDefault(\"AiPlayerbot.LevelLadderBandSize\", 5)",
+                     "levelLadderMaxLevelSharePct = config.GetIntDefault(\"AiPlayerbot.LevelLadderMaxLevelShare\", 10)",
+                     "levelLadderLogMinutes = config.GetIntDefault(\"AiPlayerbot.LevelLadderLogMinutes\", 5)"):
+            self.assertIn(line, CONFIG_CPP)
+        # The host feeds the level from the world or the character cache, and the policy owns the band math and the pick.
+        self.assertIn("sCharacterCache->GetCharacterLevelByGuid(guid)", SCHED)
+        self.assertIn("player->GetLevel()", SCHED)
+        for text in ("PoolLadderBandOf(", "PoolLadderBandTarget(", "PoolLadderBandName(", "PoolLadderViewOf(",
+                     "PoolLadderEligible(", "PoolLadderBefore(", "levelLadderMaxLevelSharePct"):
+            self.assertIn(text, SCHED_POLICY)
+        self.assertIn("world::PoolLadderBandName(world::PoolLadderBandOf(bot.level", SCHED)
+        self.assertIn("LadderLog(s, plan, now)", SCHED)
+        for text in ("the level ladder's band math", "the ladder's pick order", "the cap's band is a hard cap",
+                     "the ladder off is the round's old order", "MaxLevelShare is a hard cap"):
+            self.assertIn(text, SCHED_TEST)
 
     def test_the_rounds_five_cases_are_in_the_policy_test(self):
         # The spec's five sentences, the fix round's cases, and the count of the pass over 2000 bots (under 0.5 ms).
