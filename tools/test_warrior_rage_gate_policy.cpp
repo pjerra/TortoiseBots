@@ -53,6 +53,22 @@ int main()
     CHECK(WARRIOR_REND_RAGE_COST == 10);
     CHECK(WARRIOR_MAIN_STRIKE_RAGE_COST == 30);
     std::cout << "  [PASS] rend holds the main strike's rage pool\n";
+    // Heroic Strike: the dump floor stays above the best builder the level
+    // has, so a level 13-18 warrior finally dumps at all.
+    CHECK(HeroicStrikeRageFloor(1) == 25);
+    CHECK(HeroicStrikeRageFloor(19) == 25);
+    CHECK(HeroicStrikeRageFloor(20) == 30);
+    CHECK(HeroicStrikeRageFloor(39) == 30);
+    CHECK(HeroicStrikeRageFloor(40) == 40);
+    CHECK(HeroicStrikeRageFloor(60) == 40);
+    CHECK(!ShouldHeroicStrike(19, 24));
+    CHECK(ShouldHeroicStrike(19, 25));
+    CHECK(!ShouldHeroicStrike(20, 25));   // the 25-rage tier (Whirlwind at 36) stays affordable
+    CHECK(ShouldHeroicStrike(20, 30));
+    CHECK(!ShouldHeroicStrike(40, 39));
+    CHECK(ShouldHeroicStrike(40, 40));
+    CHECK(WARRIOR_HEROIC_STRIKE_RAGE_COST == 15);
+    std::cout << "  [PASS] heroic strike floor steps with the level's builder\n";
     // Mocking Blow: the second taunt when Taunt is down and the mob left.
     CHECK(ShouldMockingBlow(true, true, false, true, true, 10));
     CHECK(ShouldMockingBlow(true, true, false, true, true, 100));

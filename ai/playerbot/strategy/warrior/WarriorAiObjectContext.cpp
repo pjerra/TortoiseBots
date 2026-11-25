@@ -156,6 +156,7 @@ namespace ai
                 creators["bloodthirst"] = [](PlayerbotAI* ai) { return new BloodthirstTrigger(ai); };
                 creators["whirlwind"] = [](PlayerbotAI* ai) { return new WhirlwindTrigger(ai); };
                 creators["heroic strike"] = [](PlayerbotAI* ai) { return new HeroicStrikeTrigger(ai); };
+                creators["spearing strike"] = [](PlayerbotAI* ai) { return new SpearingStrikeTrigger(ai); };
                 creators["berserker rage"] = [](PlayerbotAI* ai) { return new BerserkerRageBuffTrigger(ai); };
                 creators["pummel on enemy healer"] = [](PlayerbotAI* ai) { return new PummelInterruptEnemyHealerSpellTrigger(ai); };
                 creators["pummel"] = [](PlayerbotAI* ai) { return new PummelInterruptSpellTrigger(ai); };
@@ -204,6 +205,7 @@ namespace ai
                 creators["berserker stance for whirlwind"] = [](PlayerbotAI* ai) { return new CastBerserkerStanceForWhirlwindAction(ai); };
                 creators["berserker stance for pummel"] = [](PlayerbotAI* ai) { return new CastBerserkerStanceForPummelAction(ai); };
                 creators["heroic strike"] = [](PlayerbotAI* ai) { return new CastHeroicStrikeAction(ai); };
+                creators["spearing strike"] = [](PlayerbotAI* ai) { return new CastSpearingStrikeAction(ai); };
                 creators["intimidating shout"] = [](PlayerbotAI* ai) { return new CastIntimidatingShoutAction(ai); };
                 creators["demoralizing shout"] = [](PlayerbotAI* ai) { return new CastDemoralizingShoutAction(ai); };
                 creators["challenging shout"] = [](PlayerbotAI* ai) { return new CastChallengingShoutAction(ai); };

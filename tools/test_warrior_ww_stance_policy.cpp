@@ -81,6 +81,13 @@ int main()
     CHECK(WARRIOR_PUMMEL_RAGE_COST == 10);
     std::cout << "  [PASS] cost constants pinned\n";
 
+    // Thunder Clap on Forever: Battle and Defensive cast it, Berserker and
+    // caster form do not (client SpellShapeshift mask 196608).
+    CHECK(ThunderClapStanceAvailable(true, false));   // Battle
+    CHECK(ThunderClapStanceAvailable(false, true));   // Defensive
+    CHECK(!ThunderClapStanceAvailable(false, false)); // Berserker or no stance
+    std::cout << "  [PASS] thunder clap needs Battle or Defensive Stance\n";
+
     std::cout << "All TortoiseBots warrior whirlwind-stance policy tests passed.\n";
     return 0;
 }

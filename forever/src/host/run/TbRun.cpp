@@ -20,6 +20,7 @@
 #include "host/run/TbRunTasks.h"
 #include "runtime/DecisionCapture.h"
 #include "runtime/SystemRunPolicy.h"
+#include "slice/SliceHybridPolicy.h"
 
 #include "GameTime.h"
 #include "Group.h"
@@ -72,6 +73,28 @@ void CountPulls(RunRec const& rec, uint32& pulls, uint32& done)
             && !listed(rec.run.deferredPulls, i) && !listed(rec.run.deferGivenUp, i))
             ++done;
     }
+}
+
+// `.tb run start <tank>` names the run's tank, so the order carries the role too: every admission test and every read of the run's
+// tank answers from it, and the kit (Defensive Stance for a warrior, bear form for a druid) is rebuilt from it. Without it the
+// automatic pick could give the role to another warrior in the party and refuse the named one. A class that cannot lead a run is
+// left alone: StartCheck names that refusal. Returns true when the role was committed by this start.
+bool PrepareRunTank(Player* tank)
+{
+    if (!tank || PlayerbotAIStorage::Instance().GetPlayerForcedRole(tank->GetGUID()) == BOT_ROLE_TANK)
+        return false;
+    if (!TortoiseBots::slice::hybrid::CanLeadRun(unsigned(tank->GetClass())))
+        return false;
+    std::string code, detail;
+    return h3::SetBotRole(tank, BOT_ROLE_TANK, code, detail);
+}
+
+void LogRunTank(Player* tank, bool roleSetNow)
+{
+    if (!tank)
+        return;
+    sLog.outString("TortoiseBots run: tank %s (role %s, AI IsTank %s)", tank->GetName().c_str(),
+        roleSetNow ? "set by run start" : "already tank", PlayerbotAI::IsTank(tank) ? "yes" : "no");
 }
 }
 
@@ -1388,6 +1411,8 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs,
         return refuse("not-bot", "the leader must be a host bot in the world");
     if (!plan || plan->steps.empty())
         return refuse("no-plan", "the plan has no steps");
+    // The named leader is the run's tank: commit the role (and its kit) before the admission tests read it.
+    bool const tankRoleSet = PrepareRunTank(leader);
     // The executor's own question first (O6): a host bot with an engine that leads its party, the tank role set, every member a host bot with an engine.
     {
         std::string code, message;
@@ -1466,6 +1491,7 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs,
     rec->seenPhase = rec->run.phase;
     rec->seenStep = rec->run.step;
     Note(*rec, nowMs, "start", int32(fromStep), plan->name);
+    LogRunTank(leader, tankRoleSet);
     out.rec = rec;
     return out;
 }
@@ -1517,6 +1543,8 @@ StartOutcome StartPlayerLedRun(Player* commander, Player* tank, ai::DungeonPlan 
     playerled::StartVerdict const verdict = playerled::DecideStart(obs);
     if (!verdict.code.empty())
         return refuse(verdict.code.c_str(), verdict.text);
+    // The named tank is the run's tank in this mode too: commit its role before the admission tests read it.
+    bool const tankRoleSet = PrepareRunTank(tank);
     {
         std::string code, message;
         if (!PlayerLedStartCheck(tank->GetGUID(), code, message))
@@ -1587,6 +1615,7 @@ StartOutcome StartPlayerLedRun(Player* commander, Player* tank, ai::DungeonPlan 
     rec->seenPhase = rec->run.phase;
     rec->seenStep = rec->run.step;
     Note(*rec, nowMs, "start", 0, plan->name + " (player-led: " + rec->commanderName + ")");
+    LogRunTank(tank, tankRoleSet);
     out.rec = rec;
     return out;
 }
