@@ -425,6 +425,10 @@ static void ApplySpecEnchant(Player* target, Item* item, std::string const& spec
     SpellInfo const* spell = sSpellMgr.GetSpellInfo(choice.spellId, DIFFICULTY_NONE);
     if (!spell)
         return;
+    // The off-hand slot a spec row enchants can hold a shield or a 1H weapon (GearSetPolicy), so the enchant must fit what is actually worn:
+    // a shield spike never goes on a weapon, a weapon enchant never on a shield.
+    if (!item->IsFitToSpellRequirements(spell))
+        return;
     for (SpellEffectInfo const& effect : spell->GetEffects())
         if (effect.Effect == SPELL_EFFECT_ENCHANT_ITEM && effect.MiscValue > 0)
         {

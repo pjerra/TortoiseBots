@@ -104,6 +104,15 @@ class TestSpecEnchantWiring(unittest.TestCase):
         self.assertIn("GearSetOutcome::specName", read(READER_HDR))
         self.assertIn("SpecEnchantFor", read(READER_HDR))
 
+    def test_the_enchant_must_fit_the_worn_item(self):
+        # The off-hand slot can hold a shield or a 1H weapon (GearSetPolicy), while the row's spell is
+        # a shield spike for arms/prot and a weapon enchant for fury: the seed asks the core before stamping.
+        seed = read(GEAR_SEED)
+        body = seed[seed.index("static void ApplySpecEnchant("):]
+        body = body[:body.index("GearSetOutcome SeedGearForTarget(")]
+        self.assertIn("IsFitToSpellRequirements(spell)", body)
+        self.assertLess(body.index("IsFitToSpellRequirements(spell)"), body.index("SetEnchantment("))
+
 
 if __name__ == "__main__":
     if "--mutate" in sys.argv:
