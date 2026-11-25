@@ -173,6 +173,12 @@ A bot is raised to the rolled level, never lowered, before its level-bound spell
 Bots equip an upgrade they loot or win.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
+### `AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel`
+A pool bot does not equip a looted, quested, bought or traded upgrade above its level.
+**Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
+
+Forever item rows often leave the required level empty even on high item levels, so the core alone would let a level-10 pool bot wear an item level 62 blue. With this on, the missing requirement is derived from the item level (item level minus 5, at most 60) and treated as real. A bot with a player master, hired and owned bots, and an explicit `.bot equip` order are not affected; `0` restores the old "if the core allows it, wear it" behaviour.
+
 ### `AiPlayerbot.EquipUpgradeThreshold`
 The margin a new item must beat the worn one by.
 **Default:** `1.1` · **Values:** a multiplier of the stat weight · **Restart:** needed

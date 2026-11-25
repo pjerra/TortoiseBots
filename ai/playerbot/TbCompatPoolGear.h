@@ -5,3 +5,10 @@
 #else
 #include "cmangos-compat-poolgear.h"
 #endif
+
+// The pool identity on its own, for the other organic gear decisions that only
+// need to know whether the bot is a pool bot (EquipUpgradesAction).
+inline bool IsPoolBotCompat(Player* bot)
+{
+    return PoolGearTopUpIsPoolBotCompat(bot);
+}

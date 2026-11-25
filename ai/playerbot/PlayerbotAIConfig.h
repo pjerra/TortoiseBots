@@ -1419,6 +1419,10 @@ public:
 
     std::string autoPickReward;
     bool autoEquipUpgradeLoot;
+    // Masterless pool bots only: skip an organic upgrade whose stored or
+    // item-level-derived required level is above the bot. Restores what the
+    // Turtle item data does through the core's own required-level check.
+    bool autoEquipUpgradeRespectsRequiredLevel = true;
     bool claimedBotSelfEquip = true;
     // Equip-upgrade score threshold (AG-1): a new item must beat the old
     // stat weight by this factor to count as an upgrade. Stops epsilon
