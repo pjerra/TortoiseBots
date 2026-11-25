@@ -26,6 +26,7 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 
 ### Beast Mastery & Marksmanship (Ranged DPS)
 - Opens with *Hunter's Mark* and *Auto Shot*. With a living tank in the group the mark goes only on the mob the tank is fighting.
+- *Auto Shot* needs a bow, gun or crossbow in the ranged slot and matching arrows or bullets in the bags. Bots keep a level-fitting ammo stack topped up on login, on level-up and while playing, and a hunter below level 5 whose ranged slot is empty gets the starter bow back. A hunter with no ranged weapon logs one line on login and fights in melee until it gets one.
 - Fires *Aimed Shot* (Marksmanship, once trained, within range) or *Arcane Shot* on cooldown.
 - Uses *Steady Shot* as a filler when it is trained.
 - Uses *Multi-Shot* only when the splash around the target catches a second fighting enemy, and never into a crowd-controlled mob standing beside it.

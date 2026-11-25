@@ -22,6 +22,14 @@ int main()
     assert(HunterStarterAmmoId(true, 51) == 19317);
     assert(HunterStarterAmmoId(true, 60) == 19317);
 
+    using TortoiseBots::HunterStarterRangedItemId;
+
+    // Below level 5 the starter bow is granted; from 5 the spawn kit/autogear own the ranged slot.
+    assert(HunterStarterRangedItemId(1) == 2504);
+    assert(HunterStarterRangedItemId(4) == 2504);
+    assert(HunterStarterRangedItemId(5) == 0);
+    assert(HunterStarterRangedItemId(60) == 0);
+
     std::cout << "PASS: test_hunter_starter_ammo\n";
     return 0;
 }

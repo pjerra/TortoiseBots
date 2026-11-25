@@ -540,6 +540,9 @@ public:
             player->SetPreferDrawableAmmo(true);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
             TortoiseBots::p11::EnsureHunterStarterAmmo(player);
+            if (!TortoiseBots::p11::EnsureHunterStarterWeapon(player))
+                TC_LOG_INFO("tortoisebots", "TortoiseBots: hunter {} (level {}) has no ranged weapon; Auto Shot stays off until it gets a bow, gun or crossbow",
+                    player->GetName(), uint32(player->GetLevel()));
             TortoiseBots::p11::EnsureShamanStarterTotems(player);
             // The /pvp preference of the flagged share of free bots: a streamless session cannot send CMSG_SET_PVP.
             tbhost::worldpvp::OnBotLogin(player);

@@ -200,10 +200,42 @@ GiveResult GiveHunterPet(Player* bot, bool saveToDb)
     PetSummonSteps steps{ bot, pet, map, saveToDb };
     return SummonTamedPet(steps) == PetSummonOutcome::Out ? GiveResult::Ok : GiveResult::NotSummoned;
 }
+// Auto Shot needs a bow, gun or crossbow in the ranged slot; an empty slot or a thrown weapon means it cannot start.
+static bool HasAutoShotWeapon(Player* bot)
+{
+    Item* ranged = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
+    ItemTemplate const* proto = ranged ? ranged->GetTemplate() : nullptr;
+    if (!proto || proto->GetClass() != ITEM_CLASS_WEAPON)
+        return false;
+    uint32 const subClass = proto->GetSubClass();
+    return subClass == ITEM_SUBCLASS_WEAPON_BOW || subClass == ITEM_SUBCLASS_WEAPON_GUN ||
+        subClass == ITEM_SUBCLASS_WEAPON_CROSSBOW;
+}
+
+// The core gives every new hunter a bow and arrows (CharacterLoadout), but a character made before this data, or one
+// that lost them, would never fire Auto Shot. Below level 5 the starter bow is put back; from 5 the spawn kit and
+// autogear own the slot. The answer is read back from the slot.
+bool EnsureHunterStarterWeapon(Player* bot)
+{
+    if (!bot || bot->GetClass() != CLASS_HUNTER)
+        return false;
+    if (HasAutoShotWeapon(bot))
+        return true;
+
+    uint32 const itemId = TortoiseBots::HunterStarterRangedItemId(bot->GetLevel());
+    if (itemId && sObjectMgr.GetItemTemplate(itemId))
+    {
+        uint16 dest = 0;
+        if (bot->CanEquipNewItem(EQUIPMENT_SLOT_RANGED, dest, itemId, false) == EQUIP_ERR_OK)
+            bot->EquipNewItem(dest, itemId, ItemContext::NONE, true);
+    }
+    return HasAutoShotWeapon(bot);
+}
 void EnsureHunterStarterAmmo(Player* bot)
 {
     if (!bot || bot->GetClass() != CLASS_HUNTER)
         return;
+    EnsureHunterStarterWeapon(bot);
     bot->SetPreferDrawableAmmo(true);
     bot->AutoSelectAmmo();
     if (AmmoItemIdCompat(bot) != 0)
