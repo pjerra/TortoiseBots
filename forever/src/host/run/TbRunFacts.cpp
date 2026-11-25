@@ -572,6 +572,14 @@ void ReadEngaged(Ctx& c, Facts& f)
         for (Unit* attacker : bot->getAttackers())
             AddEngaged(c, attacker, seen, obs, victims);
         AddEngaged(c, bot->GetVictim(), seen, obs, victims);
+        // A unit in combat with the bot that neither attacks it nor is its victim: one that only holds it on its threat
+        // list. Shadowfang Keep live run 3 (2026-11-23): Arugal 10000 on the courtyard wall (IMMUNE_TO_PC, nobody can
+        // fight him) held the tank and the healer in combat at 0 threat; this read never saw him, the fight read as a stale
+        // flag with nothing engaged, and "a fight lasted more than 180 s (kept on by nothing hostile engaged)" paused the
+        // run twice. Read here, he is an engaged unit the group cannot attack, and UnattackableOnlyFight lets the fight go.
+        for (auto const& ref : bot->GetCombatManager().GetPvECombatRefs())
+            if (ref.second && !ref.second->IsSuppressedFor(bot))
+                AddEngaged(c, ref.second->GetOther(bot), seen, obs, victims);
         if (Pet* pet = bot->GetPet())
             if (pet->IsAlive() && pet->IsInWorld())
             {
