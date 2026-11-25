@@ -16,6 +16,8 @@ ROWS = {
     'ai/playerbot/strategy/mage/FrostMageStrategy.cpp': ['icicles'],
     'ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp': ['envenom'],
     'ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp': ['shadow of death', 'mark for death', 'smoke bomb'],
+    'ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp': ['hand of reckoning', 'hand of reckoning on attacker'],
+    'ai/playerbot/strategy/paladin/TankPaladinStrategy.cpp': ['hand of reckoning'],
 }
 
 

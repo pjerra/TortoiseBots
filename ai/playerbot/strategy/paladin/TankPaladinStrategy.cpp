@@ -14,10 +14,13 @@ class TankPaladinStrategyActionNodeFactory : public NamedObjectFactory<ActionNod
 public:
     TankPaladinStrategyActionNodeFactory()
     {
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
         creators["hand of reckoning"] = &hand_of_reckoning;
+#endif
     }
 
 private:
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     // Hand of Reckoning (Turtle trainer spell 51303, level 10 taunt)
     // first, Righteous Defense as the party-member fallback. Mirrors the live
     // ProtectionPaladinStrategy node and the donor's own factory.
@@ -30,6 +33,7 @@ private:
             /*C*/ {}
         );
     }
+#endif
 };
 
 TankPaladinStrategy::TankPaladinStrategy(PlayerbotAI* botAI) : GenericPaladinStrategy(botAI)
@@ -66,6 +70,7 @@ void TankPaladinStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
             }
         )
     );
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     triggers.push_back(
         new TriggerNode(
             "lose aggro",
@@ -74,6 +79,7 @@ void TankPaladinStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
             }
         )
     );
+#endif
     triggers.push_back(
         new TriggerNode(
             "medium health",

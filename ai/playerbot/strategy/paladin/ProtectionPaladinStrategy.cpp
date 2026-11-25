@@ -10,17 +10,21 @@ class ProtectionPaladinStrategyActionNodeFactory : public NamedObjectFactory<Act
 public:
     ProtectionPaladinStrategyActionNodeFactory()
     {
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
         creators["hand of reckoning"] = &hand_of_reckoning;
         creators["hand of reckoning on attacker"] = &hand_of_reckoning_on_attacker;
+#endif
         creators["judgement"] = &judgement;
     }
 
 private:
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     ACTION_NODE_A(hand_of_reckoning, "hand of reckoning", "righteous defense");
 
     // Same Righteous Defense fallback when the taunt cannot fire (not
     // learned, GCD).
     ACTION_NODE_A(hand_of_reckoning_on_attacker, "hand of reckoning on attacker", "righteous defense");
+#endif
 
     ACTION_NODE_A(judgement, "judgement", "exorcism");
 };
@@ -48,6 +52,7 @@ void ProtectionPaladinStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
         "has greater blessing of salvation",
         NextAction::array(0, new NextAction("remove greater blessing of salvation", ACTION_EMERGENCY), NULL)));
 
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     triggers.push_back(new TriggerNode(
         "lose aggro",
         NextAction::array(0, new NextAction("hand of reckoning", ACTION_MOVE),
@@ -58,6 +63,13 @@ void ProtectionPaladinStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
     triggers.push_back(new TriggerNode(
         "party member attacked",
         NextAction::array(0, new NextAction("hand of reckoning on attacker", ACTION_MOVE), NULL)));
+#else
+    // No paladin taunt on ForeverCore: Hand of Reckoning is a runecarving rune and Righteous Defense does not
+    // exist here, so a mob lost to a party member cannot be taunted back; the tank's ranged holy threat is Judgement.
+    triggers.push_back(new TriggerNode(
+        "lose aggro",
+        NextAction::array(0, new NextAction("judgement", ACTION_MOVE), NULL)));
+#endif
 
     triggers.push_back(new TriggerNode(
         "holy shield",
