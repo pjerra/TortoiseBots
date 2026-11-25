@@ -556,10 +556,11 @@ class Scheduler(unittest.TestCase):
         # The scheduler logs in through that call, and decides "bound" from pool + free (BindMaster clears free).
         pass_body = func(SCHED, "bool Pass(")
         self.assertIn("BotMgr::Instance().Login(PlayerGuidOf(guid), ObjectGuid::Empty, true, true)", pass_body)
-        self.assertIn("sWorld->IsShuttingDown()", pass_body)
+        # The scheduler is built after the Forever prelude, where sWorld is the core's World reference.
+        self.assertIn("sWorld.IsShuttingDown()", pass_body)
         states = func(SCHED, "std::vector<world::PoolBotState> StatesOf(")
         self.assertIn("BotMgr::Instance().BotAccounts()", states)
-        self.assertIn("sWorld->FindSession(state.accountId)", states)
+        self.assertIn("sWorld.FindSession(state.accountId)", states)
         self.assertIn("std::binary_search(botAccounts.begin(), botAccounts.end(), state.accountId)", states)
         sync = func(SCHED, "void Sync(")
         self.assertIn("BotMgr::Instance().IsPoolBot(guid)", sync)
