@@ -107,22 +107,15 @@ Movement slows like daze or chill do not break form. Physical roots break form o
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever druids on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Balance / Feral / Restoration) | Key Talents |
 | :--- | :--- | :--- | :--- |
-| **Balance** | Ranged DPS | `41 / 0 / 10` | Moonkin Form, Eclipse, Moonfury, Vengeance, Insect Swarm. |
-| **Feral** | Tank or Melee DPS | `0 / 41 / 10` | One shared build: Leader of the Pack, Lacerate, Primal Bite, Rend and Tear, Heart of the Wild. |
-| **Restoration** | Healer | `10 / 0 / 41` | Swiftmend, Nature's Swiftness, Wild Growth, Bloom, Gift of Nature. |
+| **Balance** | Ranged DPS | `38 / 0 / 13` | Moonkin Form, Eclipse, Moonfury, Vengeance, Insect Swarm. |
+| **Feral** | Tank or Melee DPS | `9 / 32 / 10` | One shared build: Leader of the Pack, Lacerate, Primal Bite, Rend and Tear, Heart of the Wild. |
+| **Restoration** | Healer | `13 / 0 / 38` | Swiftmend, Nature's Swiftness, Wild Growth, Bloom, Gift of Nature. |
 
 A feral druid plays Bear only when it holds the tank role (`.tb role` or `.bot lfg`); otherwise the same build fights as Cat DPS.
-
-<details>
-<summary>Leveling order</summary>
-
-- **Balance:** Improved Wrath, Moonglow, Improved Moonfire, Nature's Reach, Nature's Majesty, Vengeance, Improved Starfire, Insect Swarm, Nature's Grace, Eclipse, Moonfury and Moonkin Form; the last 10 points go to Restoration (Nature's Focus, Reflection, Naturalist).
-- **Feral:** Ferocity, Feral Swiftness, Feral Instinct, Thick Hide, Savage Fury, Sharpened Claws, Feral Charge, Predatory Strikes, Blood Frenzy, Lacerate, Leader of the Pack, Rend and Tear and Primal Bite; the last 10 points go to Restoration (Heart of the Wild, Natural Shapeshifter, Naturalist).
-- **Restoration:** Nature's Focus, Naturalist, Reflection, Gift of Nature, Subtlety, Bloom, Tranquil Spirit and Improved Rejuvenation; then Swiftmend, Nature's Swiftness, Living Spirit, Improved Regrowth and Wild Growth; the last 10 points go to Balance (Improved Wrath, Improved Moonfire, Moonglow).
-
-</details>
 
 ---
 

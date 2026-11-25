@@ -41,7 +41,6 @@ Mages provide high-burst ranged spell DPS, dependable crowd control (*Polymorph*
 - Consumes *Presence of Mind* with instant *Pyroblast*.
 - Uses *Fire Blast* as an instant finishing blow below 20% target health.
 - Casts *Arcane Explosion* when 3 or more enemies cluster inside 10 yards and none of them is loose on the party.
-- Casts *Blast Wave* as point-blank area damage at interrupt priority on any enemy within 10 yards (no school-lock interrupt or daze logic).
 - Automatically falls back to *Frostbolt* when facing fire-immune enemies (via the generic school-immunity veto).
 
 ### Arcane Mage
@@ -89,20 +88,13 @@ Mages provide high-burst ranged spell DPS, dependable crowd control (*Polymorph*
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever mages on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Arcane / Fire / Frost) | Key Talents |
 | :--- | :--- | :--- | :--- |
-| **Arcane** | Ranged DPS | `40 / 0 / 11` | Arcane Power, Presence of Mind, Arcane Blast, Missile Barrage, Arcane Instability. |
-| **Fire** | Ranged DPS | `13 / 38 / 0` | Combustion, Pyroblast, Blast Wave, Ignite, Fire Power. |
-| **Frost** | Ranged DPS | `13 / 0 / 38` | Ice Barrier, Ice Block, Shatter, Cold Snap, Winter's Chill. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Arcane:** Wand Specialization, Arcane Resilience, Arcane Subtlety, Arcane Concentration, Missile Barrage, Arcane Impact, Arcane Blast, Arcane Meditation, Arcane Wrath, Presence of Mind, Arcane Mind, Arcane Instability, Arcane Power, Improved Channeling, Magic Absorption and Arcane Geometry; the last 11 points go to Frost (Precision, Improved Frostbolt, Ice Shards, Frostbite).
-- **Fire:** Incineration, Ignite, Flame Throwing, Pyroblast, Improved Fire Blast, Burning Soul, Improved Scorch, Master of Elements, Heating Up, Critical Mass, Blast Wave, Fire Power, Combustion, Accelerant and Impact; the last 13 points go to Arcane (Wand Specialization, Arcane Resilience, Arcane Concentration, Arcane Subtlety, Magic Absorption).
-- **Frost:** Improved Frostbolt, Ice Shards, Improved Frost Nova, Frost Channeling, Ice Lance, Arctic Reach, Ice Block, Shatter, Improved Cone of Cold, Cold Snap, Fingers of Frost, Winter's Chill, Ice Barrier, Precision and Frostbite; the last 13 points go to Arcane (Wand Specialization, Arcane Resilience, Arcane Concentration, Arcane Subtlety, Magic Absorption).
-
-</details>
+| **Arcane** | Ranged DPS | `32 / 16 / 3` | Arcane Power, Presence of Mind, Arcane Blast, Missile Barrage, Arcane Instability. |
+| **Fire** | Ranged DPS | `16 / 32 / 3` | Combustion, Pyroblast, Ignite, Fire Power, Critical Mass. |
+| **Frost** | Ranged DPS | `10 / 0 / 41` | Ice Barrier, Ice Block, Shatter, Cold Snap, Winter's Chill. |
 
 ---
 

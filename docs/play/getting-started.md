@@ -97,12 +97,14 @@ A guild invite does **not** make the bot your companion: you cannot order it wit
 | | Own alt | Free bot / pool bot |
 | :--- | :--- | :--- |
 | **Class spells** | Learned free on login and every level-up (`TortoiseBots.AutoLearnOnLevel`) | Learned free on login and every level-up |
-| **Talents** | Spent automatically on a premade build (`TortoiseBots.AutoTalentsOnLevel`) | Spent automatically on a premade build |
+| **Talents** | Spent automatically on a premade build (`TortoiseBots.AutoTalentsOnLevel`) | Spent automatically on a premade build; the builds are the level-60 picks of Forever players for each spec |
 | **Professions** | Not granted automatically | Two professions, First Aid and Cooking at level 5 (`TortoiseBots.AutoProfessions`) |
 | **Tools and food** | Not granted automatically | Gathering/crafting tools and level-fitting food and water (`TortoiseBots.AutoTools`, `TortoiseBots.AutoFood`) |
-| **Gear** | What you give it; it also equips upgrades it loots | Gear from loot, quests and generated upgrades (`AiPlayerbot.RandomGearProgression`, `AiPlayerbot.AutoEquipUpgradeLoot`) |
+| **Gear** | What you give it; it also equips upgrades it loots | Loot, quest rewards, one spawn kit at the rolled start level (level 5+) and generated upgrades (`AiPlayerbot.AutoEquipUpgradeLoot`) |
 | **Mounts** | Yours to buy | Learns to ride and buys its race's mount with its own gold at 40 and 60 (`AiPlayerbot.LevelUpMounts`) |
 | **Loot rolls** | Rolls with the group | Rolls with the group |
+
+A free bot's first login rolls its start level between 1 and 60 (`AiPlayerbot.RandomBotStartLevelMin` / `.Max`), so a new free bot does not always begin at level 1; from there it levels by playing.
 
 The bot engine does not use Turtle-only custom spells, races or content.
 
@@ -112,7 +114,7 @@ One tank, one healer, one melee damage dealer and two ranged damage dealers:
 
 | Role | Good picks | What they bring |
 | :--- | :--- | :--- |
-| **Tank** | Protection Warrior, Bear Druid, Protection Paladin | Holds threat, taunts, interrupts |
+| **Tank** | Protection Warrior, Bear Druid, Protection Paladin | Holds threat and interrupts (a protection paladin has no taunt on ForeverCore) |
 | **Healer** | Holy Priest, Restoration Shaman, Holy Paladin, Restoration Druid | Healing and dispels |
 | **Melee DPS** | Combat or Assassination Rogue, Fury Warrior, Cat Druid | Burst, interrupts |
 | **Ranged DPS** (2) | Frost or Fire Mage, Marksmanship Hunter, Affliction Warlock | Polymorph, Freezing Trap, Banish, conjured food and water |

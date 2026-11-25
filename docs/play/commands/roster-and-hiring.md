@@ -153,7 +153,7 @@ The default ceiling is what a spawned bot of that level gets (rare at most); `il
 
 `.tb role` sets the forced role and rebuilds the kit. `tank` needs a class with a tank kit: warrior, bear druid, or a protection paladin (recorded only); a shaman, priest, mage or rogue is refused `no-tank-kit`. `none` restores automatic role inference.
 
-`.tb spec` chooses the talent spec the kit is built from (`none` = automatic). `.tb talents <bot>` shows and applies the talent build; see [Configuration](../../server/configuration.md).
+`.tb spec` chooses the talent spec the kit is built from (`none` = automatic). `.tb talents <bot>` shows and applies the talent build (the spec's preset, built from the level-60 picks of Forever players); see [Configuration](../../server/configuration.md).
 
 ## Guild Orders
 

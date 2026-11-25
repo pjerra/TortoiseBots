@@ -106,12 +106,12 @@ Teleports are never routine movement. There is no taxi travel yet: the flight-pa
 <a id="initial-skills--professions"></a>
 ## Progression
 
-Pool characters are created at level 1 and level up by playing. There is no level seeding: bots start where a new character starts and earn their levels. The level ladder (`AiPlayerbot.LevelLadder`, on) only decides which level bands are online at a time; it never changes a bot's level. See [the bot pool](../server/bot-pool.md#the-level-ladder).
+Pool characters are created at level 1. On a fresh bot's first login the module rolls its start level between `AiPlayerbot.RandomBotStartLevelMin` and `AiPlayerbot.RandomBotStartLevelMax` (defaults `1` and `60`), and from then on it levels by playing. The level ladder (`AiPlayerbot.LevelLadder`, on) only decides which level bands are online at a time; it never changes a bot's level. See [the bot pool](../server/bot-pool.md#spawning-a-bot-start-level-and-gear).
 
 | What bots get | Setting |
 | :--- | :--- |
 | **Class spells** on login and on every level-up, free | `TortoiseBots.AutoLearnOnLevel` (on) |
-| **Talent points** spent on login and level-up following a premade build (never a reset) | `TortoiseBots.AutoTalentsOnLevel` (on) |
+| **Talent points** spent on login and level-up following a premade build (never a reset); the builds are the level-60 picks of Forever players for each spec | `TortoiseBots.AutoTalentsOnLevel` (on) |
 | **Class-quest spells** (stances, forms, totems, pets, racials) when a quest of the running world teaches them, class-masked or implied by the spell | `TortoiseBots.ClassQuestSpells` (off; the class-line autotrain already teaches these, so turning it on adds a family-0 row such as the paladin's *Sense Undead*) |
 | **At level 5, a class-sensible pair of primary professions plus First Aid and Cooking** | `TortoiseBots.AutoProfessions` (on) |
 | **Profession tools** (pick, knife, hammer, spanner, rod, pole) in a free bag slot | `TortoiseBots.AutoTools` (on) |

@@ -94,20 +94,13 @@ Shamans maintain 4-element totem sets tailored to group composition:
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever shaman on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Elemental / Enhancement / Restoration) | Key Talents |
 | :--- | :--- | :--- | :--- |
 | **Restoration** | Healer | `0 / 10 / 41` | Nature's Swiftness, Riptide, Mana Tide Totem, Healing Way, Water Shield. |
-| **Enhancement** | Melee DPS | `11 / 40 / 0` | Stormstrike, Flurry, Maelstrom Weapon, Elemental Devastation, Rage of the Farseer. |
-| **Elemental** | Ranged DPS | `41 / 0 / 10` | Elemental Fury, Lightning Mastery, Lightning Overload, Call of Thunder, Elemental Focus. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Restoration:** Improved Healing Wave, Tidal Focus, Mindfulness, Ancestral Healing, Healing Focus, Water Shield, Tidal Mastery, Restorative Totems, Mana Tide Totem, Healing Way, Nature's Swiftness, Purification and Riptide; the last 10 points go to Enhancement (Ancestral Knowledge, Guardian Totems, Mental Dexterity).
-- **Enhancement:** Thundering Strikes, Ancestral Knowledge, Mental Dexterity, Improved Lightning Shield, Elemental Weapons, Shamanistic Focus, Anticipation, Flurry, Stormstrike, Spirit Weapons, Mental Quickness, Improved Stormstrike, Maelstrom Weapon and Rage of the Farseer; the last 11 points go to Elemental (Concussion, Elemental Devastation, Call of Flame).
-- **Elemental:** Convection, Concussion, Elemental Alacrity, Call of Flame, Reverberation, Elemental Focus, Eye of the Storm, Call of Thunder, Lightning Overload, Elemental Reach, Elemental Fury, Lightning Mastery, Trial by Fire and Elemental Warding; the last 10 points go to Restoration (Improved Healing Wave, Tidal Focus).
-
-</details>
+| **Enhancement** | Melee DPS | `12 / 34 / 5` | Stormstrike, Flurry, Maelstrom Weapon, Elemental Devastation, Rage of the Farseer. |
+| **Elemental** | Ranged DPS | `32 / 8 / 11` | Elemental Fury, Lightning Mastery, Lightning Overload, Call of Thunder, Elemental Focus. |
 
 ---
 

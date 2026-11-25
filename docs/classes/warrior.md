@@ -80,20 +80,13 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever warriors on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Arms / Fury / Protection) | Key Talents |
 | :--- | :--- | :--- | :--- |
-| **Fury** | Melee DPS | `16 / 35 / 0` | Bloodthirst, Death Wish, Flurry, Dual Wield Specialization, Improved Whirlwind. |
-| **Protection** | Tank | `10 / 0 / 41` | Shield Slam, Concussion Blow, Last Stand, Bastion, Improved Revenge. |
-| **Arms** | Melee DPS | `33 / 18 / 0` | Mortal Strike, Sweeping Strikes, Weaponmaster, Impale, Deep Wounds. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Fury:** Cruelty, Unbridled Wrath, Piercing Howl, Blood Craze, Furious Precision, Dual Wield Specialization, Improved Execute, Death Wish, Improved Berserker Rage, Flurry, Improved Whirlwind, Bloodthirst and Enrage; the last 16 points go to Arms (Improved Heroic Strike, Improved Rend, Improved Tactical Mastery, Improved Overpower, Anger Management, Deep Wounds, Deflection).
-- **Protection:** Shield Specialization, Anticipation, Defiance, Master of Defense, Improved Sunder Armor, Vanguard, Improved Bloodrage, Concussion Blow, Focused Rage, Bastion, Shield Slam, Improved Revenge, Last Stand, Improved Thunder Clap, Improved Shield Bash and Improved Shield Wall; the last 10 points go to Arms (Improved Heroic Strike, Deflection, Improved Tactical Mastery, Improved Charge).
-- **Arms:** Deflection, Improved Rend, Improved Charge, Improved Tactical Mastery, Improved Overpower, Anger Management, Deep Wounds, Two-Handed Weapon Specialization, Impale, Sweeping Strikes, Weaponmaster, Improved Slam and Mortal Strike; the last 18 points go to Fury (Cruelty, Unbridled Wrath, Piercing Howl, Blood Craze, Enrage).
-
-</details>
+| **Fury** | Melee DPS | `17 / 34 / 0` | Bloodthirst, Death Wish, Flurry, Dual Wield Specialization, Improved Whirlwind. |
+| **Protection** | Tank | `4 / 15 / 32` | Shield Slam, Concussion Blow, Last Stand, Bastion, Defiance. |
+| **Arms** | Melee DPS | `32 / 19 / 0` | Mortal Strike, Sweeping Strikes, Weaponmaster, Impale, Spearing Strike. |
 
 ---
 

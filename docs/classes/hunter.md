@@ -42,7 +42,6 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 ### Survival (Melee / Ranged Hybrid)
 - Fights at range with the full shot kit and weaves melee strikes when enemies close in.
 - Uses *Raptor Strike* and *Mongoose Bite* on cooldown without requiring a dodge proc.
-- Employs *Counterattack* after parrying incoming strikes (parry legality is enforced by the core).
 
 ### Dead-Zone & Melee Weaving
 - If enemies close inside Auto Shot minimum range, ranged hunters trade into melee using *Wing Clip*, *Raptor Strike*, and *Mongoose Bite*, then step back out.
@@ -94,20 +93,13 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever hunters on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Beast Mastery / Marksmanship / Survival) | Key Talents |
 | :--- | :--- | :--- | :--- |
-| **Beast Mastery** | Ranged DPS | `36 / 15 / 0` | Bestial Wrath, Frenzy, Intimidation, Spirit Bond, Unleashed Fury. |
-| **Marksmanship** | Ranged DPS | `11 / 40 / 0` | Trueshot Aura, Mortal Shots, Barrage, Scatter Shot, Sniper Shot. |
-| **Survival** | Ranged DPS | `10 / 0 / 41` | Counterattack, Lacerating Strikes, Expose Prey, Predator's Edge, Clever Traps. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Beast Mastery:** Deadly Aspects, Endurance Training, Focused Fire, Bestial Swiftness, Unleashed Fury, Ferocity, Improved Mend Pet, Intimidation, Spirit Bond, Bestial Discipline, Frenzy and Bestial Wrath; the last 15 points go to Marksmanship (Lethal Attacks, Efficiency, Hawk Eye, Rapid Killing).
-- **Marksmanship:** Lethal Attacks, Efficiency, Careful Aim, Improved Arcane Shot, Trueshot Aura, Mortal Shots, Barrage, Scatter Shot, Ranged Weapon Specialization, Sniper Shot and Hawk Eye; the last 11 points go to Beast Mastery (Deadly Aspects, Endurance Training, Focused Fire).
-- **Survival:** Deflection, Survivalist, Savage Strikes, Improved Wing Clip, Surefooted, Deterrence, Clever Traps, Survival Tactics, Counterattack, Predator's Edge, Expose Prey, Survivalist's Discipline, Lightning Reflexes, Lacerating Strikes and Entrapment; the last 10 points go to Beast Mastery (Endurance Training, Deadly Aspects).
-
-</details>
+| **Beast Mastery** | Ranged DPS | `31 / 20 / 0` | Bestial Wrath, Frenzy, Intimidation, Unleashed Fury, Careful Aim. |
+| **Marksmanship** | Ranged DPS | `5 / 41 / 5` | Trueshot Aura, Mortal Shots, Barrage, Sniper Shot, Rapid Recuperation. |
+| **Survival** | Ranged DPS | `5 / 15 / 31` | Predator's Edge, Improved Tracking, Lethal Attacks, Expose Prey, Survivalist's Discipline. |
 
 ---
 
