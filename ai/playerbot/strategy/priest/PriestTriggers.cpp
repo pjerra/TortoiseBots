@@ -5,9 +5,49 @@
 #include "PriestMultipliers.h"
 #include "playerbot/policy/heal/ShadowformHealPolicy.h"
 #include "playerbot/strategy/values/HealerCoverage.h"
+#include "playerbot/strategy/actions/BossTacticsActions.h"
 #include "../../../runtime/policy/class/PriestFadePolicy.h"
 
 using namespace ai;
+
+bool TankRenewTrigger::IsActive()
+{
+    if (!ai->HasSpell("renew"))
+        return false;
+
+    Unit* tank = AI_VALUE(Unit*, "main tank");
+    if (!tank || tank == bot || !sServerFacade.IsAlive(tank) || tank->GetMapId() != bot->GetMapId())
+        return false;
+    if (tank->GetHealthPercent() >= sPlayerbotAIConfig.almostFullHealth)
+        return false;
+    if (ai->HasAura("renew", tank))
+        return false;
+    if (sServerFacade.getDistance2d(bot, tank) > ai->GetRange("heal") || !sServerFacade.IsWithinLOSInMap(bot, tank))
+        return false;
+
+    return HealTopUpAllowedFor(ai, bot, tank);
+}
+
+bool PrayerOfMendingTrigger::IsActive()
+{
+    if (!SpellCanBeCastedTrigger::IsActive())
+        return false;
+
+    Unit* tank = GetTarget();
+    if (!tank || tank->GetMapId() != bot->GetMapId() ||
+        sServerFacade.getDistance2d(bot, tank) > ai->GetRange("heal") || !sServerFacade.IsWithinLOSInMap(bot, tank))
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    for (Player* member : LiveGroupMembers(group))
+        if (member && ai->HasMyAura("prayer of mending", member))
+            return false;
+
+    return true;
+}
 
 // BuffTrigger proves the spell is trained and the aura missing; it cannot
 // see the capstone's cooldown, and the 5-min cooldown must not fire on the

@@ -50,7 +50,15 @@ namespace ai
     CAN_CAST_TRIGGER_A(RiposteCastTrigger, "riposte");
     CAN_CAST_TRIGGER_A(SurpriseAttackTrigger, "surprise attack");
     CAN_CAST_TRIGGER(BackstabTrigger, "backstab");
+    CAN_CAST_TRIGGER(MutilateTrigger, "mutilate");
     CAN_CAST_TRIGGER(NoxiousAssaultTrigger, "noxious assault");
+
+    class DeathMarkTrigger : public SpellCanBeCastedTrigger
+    {
+    public:
+        DeathMarkTrigger(PlayerbotAI* ai) : SpellCanBeCastedTrigger(ai, "death mark") {}
+        bool IsActive() override;
+    };
 
     class EnvenomTrigger : public NoBuffAndComboPointsAvailableTrigger
     {

@@ -201,6 +201,61 @@ namespace ai
         bool isUseful() override;
     };
 
+    // Renew spared for the tank: the party HoT row above follows the most
+    // wounded member, so a tank at 85 % got no HoT at all while anyone else
+    // stood lower. The trigger owns the band, this action only retargets.
+    class CastRenewOnTankActionBase : public HealHotPartyMemberAction
+    {
+    public:
+        CastRenewOnTankActionBase(PlayerbotAI* ai) : HealHotPartyMemberAction(ai, "renew", 15, HealManaEfficiency::VERY_HIGH) {}
+        std::string getName() override { return "renew on tank"; }
+
+    protected:
+        std::string GetTargetName() override { return "main tank"; }
+        // Never walk to "party member to heal" for this row: that target is
+        // somebody else. The trigger fires only at heal range.
+        std::string GetReachActionName() override { return ""; }
+    };
+    class CastRenewOnTankAction : public PriestFormGatedHeal<CastRenewOnTankActionBase>
+    {
+    public:
+        using PriestFormGatedHeal<CastRenewOnTankActionBase>::PriestFormGatedHeal;
+    };
+
+    // Discipline capstone (Forever 402174): 12 s cooldown channel that heals
+    // its target on landing and again during the channel.
+    class CastPenanceOnPartyActionBase : public HealPartyMemberAction
+    {
+    public:
+        CastPenanceOnPartyActionBase(PlayerbotAI* ai) : HealPartyMemberAction(ai, "penance", 50, HealManaEfficiency::HIGH) {}
+    };
+    class CastPenanceOnPartyAction : public PriestFormGatedHeal<CastPenanceOnPartyActionBase>
+    {
+    public:
+        using PriestFormGatedHeal<CastPenanceOnPartyActionBase>::PriestFormGatedHeal;
+    };
+
+    // Forever 401859: prayer that heals the next damage the target takes and
+    // then jumps. Only one per caster, and the trigger holds it until the
+    // party's copy is spent, so this action only needs the tank as a target.
+    class CastPrayerOfMendingOnTankAction : public CastHealingSpellAction
+    {
+    public:
+        CastPrayerOfMendingOnTankAction(PlayerbotAI* ai) : CastHealingSpellAction(ai, "prayer of mending", 15, HealManaEfficiency::VERY_HIGH) {}
+        std::string getName() override { return "prayer of mending on tank"; }
+        bool isUseful() override
+        {
+            Unit* target = GetTarget();
+            if (!target || target == bot || ai->HasMyAura(GetSpellName(), target))
+                return false;
+            return CastSpellAction::isUseful();
+        }
+
+    protected:
+        std::string GetTargetName() override { return "main tank"; }
+        std::string GetReachActionName() override { return ""; }
+    };
+
     // Prayer of Healing targets an injured party member and heals that
     // member's nearby group. Use the mature AOE-heal target/reach path rather
     // than the self-targeting buff action, so a separated party can be

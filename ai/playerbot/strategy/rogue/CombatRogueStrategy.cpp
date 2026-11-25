@@ -32,6 +32,12 @@ void CombatRogueStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "slice and dice",
         NextAction::array(0, new NextAction("slice and dice", ACTION_HIGH + 2), NULL)));
 
+    // Forever's delayed-detonation finisher: above Eviscerate, below the
+    // Slice and Dice upkeep this kit keeps first.
+    triggers.push_back(new TriggerNode(
+        "death mark",
+        NextAction::array(0, new NextAction("death mark", ACTION_HIGH + 1.5f), NULL)));
+
     triggers.push_back(new TriggerNode(
         "eviscerate",
         NextAction::array(0, new NextAction("eviscerate", ACTION_HIGH + 1), NULL)));

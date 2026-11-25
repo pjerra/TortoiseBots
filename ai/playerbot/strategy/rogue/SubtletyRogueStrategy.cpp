@@ -39,6 +39,12 @@ void SubtletyRogueStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers
         "eviscerate",
         NextAction::array(0, new NextAction("eviscerate", ACTION_HIGH + 2), NULL)));
 
+    // Forever's delayed-detonation finisher, above Eviscerate while it is
+    // ready (the Tortoise delayed finisher below is gone on Forever).
+    triggers.push_back(new TriggerNode(
+        "death mark",
+        NextAction::array(0, new NextAction("death mark", ACTION_HIGH + 2.5f), NULL)));
+
     // Almost-dead finisher dump, same row and priority as CombatRogueStrategy:
     // a target at 25% health or less eats banked combo points as Eviscerate.
     triggers.push_back(new TriggerNode(

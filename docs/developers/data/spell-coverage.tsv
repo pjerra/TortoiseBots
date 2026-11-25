@@ -28,6 +28,7 @@ Hunter	Survival	Carve	not in preset	forever/data/waterys/class-review/hunter.md:
 Hunter	all	Lacerate	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/hunter/HunterAiObjectContext.cpp:313	no hunter spell by this name
 Hunter	all	Aspect of the Wolf	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/hunter/HunterActions.cpp:443	no such spell on the client
 Rogue	Assassination	Cold Blood	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp:252	guaranteed critical finisher
+Rogue	Assassination	Mutilate	available	client DB2 SkillLineAbility 399956/1241582/1241584 (lvl 40/50/60)	ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp:68	builder above Backstab from 40 (trainer and class line); Backstab fallback
 Rogue	Combat	Adrenaline Rush, Blade Flurry	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/rogue/CombatRogueStrategy.cpp:241,245	damage cooldowns
 Rogue	Subtlety	Preparation, Hemorrhage, Ghostly Strike	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp:79-87,275	Subtlety kit
 Rogue	all	Instant, Deadly, Crippling, Wound poison	available	forever/data/waterys/items.csv	ai/playerbot/strategy/rogue/GenericRogueNonCombatStrategy.cpp:45-49	poison items exist on Forever
@@ -35,10 +36,13 @@ Rogue	all	Mind Poison	not on Forever	forever/data/waterys/items.csv	ai/playerbot
 Rogue	Assassination	Envenom	not on Forever	forever/tools/test_forever_spell_rows.py:14	ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp	row compiled out for the Forever build
 Rogue	Subtlety	Shadow of Death, Mark for Death, Smoke Bomb	not on Forever	forever/tools/test_forever_spell_rows.py:15	ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp	rows compiled out for the Forever build
 Rogue	Combat/Assassination	Surprise Attack, Noxious Assault	unverified	forever/data/waterys/class-review/rogue.md:87	ai/playerbot/strategy/rogue/RogueAiObjectContext.cpp	not in the spell audit; check live before relying on them
-Rogue	Subtlety	Death Mark	in preset, not cast	forever/data/waterys/talent-builds.csv	none	learned by the preset; the bot has no action for it yet
+Rogue	Subtlety	Death Mark	available	client DB2 SkillLineAbility 1316709 (lvl 40)	ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp:39	full combo bar on a durable target; 6 s stored-damage finisher, every spec (not in the new preset, learned from the class line)
 Priest	all	Power Word: Shield, Fade, Renew, Greater Heal, Flash Heal	available	forever/data/waterys/class-review/priest.md:25-31	ai/playerbot/strategy/priest/	healing ladder
 Priest	Shadow	Shadowform, Vampiric Embrace, Mind Flay, Silence	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/ShadowPriestStrategy.cpp	Shadow kit
-Priest	Discipline	Penance, Power Infusion, Prayer of Mending	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/DisciplinePriestStrategy.cpp	Forever talent abilities
+Priest	Discipline	Penance	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/DisciplinePriestStrategy.cpp:32,40,111	critical/low heal ladder; class line teaches it at 30
+Priest	Discipline	Power Infusion	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/PriestStrategy.cpp:589	damage/healing cooldown
+Priest	Discipline/Holy	Prayer of Mending	in preset (holy)	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/HolyPriestStrategy.cpp:91	cast on the main tank and jumps on damage; class line teaches it at 40
+Priest	Discipline/Holy	Renew on the tank	available	forever/data/waterys/forever-spell-ids.csv:153	ai/playerbot/strategy/priest/HolyPriestStrategy.cpp:95	tank keeps its HoT while a more wounded member takes the party row
 Priest	Holy	Chastise	available, not in preset	forever/data/waterys/talent-trees-70959.csv	ai/playerbot/strategy/priest/PriestActions.cpp	trainer spell; the bot casts it when learned
 Priest	Holy	Ascendance	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/priest/HolyPriestStrategy.cpp	no Forever spell by this name
 Shaman	Enhancement	Stormstrike	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/shaman/EnhancementShamanStrategy.cpp:59	nature burst
