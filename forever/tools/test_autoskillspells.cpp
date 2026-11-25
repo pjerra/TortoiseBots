@@ -58,10 +58,31 @@ static void TestOwedAtLevel()
     CHECK(c, !S::DualWieldOwed(0, 60));
 }
 
+static void TestHunterRangedSkill()
+{
+    char const* const c = "case 3 (hunter ranged weapon skill seed)";
+    BeginCase(c);
+    // 45 Bows, 46 Guns, 226 Crossbows; anything that is not an Auto Shot weapon falls back to Bows.
+    CHECK(c, S::HunterRangedSkill(45) == 45);
+    CHECK(c, S::HunterRangedSkill(46) == 46);
+    CHECK(c, S::HunterRangedSkill(226) == 226);
+    CHECK(c, S::HunterRangedSkill(0) == 45);
+    CHECK(c, S::HunterRangedSkill(228) == 45);   // wands: not an Auto Shot weapon, the starter bow is the fallback
+    // Only a hunter that knows none of the three is owed a skill.
+    CHECK(c, S::HunterRangedSkillOwed(std::uint8_t(S::PlayerClass::Hunter), 0, 0, 0));
+    CHECK(c, !S::HunterRangedSkillOwed(std::uint8_t(S::PlayerClass::Hunter), 1, 0, 0));
+    CHECK(c, !S::HunterRangedSkillOwed(std::uint8_t(S::PlayerClass::Hunter), 0, 300, 0));
+    CHECK(c, !S::HunterRangedSkillOwed(std::uint8_t(S::PlayerClass::Hunter), 0, 0, 1));
+    // Every other class keeps exactly the weapon skills the world seeded.
+    for (std::uint8_t cls : { 1, 2, 4, 5, 6, 7, 8, 9, 11 })
+        CHECK(c, !S::HunterRangedSkillOwed(cls, 0, 0, 0));
+}
+
 int main()
 {
     TestClassLevels();
     TestOwedAtLevel();
+    TestHunterRangedSkill();
 
     int failed = 0;
     for (auto const& [name, ok] : g_cases)

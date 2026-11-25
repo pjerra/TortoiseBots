@@ -16,9 +16,11 @@
 #include "../../../runtime/BotGearService.h"
 #include "../../../../runtime/AltBotService.h"
 #include "../../../../runtime/AltBotPolicy.h"
+#include "../../../../runtime/GearEffectiveLevelPolicy.h"
 #include "../../../runtime/policy/hire/HireSourceGuardPolicy.h"
 #include "../../../runtime/policy/hire/HireGearPolicy.h"
 #include "playerbot/TbCompatW2.h"
+#include "playerbot/TbCompatPoolGear.h"
 
 using namespace ai;
 
@@ -656,6 +658,17 @@ bool EquipUpgradesAction::Execute(Event& event)
     bool forceUsageChanged = false;
     std::set<uint8> filledSlots;
     std::set<uint32> ownerTradedIds = (event.getSource() == "trade status") ? ai->TakeOwnerTradedItemIds() : std::set<uint32>{};
+    // The same bots the pool gear top-up handles: pool bots with no live player
+    // master, never hired or guild-claimed. Forever rows often store
+    // RequiredLevel 0 even at high item levels, so the core says "can wear it"
+    // to a level-10 pool bot holding an item level 62 blue; treat the derived
+    // requirement as a real one for those bots only.
+    bool const gateOrganicByLevel = TortoiseBots::PoolGearTopUpEligible(
+        sPlayerbotAIConfig.autoEquipUpgradeRespectsRequiredLevel,
+        IsPoolBotCompat(bot),
+        PoolGearTopUpIsHiredCompat(bot),
+        PoolGearTopUpIsClaimedCompat(bot),
+        ai->HasRealPlayerMaster());
 
     for (auto& item : items)
     {
@@ -693,6 +706,15 @@ bool EquipUpgradesAction::Execute(Event& event)
             if (GetItemProtoCompat(item) && GetItemProtoCompat(item)->ItemLevel > cap &&
                 (GetItemProtoCompat(item)->Class == ITEM_CLASS_WEAPON || GetItemProtoCompat(item)->Class == ITEM_CLASS_ARMOR))
                 continue;
+
+        if (gateOrganicByLevel)
+        {
+            ItemPrototype const* levelProto = GetItemProtoCompat(item);
+            if (levelProto &&
+                (levelProto->Class == ITEM_CLASS_WEAPON || levelProto->Class == ITEM_CLASS_ARMOR) &&
+                TortoiseBots::GearEffectiveRequiredLevel(levelProto->RequiredLevel, levelProto->ItemLevel) > bot->GetLevel())
+                continue;
+        }
 
         // Bags and quivers never go through slot resolution below: core's
         // INVTYPE_BAG probe resolves to a single slot (the first free one, or

@@ -69,6 +69,30 @@ namespace ai
     constexpr uint32_t WARRIOR_REND_RAGE_COST = 10;
     constexpr uint32_t WARRIOR_MAIN_STRIKE_RAGE_COST = 30; // Mortal Strike / Bloodthirst
 
+    // Heroic Strike (15 rage) is a next-swing dump, so it waits while the bar
+    // is needed for the best builder the warrior has. That builder's cost is
+    // level-bound: below 20 the dearest other ability is Thunder Clap (20) and
+    // low-level rage income hardly fills a 40 bar inside a trash pull; from 20
+    // to 39 Whirlwind (36) costs 25; from 40 Bloodthirst, Mortal Strike and
+    // Shield Slam cost 30. A flat 40 left a level 13-18 tank without Heroic
+    // Strike for a whole dungeon run.
+    constexpr uint32_t WARRIOR_HEROIC_STRIKE_RAGE_COST = 15;
+    constexpr uint32_t WARRIOR_HEROIC_STRIKE_FLOOR_LOW = 25;   // below 20: clap (20) stays affordable
+    constexpr uint32_t WARRIOR_HEROIC_STRIKE_FLOOR_MID = 30;   // 20-39: Whirlwind (25) stays affordable
+    constexpr uint32_t WARRIOR_HEROIC_STRIKE_FLOOR_HIGH = 40;  // 40+: the 30-rage main strikes fire first
+
+    inline uint32_t HeroicStrikeRageFloor(uint8_t level)
+    {
+        return level < 20 ? WARRIOR_HEROIC_STRIKE_FLOOR_LOW
+            : level < 40 ? WARRIOR_HEROIC_STRIKE_FLOOR_MID
+            : WARRIOR_HEROIC_STRIKE_FLOOR_HIGH;
+    }
+
+    inline bool ShouldHeroicStrike(uint8_t level, uint32_t rage)
+    {
+        return rage >= HeroicStrikeRageFloor(level);
+    }
+
     // Rend (10 rage) re-applied on every new target kept the bar below the
     // main strike's 30 for the whole fight (walk 15: Mortal Strike 0-3
     // casts a run while Rend fired 41 times). A dps warrior that knows the

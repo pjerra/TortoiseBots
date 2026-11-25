@@ -93,6 +93,11 @@ ALLOWLIST = {
     "AiPlayerbot.RunTrace.MaxFileMb":
         "default is the constant TortoiseBots::RunTrace::kDefaultMaxFileMb = 64 "
         "(runtime/RunTraceRecords.h), equal to the commented template example",
+    "AiPlayerbot.RandomBotStartLevelMin":
+        "default is a core-guarded constant: Forever's pool starts at 1 "
+        "(kRandomBotStartLevelMinDefault, PlayerbotAIConfig.cpp), the Turtle build keeps "
+        "5, which is the shared template value; forever/tools/gen_aiplayerbot_conf.py "
+        "ships 1 and forever/tools/test_pool_gear_seed_wiring.py pins both",
 }
 
 

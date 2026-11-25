@@ -24,6 +24,9 @@ struct FakeBotMgrState
 
 inline FakeBotMgrState fakeBotMgrState;
 inline uint64 fakeNextCharacterGuid = 1;
+// `failCreate` refuses every creation; `fakeFailNextCreates` refuses that many and then creates (one bad composition, then a
+// good one).
+inline int fakeFailNextCreates = 0;
 
 struct FakePendingCharacter
 {
@@ -78,6 +81,11 @@ public:
         fakePoolEvents.push_back("CreateCharacter " + name);
         if (fakeBotMgrState.failCreate)
             return fakeBotMgrState.failReason;
+        if (fakeFailNextCreates > 0)
+        {
+            --fakeFailNextCreates;
+            return fakeBotMgrState.failReason;
+        }
         for (FakePoolDatabase::CoreCharacterRow const& row : CharacterDatabase.coreCharacters)
             if (row.name == name)
                 return "that name is taken";

@@ -12,6 +12,7 @@
 #include <cstdint>
 
 class Player;
+class Item;
 
 namespace tbhost
 {
@@ -28,6 +29,11 @@ void TickProfessionUpkeep(Player* bot, std::uint32_t diffMs, bool disenchant, bo
 // in its own TU (TbHostProfessionUpkeepWeight.cpp). 0 = the bot's class/spec
 // has no scale, or the enchant is not scored.
 std::uint32_t EnchantWeightFor(Player* bot, std::uint32_t enchantId);
+
+// True when the level-60 per-spec enchant table owns this worn item's slot:
+// the common player choice, or deliberately no enchant. The enchanter must
+// then leave the item alone (same compat boundary as EnchantWeightFor).
+bool SpecEnchantGoverns(Player* bot, Item* item);
 
 // True while a cast this service started is in flight: BotMgr pauses the
 // engine brain so the bot's own movement does not interrupt it.

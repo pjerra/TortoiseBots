@@ -66,9 +66,22 @@ void TankFeralDruidStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigger
         "faerie fire (feral)",
         NextAction::array(0, new NextAction("faerie fire (feral)", ACTION_HIGH), NULL)));
 
+    // Lacerate first: the stacking bleed is the bear's steady threat and
+    // damage, and it is cheaper than the bite. Primal Bite follows as the
+    // high-threat rage dump on its 6 s cooldown.
+    triggers.push_back(new TriggerNode(
+        "lacerate",
+        NextAction::array(0, new NextAction("lacerate", ACTION_NORMAL + 2), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "primal bite",
+        NextAction::array(0, new NextAction("primal bite", ACTION_HIGH + 1), NULL)));
+
+#if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     triggers.push_back(new TriggerNode(
         "savage bite",
         NextAction::array(0, new NextAction("savage bite", ACTION_HIGH + 1), NULL)));
+#endif
 
     triggers.push_back(new TriggerNode(
         "maul rage available",

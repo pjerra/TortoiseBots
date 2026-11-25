@@ -123,9 +123,10 @@ void HandleFeatures(Player* requester, std::string_view args)
 }
 
 // The run the requester's party is walking: the first group member (bots
-// lead runs; a player never does) whose guid holds one.
+// lead runs; a player never does) whose guid holds one. Runs exist only in the slice build.
 run::RunRec* PartyRun(Player* requester)
 {
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
     Group* group = requester ? requester->GetGroup() : nullptr;
     if (!group)
         return nullptr;
@@ -137,11 +138,13 @@ run::RunRec* PartyRun(Player* requester)
         if (run::RunRec* rec = run::Find(member->GetGUID()))
             return rec;
     }
+#endif
     return nullptr;
 }
 
 void HandleRunStatus(Player* requester)
 {
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
     run::RunRec* rec = PartyRun(requester);
     if (!rec || !rec->run.plan)
     {
@@ -155,10 +158,15 @@ void HandleRunStatus(Player* requester)
     addon::Send(requester, RaidLayoutLine(std::to_string(rec->bound.size() + 1), "-", "-", "-", "-"));
     TortoiseBots::DungeonRun::StatusFields const fields = TortoiseBots::DungeonRun::StatusParts(rec->run);
     addon::Ack(requester, "run status", "party", std::uint32_t(fields.step), fields.plan);
+#else
+    addon::Send(requester, NoRunLine());
+    addon::Ack(requester, "run status", "party", 0, "");
+#endif
 }
 
 void HandleRunHere(Player* requester)
 {
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
     ai::DungeonPlanTable& table = ai::GetDungeonPlans();
     if (requester && table.Sealed())
     {
@@ -179,13 +187,15 @@ void HandleRunHere(Player* requester)
             return;
         }
     }
+#endif
     addon::Send(requester, NoRunHereLine());
 }
 
 void HandleRunList(Player* requester)
 {
-    ai::DungeonPlanTable& table = ai::GetDungeonPlans();
     std::vector<PlanEntry> plans;
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    ai::DungeonPlanTable& table = ai::GetDungeonPlans();
     if (table.Sealed())
     {
         std::vector<ai::DungeonPlan const*> all = table.All();
@@ -202,6 +212,7 @@ void HandleRunList(Player* requester)
             plans.push_back(entry);
         }
     }
+#endif
     addon::Send(requester, RunListLine(plans));
     addon::Ack(requester, "run list", "plans", std::uint32_t(plans.size()), "");
 }
@@ -247,9 +258,12 @@ void AppendCcAssign(Player* requester)
             std::string mark, family;
             h8::CcOrderValues(member, mark, family);
             // TB's gate (commands/Info.cpp:495): the mark alone never lists
-            // a bot, since "rti cc" reads moon on every fresh bot.
+            // a bot, since "rti cc" reads moon on every fresh bot. The strategy
+            // question exists only with the engine, so the option-OFF build lists none.
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
             if (CcRowVisible(h8::HasCombatCcStrategy(member), mark))
                 rows.emplace_back(member->GetName(), mark);
+#endif
         }
     addon::Send(requester, CcBeginLine(rows.size()));
     for (auto const& row : rows)

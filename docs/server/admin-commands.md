@@ -108,7 +108,7 @@ The order store needs the character-database table `tortoise_bots_guild_order`; 
 | `.tb plan <plan> info` | Show one plan's map, legs and steps. |
 | `.tb plan <plan> check <character>` | Check every unit of the plan against a fresh instance. |
 | `.tb plan reload` | Re-read the plan tables (waits while a run holds a plan). |
-| `.tb run start <leader> <plan> [from step <N>\|from leg <leg>] [lead=player]` | Start a bot-led run (or the opt-in player-led one). The party must be bound. |
+| `.tb run start <leader> <plan> [from step <N>\|from leg <leg>] [lead=player]` | Start a bot-led run (or the opt-in player-led one). The named tank's role is committed first; the party must be bound. |
 | `.tb run status <leader\|all>` / `.tb run pause\|resume\|stop <leader>` / `.tb run events <leader> [since=<seq>]` | Follow and control the run. |
 | `.tb trace start <run_id> [party [<leader>]\|bot <Name>] [driver=<...>]` / `stop [<run_id>]` / `status` | Record a run trace. Off until `AiPlayerbot.RunTrace.Enabled = 1`. |
 | `.tb why <bot>` | One bot's decision trace (why trace). |

@@ -75,6 +75,10 @@ std::uint32_t CreatePerMinute();
 // TortoiseBots.Pool.MaxCharacters: the ceiling on the pool's characters, ready or being created.
 std::uint32_t MaxCharacters();
 
+// TortoiseBots.Pool.CensusComposition (default 1): new characters follow the live server's class, race and gender shares
+// (PoolCompositionPolicy.h); 0 keeps the balanced vanilla sequence.
+bool CensusComposition();
+
 // The rows that are usable: ready rows whose account still is the pool's (the stamp, name and id agree), and the ready
 // characters of those accounts. Read on first use, and again while a row's account could not be checked (the auth database gave
 // no answer: such a row is neither used nor marked stale). A creation never trusts this list for an account: VerifyAccount.

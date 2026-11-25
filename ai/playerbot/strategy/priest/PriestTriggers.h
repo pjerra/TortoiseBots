@@ -39,6 +39,28 @@ namespace ai
     // run: 3555 -> 1354 mana in 38 s, healer top threat 28.5 s).
     bool PriestPackLoose(PlayerbotAI* ai);
 
+    // Forever 139: the party HoT row follows the most wounded member, so the
+    // tank got no Renew whenever anyone else stood lower. The trigger owns the
+    // tank band (below almost-full, no aura, in reach, top-up mana allows it)
+    // and the action only retargets Renew at the main tank.
+    class TankRenewTrigger : public Trigger
+    {
+    public:
+        TankRenewTrigger(PlayerbotAI* ai) : Trigger(ai, "tank needs renew") {}
+        bool IsActive() override;
+    };
+
+    // Forever 401859: a prayer on the tank that heals the next damage taken
+    // and then jumps. One per caster, so it fires only while our copy is on
+    // nobody; the tank is the target value the spell check runs against.
+    class PrayerOfMendingTrigger : public SpellCanBeCastedTrigger
+    {
+    public:
+        PrayerOfMendingTrigger(PlayerbotAI* ai) : SpellCanBeCastedTrigger(ai, "prayer of mending") {}
+        bool IsActive() override;
+        std::string GetTargetName() override { return "main tank"; }
+    };
+
     class PartyMemberLowHealthLoosePackTrigger : public PartyMemberLowHealthTrigger
     {
     public:

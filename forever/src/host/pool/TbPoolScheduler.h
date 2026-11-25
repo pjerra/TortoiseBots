@@ -7,7 +7,8 @@
 // this file only translates: registry rows and BotMgr bots into PoolBotState, the pass's guids back into Login/Logout, and the
 // session's two stamps into `tb_pool_character` (last_login, last_logout). A bot that got a master leaves the count and is
 // never logged out by the pool (the policy's `bound`, from `IsPoolBot`, `IsFreeBot` and `MasterOf`); no login is planned while
-// the core's shutdown countdown runs.
+// the core's shutdown countdown runs. The level ladder (`AiPlayerbot.LevelLadder`, on): each bot's level comes from the
+// Player in the world or the character cache outside it, and the policy picks the band with the largest shortfall first.
 //
 // `.tb pool start|stop|status` (TbScripts.cpp): start is explicit (decision: player control first), stop drains every pool bot
 // at 5 logouts per second. Everything is off by default (TortoiseBots.Pool.Enable = 0, TargetOnline = 0).

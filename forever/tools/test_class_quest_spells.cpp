@@ -41,6 +41,7 @@ static char const* kCase7 = "case 7 (CollectTaught: masks, repeatable, displays,
 static char const* kCase8 = "case 8 (shaman totem: the bot's own race decides the level)";
 static char const* kCase9 = "case 9 (no quest; one jump 1 -> 30 teaches everything)";
 static char const* kCase10 = "case 10 (the 39-row table is sane)";
+static char const* kCase11 = "case 11 (a classless quest teaches only the class its spell belongs to)";
 
 static Q::QuestRaw const kStolenTome{ 1598, 256, false, 1, 7763, { 688 }, { 688 }, 0, {} };
 static Q::QuestRaw const kBeginnings{ 1485, 256, false, 1, 7763, { 688 }, { 688 }, 0, {} };
@@ -178,8 +179,10 @@ static void TestCase6()
 static void TestCase7()
 {
     BeginCase(kCase7);
+    // No class mask: the taught spell implies the class, so only the class whose list holds 688 collects it.
     Q::QuestRaw const openToAll{ 1, 0, false, 1, 7763, { 688 }, { 688 }, 0, {} };
-    CHECK(kCase7, Q::CollectTaught(openToAll, 9).empty());
+    CHECK(kCase7, Q::CollectTaught(openToAll, 9) == std::vector<uint32_t>{ 688 });
+    CHECK(kCase7, Q::CollectTaught(openToAll, 1).empty());
 
     Q::QuestRaw const repeatable{ 2, 256, true, 1, 7763, { 688 }, { 688 }, 0, {} };
     CHECK(kCase7, Q::CollectTaught(repeatable, 9).empty());
@@ -285,6 +288,40 @@ static void TestCase10()
     CHECK(kCase10, Q::VerdictName(Q::Verdict::NoRaceQuest) == std::string("no-race-quest"));
 }
 
+// 11. A classless quest teaches only the class whose allow-list holds the spell it gives, and never a repeatable one.
+static void TestCase11()
+{
+    BeginCase(kCase11);
+    // 94441 "A Lesson in Divinity" teaches Redemption (7328, paladin only) and carries no class mask (world.sql quest_template_addon).
+    Q::QuestRaw const lesson{ 94441, 0, false, 12, 7329, { 7328 }, {}, 0, {} };
+    CHECK(kCase11, Q::CollectTaught(lesson, 2) == std::vector<uint32_t>{ 7328 });
+    CHECK(kCase11, Q::CollectTaught(lesson, 1).empty());
+    CHECK(kCase11, Q::CollectTaught(lesson, 5).empty());
+
+    // 94013 "Taming the Beast" teaches the hunter pet kit and carries no class mask either.
+    Q::QuestRaw const taming{ 94013, 0, false, 10, 1579, { 1515, 883, 2641 }, {}, 0, {} };
+    CHECK(kCase11, Q::CollectTaught(taming, 3) == (std::vector<uint32_t>{ 1515, 883, 2641 }));
+    CHECK(kCase11, Q::CollectTaught(taming, 2).empty());
+
+    Q::QuestRaw const repeatable{ 94442, 0, true, 12, 7329, { 7328 }, {}, 0, {} };
+    CHECK(kCase11, Q::CollectTaught(repeatable, 2).empty());
+
+    Q::QuestRaw const unrelated{ 94443, 0, false, 0, 0, { 133 }, {}, 0, {} };
+    CHECK(kCase11, Q::CollectTaught(unrelated, 2).empty());
+    CHECK(kCase11, Q::CollectTaught(unrelated, 8).empty());
+
+    Q::AllowedSpell const* row = Q::FindRow(2, 7328);
+    CHECK(kCase11, row != nullptr);
+    if (row)
+    {
+        std::vector<Q::Candidate> const cands{ { 94441, true, 12 } };
+        Q::Decision const d = Q::Decide(*row, 12, cands, false, true);
+        CHECK(kCase11, d.verdict == Q::Verdict::Teach);
+        CHECK(kCase11, d.gate == 12);
+        CHECK(kCase11, d.questId == 94441);
+    }
+}
+
 int main()
 {
     TestCase1();
@@ -297,6 +334,7 @@ int main()
     TestCase8();
     TestCase9();
     TestCase10();
+    TestCase11();
 
     bool failed = false;
     for (auto const& entry : g_cases)

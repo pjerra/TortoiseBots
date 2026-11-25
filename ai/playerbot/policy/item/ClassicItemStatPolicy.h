@@ -52,4 +52,58 @@ inline char const* ClassicItemStatWeightName(uint32_t statType)
     }
 }
 
+// The weight scales price crit, hit, dodge, parry and block per percent and
+// expertise per point; a ForeverCore item stat carries rating points instead.
+// These are the CombatRatings ratios (14 crit, 10 hit, 12 dodge, 15 parry,
+// 5 block, 10 expertise rating per point), constant across levels in
+// CombatRatings.txt, so dividing the raw item stat by them turns the value into
+// the unit the scale was written in. 1 means the stat is stored in scale units
+// already (defense skill, block value, spell penetration, armor, the
+// +damage/+healing stats).
+inline uint32_t ClassicItemStatRatingDivisor(uint32_t statType)
+{
+    switch (statType)
+    {
+    case 13: return 12;  // ITEM_MOD_DODGE_RATING
+    case 14: return 15;  // ITEM_MOD_PARRY_RATING
+    case 15: return 5;   // ITEM_MOD_BLOCK_RATING
+    case 16:             // ITEM_MOD_HIT_MELEE_RATING
+    case 17:             // ITEM_MOD_HIT_RANGED_RATING
+    case 18:             // ITEM_MOD_HIT_SPELL_RATING
+    case 31: return 10;  // ITEM_MOD_HIT_RATING
+    case 19:             // ITEM_MOD_CRIT_MELEE_RATING
+    case 20:             // ITEM_MOD_CRIT_RANGED_RATING
+    case 21:             // ITEM_MOD_CRIT_SPELL_RATING
+    case 32: return 14;  // ITEM_MOD_CRIT_RATING
+    case 37: return 10;  // ITEM_MOD_EXPERTISE_RATING
+    default: return 1;
+    }
+}
+
+// Turns a weighted rating stat back into the percent the scale is written in.
+// Rounds to nearest and keeps one point when the item carries the stat at all:
+// a single-digit rating on a weight-1 scale must not make the stat vanish from
+// the score, or the item looks like it carries it for free.
+inline uint32_t ClassicItemStatRounded(uint32_t weighted, uint32_t divisor)
+{
+    if (divisor <= 1 || weighted == 0)
+        return weighted;
+    uint32_t const rounded = (weighted + divisor / 2) / divisor;
+    return rounded ? rounded : 1;
+}
+
+// ITEM_MOD_SPELL_POWER (45) grants spell damage and healing on ForeverCore,
+// ITEM_MOD_SPELL_DAMAGE_DONE (42) grants damage only. A 45 stat therefore
+// scores under the better of the scale's damage and healing weights, so a
+// healer's spell power counts as healing while a damage caster's stays damage.
+// Both arguments are weight times the stat value, so comparing the scores
+// compares the weights.
+inline char const* ClassicItemStatSpellPowerWeightName(uint32_t statType,
+    uint32_t damageScore, uint32_t healingScore)
+{
+    if (statType == 45 && healingScore > damageScore)
+        return "splheal";
+    return "splpwr";
+}
+
 } // namespace ai

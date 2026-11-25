@@ -2869,10 +2869,10 @@ AiPlayerbot.RandomBotShowCloak = 1
 # level-bound skills, professions and starter gear are seeded, so a fresh pool
 # starts playable instead of walking up from level 1. Bots level up normally
 # from there. 1/1 keeps the historic behaviour (start at level 1).
-# The minimum defaults to 5: gear seeding starts at level 5, and a bot that
-# rolls 1-4 keeps its level-1 outfit for good (its played time is no longer 0
-# when it reaches level 5), so the default never rolls below 5.
-# Default: 5 / 60 (fresh bots spread over levels 5-60)
+# The spawn gear kit starts at level 5: a bot that rolls 1-4 keeps its level-1
+# outfit for good (its spawn happens once), so a range whose minimum is below 5
+# still produces some bots without a kit.
+# Default: 5 / 60 (the Forever build ships 1 / 60: its pool bots may start at level 1)
 AiPlayerbot.RandomBotStartLevelMin = 5
 AiPlayerbot.RandomBotStartLevelMax = 60
 
@@ -3022,6 +3022,13 @@ AiPlayerbot.AutoPickReward = yes
 # Bots equip upgrades (Bots will equip any item obtained from looting or a quest if they are upgrades)
 # Default: 1 (enabled)
 AiPlayerbot.AutoEquipUpgradeLoot = 1
+
+# Pool bots skip a looted/quested/bought/traded upgrade whose required level is above their own.
+# Forever item rows often leave the required level empty, so without this a level-10 bot wears an
+# item level 62 blue. The missing level is derived from the item level (item level - 5, at most 60).
+# A bot with a player master, hired and owned bots, and an explicit .bot equip order are not affected.
+# Default: 1 (enabled)
+AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel = 1
 
 # Allow claimed guild bots at level 60 to auto-equip upgrades (1 = on, 0 = lock at level 60).
 AiPlayerbot.ClaimedBotSelfEquip = 1

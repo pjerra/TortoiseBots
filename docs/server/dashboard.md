@@ -119,6 +119,10 @@ Set the variables for your server, then open `http://localhost:8095` and sign in
 
 **What the Forever sender does not send:** per-bot AI visit counters and pool lineage/level-band health. Those panels read empty or say so; the Forever pool has no lineages and no AI visit counter. Everything else in the roster is filled from the live engine and the core.
 
+### Pool vs census (Server tab)
+
+The Forever sender also builds a `pool_census` block into `SERVER_INFO` once a minute, from the pool registry in memory — its class, race, gender and rolled spec counts, plus the live shares the pool picker uses. The Server tab draws it as three panels: class, race, and gender with the per-class spec mix. Each row shows the pool count and share next to the census share, so the pool can be checked against the live game. The level row is a reference only: a fresh pool bot rolls a start level between 1 and 60 and then levels by playing, so its levels are not expected to match the census's. Nothing here reads the characters table.
+
 ### State census
 
 | State | Meaning |

@@ -31,4 +31,12 @@ inline uint32_t HunterStarterAmmoId(bool isBullet, uint8_t level)
     return 2512;      // Rough Arrow
 }
 
+// The ranged weapon a hunter below level 5 falls back on when its ranged slot is empty: the Worn Shortbow the
+// core's new-character loadout gives (item level 2, required level 1). Above that the spawn kit and autogear own
+// the slot, so a starter weapon is never forced on a levelled hunter.
+inline uint32_t HunterStarterRangedItemId(uint8_t level)
+{
+    return level < 5 ? 2504u : 0u;
+}
+
 } // namespace TortoiseBots

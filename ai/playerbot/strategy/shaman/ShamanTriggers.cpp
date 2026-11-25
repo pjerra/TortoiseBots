@@ -323,6 +323,15 @@ bool TankMagmaTrigger::IsActive()
     if (!TankFirePackRowAllowed(ai, bot))
         return false;
 
+    uint8 attackerCount = AI_VALUE(uint8, "attackers count");
+    bool manaForMagma = AI_VALUE2(uint8, "mana", "self target") >= 25;
+
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+    // Forever's Magma is the fire totem Fire Nova bursts from, so the two
+    // rows stack instead of competing for the slot.
+    if (!TankMagmaPulseShouldDrop(attackerCount, manaForMagma))
+        return false;
+#else
     // Magma is the fire slot's fallback, never a replacement for a Fire Nova
     // that is still available or still standing: Nova owns the slot while its
     // row above this one can fire, and a standing Nova totem must be left
@@ -331,11 +340,9 @@ bool TankMagmaTrigger::IsActive()
     bool novaReady = novaSpellId && sServerFacade.IsSpellReady(bot, novaSpellId);
     bool novaTotemStanding = AI_VALUE2(bool, "has totem", "fire nova totem");
 
-    uint8 attackerCount = AI_VALUE(uint8, "attackers count");
-    bool manaForMagma = AI_VALUE2(uint8, "mana", "self target") >= 25;
-
     if (!TankMagmaShouldFollow(novaReady, novaTotemStanding, attackerCount, manaForMagma))
         return false;
+#endif
 
     return ai->CanCastSpell("magma totem", bot, true, nullptr, true);
 }
@@ -346,6 +353,16 @@ TankFireNovaTrigger::TankFireNovaTrigger(PlayerbotAI* ai) : AoeTrigger(ai, 2, Fi
 
 bool TankFireNovaTrigger::IsActive()
 {
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+    // The burst needs the fire totem it pulses from, and its own 10 s
+    // category cooldown; the totem stays up for the next burst.
+    uint32 spellId = AI_VALUE2(uint32, "spell id", "fire nova");
+    bool known = spellId != 0;
+    bool ready = spellId && sServerFacade.IsSpellReady(bot, spellId);
+    bool standing = FireNovaFireTotemStanding(ai);
+    if (!TankFireNovaPulseShouldFire(known, ready, standing))
+        return false;
+#else
     // The drop's own readiness/ownership gate: the spell must be trained and
     // off its 15 s category cooldown, and a Nova totem already standing owns
     // the slot until it detonates.
@@ -355,13 +372,14 @@ bool TankFireNovaTrigger::IsActive()
     bool standing = AI_VALUE2(bool, "has totem", "fire nova totem");
     if (!TankFireNovaShouldDrop(known, ready, standing))
         return false;
+#endif
     if (!TankFirePackRowAllowed(ai, bot))
         return false;
 
-    // The pack gate: 2+ attackers inside the Nova's own detonation window
-    // (10 yd, the blast radius of the pulse the totem drops at our feet),
-    // inherited from AoeTrigger with its breakable-CC interlock - a sheep or
-    // sap beside the pack still blocks the blast. Wider than the 5 yd melee
-    // window, so a pack that stopped just outside melee still counts.
+    // The pack gate: 2+ attackers inside the Nova's own burst window
+    // (10 yd, the blast radius of the pulse), inherited from AoeTrigger
+    // with its breakable-CC interlock - a sheep or sap beside the pack
+    // still blocks the blast. Wider than the 5 yd melee window, so a pack
+    // that stopped just outside melee still counts.
     return AoeTrigger::IsActive();
 }

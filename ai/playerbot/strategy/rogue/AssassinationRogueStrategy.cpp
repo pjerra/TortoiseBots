@@ -10,10 +10,13 @@ public:
     AssassinationRogueStrategyActionNodeFactory()
     {
         creators["backstab"] = &backstab;
+        creators["mutilate"] = &mutilate;
     }
 
 private:
     ACTION_NODE_A(backstab, "backstab", "sinister strike");
+
+    ACTION_NODE_A(mutilate, "mutilate", "backstab");
 };
 
 AssassinationRogueStrategy::AssassinationRogueStrategy(PlayerbotAI* ai) : RogueStrategy(ai)
@@ -29,6 +32,12 @@ void AssassinationRogueStrategy::InitCombatTriggers(std::list<TriggerNode*>& tri
     triggers.push_back(new TriggerNode(
         "eviscerate",
         NextAction::array(0, new NextAction("eviscerate", ACTION_HIGH + 2), NULL)));
+
+    // Forever's delayed-detonation finisher: above Eviscerate while it is
+    // ready, same damage-first order as the rest of this kit.
+    triggers.push_back(new TriggerNode(
+        "death mark",
+        NextAction::array(0, new NextAction("death mark", ACTION_HIGH + 2.5f), NULL)));
 
     // Almost-dead finisher dump, same row and priority as CombatRogueStrategy:
     // a target at 25% health or less eats banked combo points as Eviscerate.
@@ -54,6 +63,10 @@ void AssassinationRogueStrategy::InitCombatTriggers(std::list<TriggerNode*>& tri
     triggers.push_back(new TriggerNode(
         "noxious assault",
         NextAction::array(0, new NextAction("noxious assault", ACTION_NORMAL + 1), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "mutilate",
+        NextAction::array(0, new NextAction("mutilate", ACTION_NORMAL + 1), NULL)));
 
     triggers.push_back(new TriggerNode(
         "backstab",

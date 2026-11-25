@@ -39,13 +39,30 @@ TortoiseBots.Enable = 1
 TortoiseBots.Pool.Enable = 1
 TortoiseBots.Pool.CreatePerMinute = 30
 TortoiseBots.Pool.MaxCharacters = 50
+TortoiseBots.Pool.GearOnCreate = 1
 ```
 
 1. Set the keys.
 2. Create characters with [`.tb pool create <n>`](admin-commands.md#the-bot-pool). Creation is paced: one character per world tick at most, at most `CreatePerMinute` per minute, never past `MaxCharacters`.
 3. Start the schedule with [`.tb pool start`](admin-commands.md#the-bot-pool).
 
-`CreatePerMinute = 0` means nothing may be created; `MaxCharacters = 0` means the pool cannot grow. `.tb pool create` creates only what still fits under the cap and refuses a full pool.
+`CreatePerMinute = 0` means nothing may be created; `MaxCharacters = 0` means the pool cannot grow. `.tb pool create` creates only what still fits under the cap and refuses a full pool. If the core refuses one character (a race the realm's client data cannot create), that composition is skipped, the race is not rolled again for the rest of the job, the refusal is logged once, and creation continues; the job stops only when nothing it rolls can be created.
+
+### What a new character looks like
+
+By default (`TortoiseBots.Pool.CensusComposition = 1`) the pool rolls each new character the way the live game looks (aotc.gg, read 2026-11-24): class by its share of the faction, race within the faction among the pairs ForeverCore can create, gender by the class's female share. The faction alternates, so the pool stays half Alliance and half Horde, and both Skyborne races are part of the mix. `0` keeps the old balanced sequence: the vanilla races in turn and a random class of the race.
+
+A pool bot's spec tree follows the live spec shares of its class (`TortoiseBots.Pool.CensusSpec = 1`); `0` keeps the pool's own roll. A commanded bot always gets the spec its role needs.
+
+## Spawning a bot: start level and gear
+
+Characters are made at level 1. On a bot's **first login** the module spawns it once:
+
+- `AiPlayerbot.RandomBotStartLevelMin` / `.Max` (default `1` / `60`) roll its start level, before its level-bound spells, talents and professions are synced. Bots level up by playing from there.
+- With `TortoiseBots.Pool.GearOnCreate = 1` (the default), a bot of level 5 or above gets a one-time gear kit: level- and spec-fitting white, green and blue items, from the classic table and Forever's own items. The quality follows the level band (white below 20, green from 20), with a rolled number of slots one quality up (0-1 green at 5-9, 1-2 at 10-14, 2-3 at 15-19, 0-2 blue at 20-29, 3-5 at 30-49, 6-9 at 50-60) spread over the slots that really have such a piece; within a slot the kit picks among the best-fitting pieces, so two bots of one level do not look the same. Every piece passes the source check (no raid, PvP, reputation or unobtainable gear), and no piece sits above the bot's own level plus `AiPlayerbot.RandomGearMaxItemLevelAboveLevel`. The source check classifies the item, not the quest that rewards it, so a quest reward's own level is not enforced.
+- A bot that spawns at level 1-4 keeps the core's starter outfit for good, and no bot is seeded a second time. Existing bots (played time above zero) are never touched. The record that a spawn happened is a `pool-spawn` row in the characters table `tortoise_bots_player_flag`.
+
+After the spawn a bot upgrades only from what it finds, buys or is given.
 
 ## The scheduler
 
@@ -58,12 +75,36 @@ Once a second, the scheduler keeps `TortoiseBots.Pool.TargetOnline` pool bots of
 | `TortoiseBots.Pool.SessionMinutes.Min` / `.Max` | 30 / 90 | A session's rolled length in minutes. A living bot in combat keeps its session until the fight ends. |
 | `TortoiseBots.Pool.OfflineMinutes.Min` / `.Max` | 5 / 20 | How long a bot stays away after its session. |
 | `TortoiseBots.Pool.PopulationLow` / `.PopulationHigh` | 10 / 50 | The presets behind `.tb pool population low\|high`. |
+| `AiPlayerbot.LevelLadder` | 1 | `aiplayerbot.conf`: pick logins by level band instead of longest offline. 0 restores the old order. |
+| `AiPlayerbot.LevelLadderBandSize` | 5 | `aiplayerbot.conf`: levels per band, 1-5, 6-10, ... 56-59, and the level cap alone. Clamped to 1..(`MaxPlayerLevel` - 1). |
+| `AiPlayerbot.LevelLadderMaxLevelShare` | 10 | `aiplayerbot.conf`: percent of `TargetOnline` the level cap's band may hold, 0 to 100. A hard cap: the rest stay offline as a reserve. |
+| `AiPlayerbot.LevelLadderLogMinutes` | 5 | `aiplayerbot.conf`: how often the ladder logs the online/target(pool) count of every band. |
 
 - Logins alternate factions and take the bot that has been offline longest first, and only on an account without a session.
 - A bot that gets a master is **bound**: it leaves the online count and the pool never logs it out. Its account is out of reach until the binding ends, so the pool may need more characters than its target to refill that slot. `.tb pool status` says `capped by accounts: N` when the target is above the accounts left.
 - A lowered target logs out the newest sessions first, never a dead or fighting bot.
 - `.tb pool stop` drains every pool bot at five logouts per second. A bot held in a running battleground is released when the match ends or after `TortoiseBots.Bg.MaxMinutes`.
 - No login is planned while the core's shutdown countdown runs.
+
+### The level ladder
+
+With `AiPlayerbot.LevelLadder = 1` (the default, in `aiplayerbot.conf`) the level decides which bot logs in next, not only the offline time:
+
+- The levels are cut into bands of `LevelLadderBandSize` (1-5, 6-10, ... 56-59), and the server's level cap (`MaxPlayerLevel`, 60 on the shipped data) stands alone in the last band.
+- The `TargetOnline` slots are split over the bands: each low band gets an equal share (one level of difference at most, the lower bands taking the remainder first) and the cap's band gets `LevelLadderMaxLevelShare` percent of the target, rounded down. The shares always add up to the target.
+- The band with the largest shortfall logs in first; inside a band the highest level goes first, and among equal levels the bot offline longest. A band already at its share yields to one still short, and once every band is covered the overflow goes to the highest levels.
+- The cap's share is a **hard cap**: beyond it, no max-level character logs in, however many the pool holds. They stay offline as a reserve for `.tb bot add`, hired bots and players; a lowered target or `MaxCharacters` reset hands them no slot.
+- The level comes from the character itself while it is in the world, from the core's character cache while it is not (the cache is kept on level-up). A character with no known level counts as level 1.
+- This decides logins only. Session ends, a lowered target and `.tb pool stop` log out exactly as before.
+- `LevelLadder = 0` restores the plain order: the faction's bot offline longest logs in first.
+
+Every `LevelLadderLogMinutes` the scheduler logs one line with the online count, the band's target and the pool size per band, plus the offline reserve and the highest level in the pool:
+
+```text
+TortoiseBots: level ladder online/target(pool) per band 1-5:1/1(6) 6-10:0/1(5) ... 56-59:0/1(3) 60:1/1(4) | reserve 18, highest level 60
+```
+
+While the pool is short of its target it also logs `level ladder pass: online X/Y, added A, offline eligible E` once a minute; with the band line it shows why nothing logs in (nothing due yet, a session on the account, or the cap's band full while no low band needs a bot).
 
 ## Pruning failed rows
 

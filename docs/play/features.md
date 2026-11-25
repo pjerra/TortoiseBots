@@ -94,10 +94,11 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
 | A pool of bots that log in and out on a schedule | No | `TortoiseBots.Pool.Enable = 0`, then `.tb pool start` | [Bot pool](../server/bot-pool.md) |
+| New pool characters follow the live game's class, race, gender and spec shares | Yes | `TortoiseBots.Pool.CensusComposition = 1`, `TortoiseBots.Pool.CensusSpec = 1` | [Bot pool](../server/bot-pool.md#what-a-new-character-looks-like) |
 | Free bots quest, grind, loot, vendor, repair and train | Always | — | [Living world](../world/living-world.md) |
 | Free bots run capital errands (mail, bank, trainer, auctioneer) and duel at the gates | Yes | `TortoiseBots.World.CapitalErrands = 1` | [Living world](../world/living-world.md) |
 | Free bots fish at a nearby hole | Yes | `TortoiseBots.World.Fishing = 1` | [Professions](../world/living-world.md) |
-| Free bots disenchant junk and enchant their own gear | Yes | `TortoiseBots.World.Disenchant = 1`, `TortoiseBots.World.EnchantGear = 1` | [Professions](../world/living-world.md) |
+| Free bots disenchant junk and enchant their own gear; at level 60 the enchant follows the common Forever choice for their spec and slot | Yes | `TortoiseBots.World.Disenchant = 1`, `TortoiseBots.World.EnchantGear = 1` | [Professions](../world/living-world.md) |
 | Free bots gather herbs and ore | No | `TortoiseBots.World.Professions = 0` | [Professions](../world/living-world.md) |
 | Free rogue bots pick pockets and open lockboxes | Yes | `TortoiseBots.World.Pickpocket = 1`, `TortoiseBots.World.Lockboxes = 1` | [Rogue](../classes/rogue.md) |
 | Free bots mail lockboxes to a guild rogue and get the contents back | Yes | `TortoiseBots.World.LockboxMail = 1` | [Social](../world/social.md) |
@@ -119,15 +120,16 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Feature | On? | Where | More |
 | :--- | :---: | :--- | :--- |
 | Bots learn their class trainer spells for free on login and level-up | Yes | `TortoiseBots.AutoLearnOnLevel = 1` | [Class spells](../world/living-world.md#class-spells) |
-| Bots spend free talent points on a premade build | Yes | `TortoiseBots.AutoTalentsOnLevel = 1` | [Talents](getting-started.md#levelling-spells-and-gear) |
+| Bots spend free talent points on a premade build (the level-60 picks of Forever players for their spec) | Yes | `TortoiseBots.AutoTalentsOnLevel = 1` | [Talents](getting-started.md#levelling-spells-and-gear) |
+| A fresh pool bot rolls a start level (1-60) on its first login and gets one spawn kit at level 5 or above | Yes | `AiPlayerbot.RandomBotStartLevelMin` / `.Max`, `TortoiseBots.Pool.GearOnCreate = 1` | [Bot pool](../server/bot-pool.md#spawning-a-bot-start-level-and-gear) |
+| Generated gear (spawn kit, level-up top-up, `.bot autogear`) comes only from ordinary sources: no raid, PvP, reputation or unobtainable items | Yes | `AiPlayerbot.RandomGearMaxSourceTier = 0`, `AiPlayerbot.RandomGearAllowReputation = 0`, `AiPlayerbot.RandomGearAllowPvP = 0` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
 | Pool bots learn two professions, First Aid and Cooking at level 5 | Yes | `TortoiseBots.AutoProfessions = 1` | [Professions](../world/living-world.md) |
 | Pool and free bots get the gathering and crafting tools they need | Yes | `TortoiseBots.AutoTools = 1` | [Professions](../world/living-world.md) |
 | Hunter bots get a starter pet and its control spells | Yes | `TortoiseBots.AutoHunterPet = 1` | [Hunter](../classes/hunter.md) |
 | Pool and free bots get level-fitting food and water | Yes | `TortoiseBots.AutoFood = 1` | [Living world](../world/living-world.md) |
-| Bots learn the class-quest spells a player would earn | No | `TortoiseBots.ClassQuestSpells = 0` | [Class spells](../world/living-world.md#class-spells) |
-| Bots keep gear that fits their level as they level | Yes | `AiPlayerbot.RandomGearProgression = 1` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
+| Bots learn the class-quest spells a player would earn (the class-line autotrain already teaches all but the family-0 rows such as the paladin's *Sense Undead*) | No | `TortoiseBots.ClassQuestSpells = 0` | [Class spells](../world/living-world.md#class-spells) |
 | Bots equip better gear they loot | Yes | `AiPlayerbot.AutoEquipUpgradeLoot = 1` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
-| Reputation and PvP items in generated gear | No | `AiPlayerbot.RandomGearAllowReputation = 0`, `AiPlayerbot.RandomGearAllowPvP = 0` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
+| Pool bots fill empty or badly outdated gear slots at level-up | No | `AiPlayerbot.PoolGearTopUpOnLevel = 0` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
 | Bots learn to ride and buy their race's mount with their own gold | Yes | `AiPlayerbot.LevelUpMounts = 1` | [Mounts](../world/living-world.md#mount-rules) |
 | Shop and other-race mounts | No | `AiPlayerbot.RandomBotShopMounts = 0` | [Mounts](../world/living-world.md#mount-rules) |
 

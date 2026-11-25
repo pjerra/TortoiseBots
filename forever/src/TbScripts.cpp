@@ -10,6 +10,7 @@
 #include "host/pool/TbPoolRegistry.h"
 #include "host/pool/TbPoolReset.h"
 #include "host/pool/TbPoolScheduler.h"
+#include "host/pool/TbPoolSpawn.h"
 #include "host/cmd/TbCmdOrders.h"
 #include "host/cmd/TbPlace.h"
 #include "host/cmd/TbCmdFeeds.h"
@@ -37,6 +38,8 @@
 #include "host/run/TbRunHooks.h"
 #include "host/run/TbRunLiquid.h"
 #include "host/gear/TbGearGen.h"
+#include "host/TbSpecEnchant.h"
+#include "host/gear/TbGearSourceTier.h"
 #include "host/TbHostProfession.h"
 #include "host/TbHostWorldPvp.h"
 #include "host/TbHostRitualFill.h"
@@ -239,6 +242,9 @@ public:
         TortoiseBots::DashRuns::LoadConfig();
         TortoiseBots::pool::LoadConfig();      // W0: the pool key, its rate and the registry rows (re-read on a reload)
         TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B: the scheduler's target, window, session and offline times
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        TortoiseBots::poolspawn::LoadConfig(); // the spawn kit key (the start-level range is PlayerbotAIConfig's)
+#endif
         TortoiseBots::bg::LoadConfig();        // BG1: the battleground keys (off by default)
         tbhost::autotrain::LoadConfig();       // TortoiseBots.AutoLearnOnLevel (default 1)
         TortoiseBots::questspells::LoadConfig();   // the class-quest spell switch, on by default
@@ -332,6 +338,9 @@ public:
         TortoiseBots::DashRuns::LoadConfig();
         TortoiseBots::pool::LoadConfig();      // W0
         TortoiseBots::pool::PoolScheduler::LoadConfig();   // W0-B
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        TortoiseBots::poolspawn::LoadConfig(); // the spawn kit key
+#endif
         TortoiseBots::pool::Reconcile();       // W0: the creations that stopped halfway (a claim row, no account or character yet)
         // Startup only (the key is read here, never in OnConfigLoad): `.reload config` cannot start a reset.
         TortoiseBots::pool::Reset::PlanAtStartup(sConfigMgr->GetStringDefault("TortoiseBots.Pool.Reset", "off"));
@@ -373,6 +382,8 @@ public:
                 LoadEngineConfig();
                 TortoiseBots::RunTraceService::Instance().Initialize();   // mark summaries the last server never finalised
                 TortoiseBots::gear::InitGearIndex();
+                TortoiseBots::gear::InitGearSourceIndex();
+                TortoiseBots::enchant::LoadSpecEnchants();   // the level-60 enchant choice, one world table read
                 TortoiseBots::run::LoadPlans();     // S5 (H5): the dungeon plan tables and the step unit rows
                 TortoiseBots::cmd::LoadBindings();   // P2: TortoiseBots.Commander.KeepBindings and the stored rows
                 TortoiseBots::cmd::LoadFeeds();      // P4: the boss roster (the plans are sealed now) and the feeds' keys
@@ -387,6 +398,7 @@ public:
         // The add-on hint: the three keys once, then the characters already told (a guarded SELECT).
         TortoiseBots::addonhint::LoadConfig();
         TortoiseBots::addonhint::LoadAtStartup();
+        TortoiseBots::poolspawn::LoadAtStartup();   // the spawn row's table, so a fresh bot can record its spawn
 #endif
     }
 
@@ -546,12 +558,17 @@ public:
         {
             TC_LOG_INFO("tortoisebots", "bot {} entered the world on map {}", player->GetName(), player->GetMapId());
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+            // The start level before the level-bound spell, talent and profession syncs below.
+            TortoiseBots::poolspawn::ApplyStartLevel(player);
             tbhost::prof::ClearBotErrands(player->GetGUID());
 #endif
             // P11 (G8): a bot has no client to choose its ammo, so the core's pick prefers a stack that is drawn with a model (Player.h:1528).
             player->SetPreferDrawableAmmo(true);
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
             TortoiseBots::p11::EnsureHunterStarterAmmo(player);
+            if (!TortoiseBots::p11::EnsureHunterStarterWeapon(player))
+                TC_LOG_INFO("tortoisebots", "TortoiseBots: hunter {} (level {}) has no ranged weapon; Auto Shot stays off until it gets a bow, gun or crossbow",
+                    player->GetName(), uint32(player->GetLevel()));
             TortoiseBots::p11::EnsureShamanStarterTotems(player);
             // The /pvp preference of the flagged share of free bots: a streamless session cannot send CMSG_SET_PVP.
             tbhost::worldpvp::OnBotLogin(player);
@@ -574,6 +591,12 @@ public:
             TortoiseBots::autotools::Sync(player, "login");
             TortoiseBots::autohunterpet::Sync(player, "login");
             TortoiseBots::autofood::Sync(player, "login");
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+            // The one-time kit, after the syncs have taught the level's spells (Dual Wield, weapon skills).
+            TortoiseBots::poolspawn::SeedSpawnKit(player);
+            // A kit bow or gun comes with no ammo, and the kit runs after the login ammo pass: match it here, not at the resync.
+            TortoiseBots::p11::EnsureHunterStarterAmmo(player);
+#endif
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
@@ -586,6 +609,11 @@ public:
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
         {
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+            // The spawn's start-level raise happens here, and OnLogin runs the same syncs right after: skip this pass.
+            if (TortoiseBots::poolspawn::ApplyingStartLevel())
+                return;
+#endif
             tbhost::autotrain::Sync(player, "level");
             tbhost::skillspells::Sync(player, "level");
             TortoiseBots::questspells::Sync(player, "level");
@@ -623,6 +651,9 @@ public:
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
             TC_LOG_INFO("tortoisebots", "bot {} left the world", player->GetName());
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        TortoiseBots::poolspawn::Forget(player->GetGUID());
+#endif
         TortoiseBots::cmd::NoteLogout(player);    // P2: a lead's departure, or the commander's grace (a shutdown keeps the binding)
         TortoiseBots::place::NoteLogout(player);  // #15: a commander's rallies, holds and pending cursor request go with it
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1

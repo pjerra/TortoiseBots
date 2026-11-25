@@ -473,6 +473,11 @@ type ServerInfoPayload struct {
 	// every pool character per level band, the lineages and the distance to
 	// their safety ceiling. Absent from servers that predate it.
 	Pool map[string]any `json:"pool,omitempty"`
+	// PoolCensus is the pool's class, race, gender and rolled spec counts with
+	// the live-census shares the pool picker uses. The Forever sender builds it
+	// from the pool registry in memory, so the daemon reads no character table
+	// for it. Absent from older senders.
+	PoolCensus map[string]any `json:"pool_census,omitempty"`
 }
 
 // GrindingSummary is the daemon's pool-wide "are they grinding" rollup,

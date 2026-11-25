@@ -3,6 +3,11 @@
 #include "dash/TbDashEndpoint.h"
 #include "dash/TbDashboardStatePure.h"
 #include "host/TbEngineBrain.h"
+#include "host/TbTalents.h"
+#include "host/TbTalentsPure.h"
+#include "host/pool/TbPoolRegistry.h"
+#include "ai/playerbot/policy/world/PoolCompositionPolicy.h"
+#include "CharacterCache.h"
 #include "Config.h"
 #include "Creature.h"
 #include "DB2Stores.h"
@@ -36,6 +41,7 @@
 #include <ctime>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -48,6 +54,7 @@
 #include <mutex>
 #include <optional>
 #include <sstream>
+#include <vector>
 
 namespace TortoiseBots::Dashboard
 {
@@ -56,6 +63,11 @@ bool WriteJsonFile(std::string const& path, std::string const& body, char const*
 
 namespace
 {
+// The pool census reads the pool registry, the spec picker and the pure composition shares, each in its own namespace.
+namespace pool = TortoiseBots::pool;
+namespace talents = TortoiseBots::talents;
+namespace world = TortoiseBots::world;
+
 // The dashboard's model.ProtocolVersion this sender writes.
 constexpr int ProtocolVersion = 12;
 // Bots per BOT_BATCH datagram: keeps one datagram well under the 64 KB UDP limit.
@@ -327,6 +339,109 @@ void SendAnomaly(Player* bot, char const* type, char const* severity, std::strin
     Send(a.str());
 }
 
+// The pool's live composition against the census shares the picker uses: counts by class, race, gender and rolled spec tab
+// from the registry's ready rows (in memory, no query) and the shares copied into the pure policy headers. Every class, race
+// and spec is listed even at count 0 so the dashboard draws a stable table. Empty while the pool has no characters.
+std::string BuildPoolCensus()
+{
+    std::vector<pool::Character> const& characters = pool::Characters();
+    if (characters.empty())
+        return {};
+
+    std::uint32_t classes[12] = {};
+    std::uint32_t races[97] = {};
+    std::uint32_t genders[2] = {};
+    std::uint32_t specs[12][3] = {};
+    std::uint32_t levels[81] = {};
+    std::uint32_t levelKnown = 0;
+    bool const censusSpec = talents::PoolCensusSpecEnabled();
+    for (pool::Character const& character : characters)
+    {
+        if (character.klass < 12)
+            ++classes[character.klass];
+        if (character.race < 97)
+            ++races[character.race];
+        if (character.gender < 2)
+            ++genders[character.gender];
+        if (character.klass < 12)
+        {
+            int const tab = talents::PickSpecTabForBot(character.klass, std::uint32_t(character.guid), -1, 0, 0, 0, censusSpec);
+            if (tab >= 0 && tab <= 2)
+                ++specs[character.klass][tab];
+        }
+        // The character cache knows every level (it loads the whole table at startup): a hash lookup, no query.
+        std::uint8_t const level = character.guid
+            ? sCharacterCache->GetCharacterLevelByGuid(ObjectGuid::Create<HighGuid::Player>(character.guid)) : 0;
+        if (level >= 1 && level <= 80)
+        {
+            ++levels[level];
+            ++levelKnown;
+        }
+    }
+
+    std::ostringstream ss;
+    ss << "{\"total\":" << characters.size()
+       << ",\"census_composition\":" << (pool::CensusComposition() ? 1 : 0)
+       << ",\"census_spec\":" << (censusSpec ? 1 : 0)
+       << ",\"classes\":[";
+    static std::uint8_t const kClasses[] = { world::ClassWarrior, world::ClassPaladin, world::ClassHunter, world::ClassRogue,
+        world::ClassPriest, world::ClassShaman, world::ClassMage, world::ClassWarlock, world::ClassDruid };
+    for (std::size_t i = 0; i < sizeof(kClasses) / sizeof(kClasses[0]); ++i)
+    {
+        std::uint8_t const klass = kClasses[i];
+        std::uint32_t const census = (world::CensusClassSharePm(0, klass) + world::CensusClassSharePm(1, klass)) / 2;
+        ss << (i ? "," : "") << "{\"id\":" << unsigned(klass) << ",\"count\":" << classes[klass] << ",\"census_pm\":" << census << '}';
+    }
+    ss << "],\"races\":[";
+    static std::uint8_t const kRaces[] = { world::RaceHuman, world::RaceNightElf, world::RaceDwarf, world::RaceGnome,
+        world::RaceSkyborneAlliance, world::RaceUndead, world::RaceOrc, world::RaceTauren, world::RaceTroll, world::RaceSkyborneHorde };
+    for (std::size_t i = 0; i < sizeof(kRaces) / sizeof(kRaces[0]); ++i)
+    {
+        std::uint8_t const race = kRaces[i];
+        std::uint32_t const census = world::CensusRaceSharePm(race) / 2;      // the pool is half Alliance, half Horde
+        ss << (i ? "," : "") << "{\"id\":" << unsigned(race) << ",\"faction\":" << (world::IsAllianceRace(race) ? 0 : 1)
+           << ",\"count\":" << races[race] << ",\"census_pm\":" << census << '}';
+    }
+    ss << "],\"genders\":[";
+    std::uint32_t censusFemaleNum = 0;
+    for (std::uint8_t const klass : kClasses)
+        censusFemaleNum += (world::CensusClassSharePm(0, klass) + world::CensusClassSharePm(1, klass)) * world::CensusFemaleSharePm(klass);
+    std::uint32_t const censusFemale = (censusFemaleNum + 1000) / 2000;
+    ss << "{\"id\":0,\"count\":" << genders[0] << ",\"census_pm\":" << (1000 - censusFemale) << "},"
+       << "{\"id\":1,\"count\":" << genders[1] << ",\"census_pm\":" << censusFemale << "}";
+    ss << "],\"specs\":[";
+    bool first = true;
+    for (std::uint8_t const klass : kClasses)
+    {
+        for (int tab = 0; tab < 3; ++tab)
+        {
+            ss << (first ? "" : ",") << "{\"class\":" << unsigned(klass) << ",\"tab\":" << tab
+               << ",\"count\":" << specs[klass][tab] << ",\"census_pm\":" << talents::CensusSpecSharePm(klass, tab) << '}';
+            first = false;
+        }
+    }
+    // The pool's own levels are a reference (it starts at 1): min, median, max and how many reached 60, from the cache.
+    std::uint32_t levelMin = 0, levelMax = 0, levelMedian = 0, levelSixty = levels[60];
+    if (levelKnown)
+    {
+        for (std::uint32_t level = 1; level <= 80; ++level)
+        {
+            if (!levels[level])
+                continue;
+            if (!levelMin)
+                levelMin = level;
+            levelMax = level;
+        }
+        std::uint32_t seen = 0;
+        for (std::uint32_t level = 1; level <= 80 && !levelMedian; ++level)
+            if ((seen += levels[level]) * 2 >= levelKnown)
+                levelMedian = level;
+    }
+    ss << "],\"levels\":{\"known\":" << levelKnown << ",\"min\":" << levelMin << ",\"median\":" << levelMedian
+       << ",\"max\":" << levelMax << ",\"sixty\":" << levelSixty << "}}";
+    return ss.str();
+}
+
 void SendServerInfo()
 {
     Sender& s = Get();
@@ -358,7 +473,11 @@ void SendServerInfo()
     std::string const engineDiagnostics = TortoiseBots::engine::ServerDiagnosticsJson();
     if (!engineDiagnostics.empty())
         ss << ',' << engineDiagnostics;
-    ss << "}}";
+    ss << '}';
+    std::string const census = BuildPoolCensus();
+    if (!census.empty())
+        ss << ",\"pool_census\":" << census;
+    ss << '}';
     Send(ss.str());
 }
 

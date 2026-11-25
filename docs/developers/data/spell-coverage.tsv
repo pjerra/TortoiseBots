@@ -7,6 +7,9 @@ Warrior	Protection	Revenge, Sunder Armor, Taunt	available	forever/data/waterys/t
 Warrior	Protection	Intervene	unverified	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/warrior/ProtectionWarriorStrategy.cpp:118	not in the spell audit; client SpellName has Intervene; check live
 Warrior	Arms/Fury	Master Strike	not on Forever	forever/tools/test_forever_spell_rows.py:12	ai/playerbot/strategy/warrior/ArmsWarriorStrategy.cpp:86	row compiled out for the Forever build
 Warrior	Protection	Defensive Tactics	not on Forever	forever/data/waterys/talent-trees-70959.csv	none	no such talent node on the Forever Protection tree
+Warrior	Arms/Fury	Heroic Strike	available	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/warrior/WarriorTriggers.h:271	level-aware rage floor 25/30/40 (WarriorRageGatePolicy.h:84)
+Warrior	Arms/Fury	Thunder Clap	available	forever-local/data/dbc/enUS/SpellShapeshift.db2 (6343 mask 196608)	ai/playerbot/strategy/warrior/WarriorActions.h:156	Battle/Defensive Stance only: a Berserker kit stands down instead of failing the cast
+Warrior	Arms	Spearing Strike	available	forever/data/aotc/talent-picks.csv:8969 (trait node 105949)	ai/playerbot/strategy/warrior/ArmsWarriorStrategy.cpp:89	Battle Stance only, 15 rage, 20 s cooldown; Arms-tree trait taken by the new Arms preset
 Paladin	Retribution	Holy Strike	available	forever/data/waterys/class-review/paladin.md:28	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:95	Forever's paladin strike
 Paladin	Retribution	Judgement, Exorcism, Hammer of Wrath	available	forever/data/waterys/class-review/paladin.md:29-35	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:79-91	Retribution rotation
 Paladin	Retribution	Seal of Command	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:87	Retribution seal
@@ -15,19 +18,21 @@ Paladin	Holy	Holy Shock	in preset	forever/data/waterys/talent-builds.csv	ai/play
 Paladin	all	Blessing of Kings, Might, Wisdom, Light	available	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/paladin/PaladinActions.cpp:316-409	blessing picker
 Paladin	Retribution	Crusader Strike	unverified	forever/data/waterys/class-review/paladin.md:30	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:102	near-name spells exist; the exact action name needs a live check
 Paladin	Protection	Bulwark of the Righteous	not on Forever	forever/data/waterys/class-review/paladin.md:40-42	ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp:67	no Forever spell by this name
-Paladin	Protection	Hand of Reckoning	unverified	forever/data/waterys/class-review/paladin.md:34	ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp:53	spell exists by name; the exact action name needs a live check
-Paladin	Protection	Righteous Defense	not on Forever	forever/data/waterys/class-review/paladin.md:30-33	ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp:19	fallback taunt is not available
+Paladin	Protection	Hand of Reckoning	not castable by bots	DB2 (SpellItemEnchantment.db2 6844); DB2 (ItemEffect.db2 179936)	none (row compiled out on Forever)	a runecarving glove rune only: enchant 6844 applies 407774/409911 via Engrave Gloves 410001, from the Libram of Justice (item 208851); no class line, trainer row or preset grants it, so the paladin tank has no taunt
+Paladin	Protection	Righteous Defense	not on Forever	forever/data/waterys/class-review/paladin.md:30-33	none (row compiled out on Forever)	absent by name; the tank kit holds threat without a taunt
 Paladin	Holy	Hand of Freedom	not on Forever	forever/data/waterys/class-review/paladin.md:30-33	ai/playerbot/strategy/paladin/HolyPaladinStrategy.cpp:435	bot casts Blessing of Freedom instead
 Paladin	all	Crusader Aura	not on Forever	forever/data/waterys/class-review/paladin.md:40-42	ai/playerbot/strategy/paladin/PaladinActions.cpp:52	aura name absent
 Paladin	all	Blessing of Sanctuary, Blessing of Salvation	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/paladin/PaladinActions.cpp:280	SpellName has no such names on Forever
-Hunter	all	Aspect of the Viper	available	forever/data/waterys/class-notes/hunter.md:7	ai/playerbot/strategy/hunter/HunterStrategy.cpp:566	hunter trainer spell on the client
+Hunter	all	Aspect of the Viper	not in preset	DB2 (SkillLineAbility.db2 415423)	ai/playerbot/strategy/hunter/HunterStrategy.cpp:566	client has 415423 (Beast Mastery line, spell level 1) but no trainer row; the class-line pass skips retail-era ids with no rank chain, and no preset buys it, so the Viper row never fires
+Hunter	all	Aspect of the Beast	available	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/hunter/HunterActions.h:211	13161 on the Beast Mastery line is taught by the class-line pass; only the manual `.bot choice aspect beast` order schedules it
 Hunter	all	Serpent Sting, Viper Sting	available	forever/data/waterys/class-review/hunter.md:142	ai/playerbot/strategy/hunter/HunterStrategy.cpp:530-544	sting rows
-Hunter	all	Auto Shot, Aimed Shot, Arcane Shot, Multi-Shot, Volley	available	forever/data/waterys/class-review/hunter.md:142	ai/playerbot/strategy/hunter/HunterStrategy.cpp:123-296	shot kit
+Hunter	all	Auto Shot, Aimed Shot, Arcane Shot, Multi-Shot, Volley	available	forever/data/waterys/class-review/hunter.md:142	ai/playerbot/strategy/hunter/HunterStrategy.cpp:123-296	shot kit; Auto Shot needs a bow, gun or crossbow plus matching ammo (starter bow restored below level 5, one login line when a hunter has none)
 Hunter	all	Feign Death, Disengage, traps, pet kit	available	forever/data/waterys/class-review/hunter.md:142	ai/playerbot/strategy/hunter/HunterStrategy.cpp	threat drops and pet upkeep
-Hunter	Survival	Carve	not in preset	forever/data/waterys/class-review/hunter.md:138	ai/playerbot/strategy/hunter/HunterAiObjectContext.cpp:313	spell exists, no preset point buys it
-Hunter	all	Lacerate	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/hunter/HunterAiObjectContext.cpp:313	no hunter spell by this name
+Hunter	Survival	Carve	not learnable	DB2 (SkillLineAbility.db2 425711)	ai/playerbot/strategy/hunter/SurvivalHunterStrategy.cpp:109	client has Carve 425711 (Survival line, spell level 1) but no trainer row, no trait node and no rank chain: neither a player nor the class-line pass gets it, so the Survival row is dead
+Hunter	all	Lacerate	available (pet ranks)	DB2 (SkillLineAbility.db2 24118-24120)	ai/playerbot/strategy/hunter/HunterAiObjectContext.cpp:313	pet-ability ranks on the Survival line at spell level 30/40/50 (24118/24119/24120); the hunter's own lacerate action has no trigger, so it never casts it itself (pet abilities are the pet's)
 Hunter	all	Aspect of the Wolf	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/hunter/HunterActions.cpp:443	no such spell on the client
 Rogue	Assassination	Cold Blood	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp:252	guaranteed critical finisher
+Rogue	Assassination	Mutilate	available	client DB2 SkillLineAbility 399956/1241582/1241584 (lvl 40/50/60)	ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp:68	builder above Backstab from 40 (trainer and class line); Backstab fallback
 Rogue	Combat	Adrenaline Rush, Blade Flurry	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/rogue/CombatRogueStrategy.cpp:241,245	damage cooldowns
 Rogue	Subtlety	Preparation, Hemorrhage, Ghostly Strike	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp:79-87,275	Subtlety kit
 Rogue	all	Instant, Deadly, Crippling, Wound poison	available	forever/data/waterys/items.csv	ai/playerbot/strategy/rogue/GenericRogueNonCombatStrategy.cpp:45-49	poison items exist on Forever
@@ -35,25 +40,35 @@ Rogue	all	Mind Poison	not on Forever	forever/data/waterys/items.csv	ai/playerbot
 Rogue	Assassination	Envenom	not on Forever	forever/tools/test_forever_spell_rows.py:14	ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp	row compiled out for the Forever build
 Rogue	Subtlety	Shadow of Death, Mark for Death, Smoke Bomb	not on Forever	forever/tools/test_forever_spell_rows.py:15	ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp	rows compiled out for the Forever build
 Rogue	Combat/Assassination	Surprise Attack, Noxious Assault	unverified	forever/data/waterys/class-review/rogue.md:87	ai/playerbot/strategy/rogue/RogueAiObjectContext.cpp	not in the spell audit; check live before relying on them
-Rogue	Subtlety	Death Mark	in preset, not cast	forever/data/waterys/talent-builds.csv	none	learned by the preset; the bot has no action for it yet
+Rogue	Subtlety	Death Mark	available	client DB2 SkillLineAbility 1316709 (lvl 40)	ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp:39	full combo bar on a durable target; 6 s stored-damage finisher, every spec (not in the new preset, learned from the class line)
 Priest	all	Power Word: Shield, Fade, Renew, Greater Heal, Flash Heal	available	forever/data/waterys/class-review/priest.md:25-31	ai/playerbot/strategy/priest/	healing ladder
 Priest	Shadow	Shadowform, Vampiric Embrace, Mind Flay, Silence	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/ShadowPriestStrategy.cpp	Shadow kit
-Priest	Discipline	Penance, Power Infusion, Prayer of Mending	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/DisciplinePriestStrategy.cpp	Forever talent abilities
+Priest	Discipline	Penance	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/DisciplinePriestStrategy.cpp:32,40,111	critical/low heal ladder; class line teaches it at 30
+Priest	Discipline	Power Infusion	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/PriestStrategy.cpp:589	damage/healing cooldown
+Priest	Discipline/Holy	Prayer of Mending	in preset (holy)	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/priest/HolyPriestStrategy.cpp:91	cast on the main tank and jumps on damage; class line teaches it at 40
+Priest	Discipline/Holy	Renew on the tank	available	forever/data/waterys/forever-spell-ids.csv:153	ai/playerbot/strategy/priest/HolyPriestStrategy.cpp:95	tank keeps its HoT while a more wounded member takes the party row
 Priest	Holy	Chastise	available, not in preset	forever/data/waterys/talent-trees-70959.csv	ai/playerbot/strategy/priest/PriestActions.cpp	trainer spell; the bot casts it when learned
 Priest	Holy	Ascendance	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/priest/HolyPriestStrategy.cpp	no Forever spell by this name
 Shaman	Enhancement	Stormstrike	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/shaman/EnhancementShamanStrategy.cpp:59	nature burst
 Shaman	Elemental	Water Shield	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/shaman/ElementalShamanStrategy.cpp:437	mana regeneration
-Shaman	Restoration	Chain Heal, Healing Wave	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp:73-101	heal kit
+Shaman	Restoration	Chain Heal, Healing Wave	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp:72-118	heal kit
+Shaman	Restoration	Riptide	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp	instant heal/HoT in the low and medium bands
 Shaman	all	Searing, Magma, Mana Spring, Healing Stream, Windfury, Grace of Air, Grounding, Tremor, Earthbind, Stoneclaw, Strength of Earth totems	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/ShamanAiObjectContext.cpp	totem kit
 Shaman	all	Earth Shield	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/ShamanAiObjectContext.cpp	shaman trainer spell on the client
 Shaman	all	Totemic Recall	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/ShamanActions.cpp	refunds the standing set
-Shaman	all	Fire Nova	likely dead	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/ShamanActions.h:484	client has Fire Nova; the action still asks for fire nova totem
+Shaman	all	Fire Nova	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/ShamanActions.h	burst around the standing fire totem (408341); the row waits for a totem
 Shaman	Elemental	Elemental Mastery	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ElementalShamanStrategy.cpp	no shaman ability by this name
 Shaman	Elemental	Earthquake	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ElementalShamanStrategy.cpp	no shaman ability by this name
 Shaman	Enhancement	Lightning Strike	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ShamanActions.h:570	no shaman ability by this name
 Shaman	Enhancement	Bloodlust	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/EnhancementShamanStrategy.cpp	no shaman ability by this name
 Shaman	Restoration	Spirit Link, Ancestral Swiftness	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp	no shaman abilities by these names
-Shaman	Tank	Earthshaker Slam, Totemic Slam	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ShamanActions.h:522,548	tank kit has no taunt on Forever
+Shaman	Tank	Earthshaker Slam, Totemic Slam	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ShamanActions.h	tank kit has no taunt on Forever; the taunt rows are compiled out and lost aggro falls back to Earth Shock
+Mage	Arcane	Arcane Blast	available	forever/data/waterys/talent-builds.csv (node 105806)	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	Forever arcane filler; Arcane Missiles stays the default fallback
+Mage	Arcane	Arcane Wrath	in preset	forever/data/waterys/talent-builds.csv (node 113627)	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	talent-only: ranks have no trainer or chain row; 6 s cooldown nuke
+Mage	Arcane	Missile Barrage (proc)	in preset	forever/data/waterys/talent-builds.csv (node 105809)	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	proc aura 400589 spent on Arcane Missiles
+Mage	Frost	Ice Lance	available	forever/data/waterys/talent-builds.csv (node 105767)	ai/playerbot/strategy/mage/FrostMageStrategy.cpp	frozen target or Fingers of Frost aura 400669; 8 s cooldown
+Mage	Arcane	Arcane Barrage	not in preset	none	none	client spell 400610; chainless, no trainer row and no preset point, so no bot learns it
+Mage	Fire	Heating Up (Pyroblast cast-time proc)	in preset	forever/data/waterys/talent-builds.csv (node 105786)	none	proc aura 400625; the Hot Streak row below still reads the Turtle proc ids
 Mage	Arcane	Arcane Power, Presence of Mind	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp:267-271	burst cooldowns
 Mage	Fire	Combustion, Pyroblast, Blast Wave	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/mage/FireMageStrategy.cpp:52-325	Fire kit
 Mage	Frost	Cold Snap, Ice Block, Ice Barrier	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/mage/FrostMageStrategy.cpp:206-256	Frost kit
@@ -61,6 +76,9 @@ Mage	all	Evocation	available	forever/data/waterys/class-review/mage.md:127	ai/pl
 Mage	Arcane	Arcane Rupture	not on Forever	forever/tools/test_forever_spell_rows.py:13	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	row compiled out for the Forever build
 Mage	Frost	Icicles	not on Forever	forever/tools/test_forever_spell_rows.py:13	ai/playerbot/strategy/mage/FrostMageStrategy.cpp	row compiled out for the Forever build
 Mage	Fire	Hot Streak	not on Forever	ai/playerbot/strategy/mage/MageTriggers.cpp:154	ai/playerbot/strategy/mage/FireMageStrategy.cpp:51	proc auras 51930/51931 are absent from the client
+Warlock	Destruction	Incinerate	available	forever/data/waterys/talent-builds.csv (node 105874)	ai/playerbot/strategy/warlock/DestructionWarlockStrategy.cpp	Forever destruction filler; Shadow Bolt stays the fallback
+Warlock	Affliction	Wrack	in preset	forever/data/waterys/talent-builds.csv (node 105909)	ai/playerbot/strategy/warlock/AfflictionWarlockStrategy.cpp	talent-only (single rank, no trainer row); channel speeds up our DoTs
+Warlock	Destruction	Bane of Havoc	in preset	forever/data/waterys/talent-builds.csv (node 105876)	none	active curse on a second target; no row (single-target play gets nothing from it)
 Warlock	Demonology	Soul Link, Demonic Sacrifice, Fel Domination	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/warlock/DemonologyWarlockStrategy.cpp:56-254	demon kit
 Warlock	Destruction	Conflagrate, Shadowburn, Rain of Fire	available	forever/data/waterys/class-review/warlock.md:22-30	ai/playerbot/strategy/warlock/DestructionWarlockStrategy.cpp:21	Destruction kit
 Warlock	all	Imp, Voidwalker, Succubus, Felhunter	available	forever/data/waterys/class-review/warlock.md:22-30	ai/playerbot/strategy/warlock/WarlockAiObjectContext.cpp	all four summon spells exist
@@ -68,9 +86,10 @@ Warlock	Affliction	Dark Pact	not on Forever	ai/playerbot/strategy/warlock/Warloc
 Warlock	Affliction	Dark Harvest	not on Forever	forever/data/waterys/class-review/warlock.md:34	ai/playerbot/strategy/warlock/AfflictionWarlockStrategy.cpp	no Forever spell by this name
 Warlock	Demonology	Power Overwhelming	not on Forever	forever/data/waterys/class-review/warlock.md:34	ai/playerbot/strategy/warlock/DemonologyWarlockStrategy.cpp	no Forever spell by this name
 Druid	Restoration	Swiftmend, Nature's Swiftness, Tranquility	available	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp:49-234	heal kit
+Druid	Restoration	Wild Growth	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp	instant group heal-over-time on 2+ hurt members
 Druid	Balance	Moonkin Form, Hurricane, Insect Swarm	available	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/BalanceDruidStrategy.cpp:120-296	caster kit
 Druid	all	Innervate, Rebirth, Barkskin	available	forever/data/waterys/class-review/druid.md:25-36	ai/playerbot/strategy/druid/	utility kit
-Druid	Feral	Lacerate, Primal Bite	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp	Forever feral abilities
+Druid	Feral	Lacerate, Primal Bite	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp	bear bleed stack and high-threat rage dump rows
 Druid	Feral	Berserk	unverified	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/druid/DpsFeralDruidStrategy.cpp:386	client has a druid Berserk (417141); the audit marks the Turtle id missing; no preset point buys it
 Druid	Restoration	Tree of Life Form	not on Forever	forever/data/waterys/class-notes/druid.md:7	ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp:294	no druid ability by this name
-Druid	Feral	Savage Bite, Mangle (Bear)	not on Forever	forever/data/waterys/class-notes/druid.md:12-14	ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp:70	rows stay but the spells do not resolve
+Druid	Feral	Savage Bite, Mangle (Bear)	not on Forever	forever/data/waterys/class-notes/druid.md:12-14	ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp	the Savage Bite row is compiled out for the Forever build; Primal Bite replaces it

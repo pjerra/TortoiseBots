@@ -169,6 +169,37 @@ bool SavageBiteTrigger::IsActive()
     return ShouldSavageBite(AI_VALUE2(uint8, "rage", "self target"), ai->HasAura("clearcasting", bot));
 }
 
+bool PrimalBiteTrigger::IsActive()
+{
+    if (!SpellCanBeCastedTrigger::IsActive())
+        return false;
+
+    return ShouldPrimalBite(AI_VALUE2(uint8, "rage", "self target"), ai->HasAura("clearcasting", bot));
+}
+
+bool LacerateTrigger::IsActive()
+{
+    if (!SpellCanBeCastedTrigger::IsActive())
+        return false;
+
+    Unit* target = GetTarget();
+    if (!target)
+        return false;
+
+    uint8 stacks = 0;
+    uint32 remainingMs = 0;
+    // Only the lacerate this bot stacked counts: another druid's bleed is neither this bot's stack nor its refresh.
+    uint32 const spellId = AI_VALUE2(uint32, "spell id", "lacerate");
+    if (Aura* aura = ai->GetAura(spellId, target, true))
+    {
+        stacks = aura->GetStackAmount();
+        // A duration that is not running (an infinite or unset one reads as a negative value) leaves no time-to-expiry to refresh on.
+        int32 const duration = aura->GetAuraDuration();
+        remainingMs = duration > 0 ? uint32(duration) : 0u;
+    }
+    return ShouldLacerate(AI_VALUE2(uint8, "rage", "self target"), stacks, remainingMs);
+}
+
 bool HurricaneChannelCheckTrigger::IsActive()
 {
     Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL);

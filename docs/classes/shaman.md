@@ -28,6 +28,7 @@ The shaman tank spec is Not on ForeverCore yet.
 
 ### Restoration (Healer)
 - Casts *Chain Heal* when several nearby allies are injured.
+- Opens the low and medium wound bands with an instant *Riptide* (heal plus HoT) before the *Healing Wave* cast, and keeps *Riptide* on a wounded ally so its *Chain Heal* gets the bonus.
 - Deals off-spec damage (*Flame Shock*, *Lightning Bolt*, *Chain Lightning* into packs) per [healer off-DPS rules](overview.md#shared-bot-behaviors).
 
 ### Enhancement (Melee DPS)
@@ -50,6 +51,7 @@ Shamans maintain 4-element totem sets tailored to group composition:
 - **Earth Totem:** Drops *Strength of Earth Totem* if melee allies are present and the spell is known; otherwise the slot stays empty.
 - Reacts to fears with *Tremor Totem* and to runners with *Earthbind Totem*.
 - **Fire Totem:** Drops *Searing Totem* on single targets and *Magma Totem* on packs.
+- **Fire Nova:** a burst around whichever fire totem is standing (10 yd, 10 s cooldown), fired on packs. It leaves the totem up, so a tank can drop *Magma Totem* and burst from it.
 - **Water Totem:** Drops *Mana Spring Totem* if mana users are present; *Healing Stream Totem* otherwise. Reacts to poison and disease with cleansing totems.
 - **Air Totem:** Drops *Windfury Totem* for melee groups; drops *Grace of Air Totem* for casters. Reacts to incoming enemy spells with *Grounding Totem*.
 - **Out of Combat:** Totems drop in combat and in the pre-pull window (ready check / rebuff) only — never otherwise out of combat, so a following bot leaves no totems behind in town.
@@ -65,13 +67,15 @@ Shamans maintain 4-element totem sets tailored to group composition:
 ## Custom abilities
 
 - **Water Shield:** a shaman shield that restores mana; the elemental kit keeps it up.
+- **Riptide:** instant heal plus a HoT on a 12 s cooldown; the restoration ladder opens the low and medium bands with it.
+- **Fire Nova:** bursts fire damage around the active fire totem (10 yd, 10 s cooldown). It needs a totem standing; no totem, no burst.
 - **Totemic Recall:** refunds the standing totem set after a fight.
 - **Earthquake:** Not on ForeverCore yet.
 - **Lightning Strike:** Not on ForeverCore yet.
 - **Spirit Link:** Not on ForeverCore yet.
 - **Ancestral Swiftness:** Not on ForeverCore yet.
 - **Bloodlust:** Not on ForeverCore yet.
-- **Earthshaker Slam:** Not on ForeverCore yet.
+- **Earthshaker Slam:** Not on ForeverCore yet; the shaman tank kit has no taunt, so its lost-aggro answer is *Earth Shock*.
 
 ---
 
@@ -90,20 +94,13 @@ Shamans maintain 4-element totem sets tailored to group composition:
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever shaman on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Elemental / Enhancement / Restoration) | Key Talents |
 | :--- | :--- | :--- | :--- |
 | **Restoration** | Healer | `0 / 10 / 41` | Nature's Swiftness, Riptide, Mana Tide Totem, Healing Way, Water Shield. |
-| **Enhancement** | Melee DPS | `11 / 40 / 0` | Stormstrike, Flurry, Maelstrom Weapon, Elemental Devastation, Rage of the Farseer. |
-| **Elemental** | Ranged DPS | `41 / 0 / 10` | Elemental Fury, Lightning Mastery, Lightning Overload, Call of Thunder, Elemental Focus. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Restoration:** Improved Healing Wave, Tidal Focus, Mindfulness, Ancestral Healing, Healing Focus, Water Shield, Tidal Mastery, Restorative Totems, Mana Tide Totem, Healing Way, Nature's Swiftness, Purification and Riptide; the last 10 points go to Enhancement (Ancestral Knowledge, Guardian Totems, Mental Dexterity).
-- **Enhancement:** Thundering Strikes, Ancestral Knowledge, Mental Dexterity, Improved Lightning Shield, Elemental Weapons, Shamanistic Focus, Anticipation, Flurry, Stormstrike, Spirit Weapons, Mental Quickness, Improved Stormstrike, Maelstrom Weapon and Rage of the Farseer; the last 11 points go to Elemental (Concussion, Elemental Devastation, Call of Flame).
-- **Elemental:** Convection, Concussion, Elemental Alacrity, Call of Flame, Reverberation, Elemental Focus, Eye of the Storm, Call of Thunder, Lightning Overload, Elemental Reach, Elemental Fury, Lightning Mastery, Trial by Fire and Elemental Warding; the last 10 points go to Restoration (Improved Healing Wave, Tidal Focus).
-
-</details>
+| **Enhancement** | Melee DPS | `12 / 34 / 5` | Stormstrike, Flurry, Maelstrom Weapon, Elemental Devastation, Rage of the Farseer. |
+| **Elemental** | Ranged DPS | `32 / 8 / 11` | Elemental Fury, Lightning Mastery, Lightning Overload, Call of Thunder, Elemental Focus. |
 
 ---
 

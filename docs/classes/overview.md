@@ -18,7 +18,7 @@ relates_to:
 
 # Class AI & Roles Overview
 
-Bots cover all nine Vanilla classes. Each bot is assigned a spec for its class and spends its talent points along that spec's preset build, then fights in that spec's style.
+Bots cover all nine Vanilla classes. Each bot is assigned a spec for its class and spends its talent points along that spec's preset build, then fights in that spec's style. The presets are built from the level-60 picks of Forever players for each spec (aotc.gg, read 2026-11-24).
 
 ## Supported Roles & Classes
 
@@ -26,7 +26,7 @@ Bots cover all nine Vanilla classes. Each bot is assigned a spec for its class a
 | :--- | :---: | :---: | :---: | :---: | :--- | :--- |
 | **[Warrior](warrior.md)** | Prot | - | Arms, Fury | - | Intimidating Shout, Concussion Blow | Shield Bash, Pummel |
 | **[Paladin](paladin.md)** | Prot | Holy | Retribution | - | Hammer of Justice, Repentance | Hammer of Justice, Repentance |
-| **[Hunter](hunter.md)** | - | - | - | BM, MM, Survival | Freezing Trap, Scare Beast | None (Scatter Shot snares) |
+| **[Hunter](hunter.md)** | - | - | - | BM, MM, Survival | Freezing Trap, Scare Beast | None |
 | **[Rogue](rogue.md)** | - | - | All Specs | - | Sap, Blind, Gouge | Kick |
 | **[Priest](priest.md)** | - | Holy, Disc | - | Shadow | Shackle Undead, Psychic Scream (PvP and close range only) | Silence (Shadow) |
 | **[Shaman](shaman.md)** | - | Resto | Enhancement | Elemental | None | Earth Shock |

@@ -163,6 +163,26 @@ namespace ai
         return !novaTotemStanding;
     }
 
+    // Forever's Fire Nova bursts around the standing fire totem instead of
+    // dropping one: it needs the totem up and its own 10 s category ready,
+    // and it leaves the totem standing for the next burst.
+    inline bool TankFireNovaPulseShouldFire(bool knowsFireNova, bool novaReady, bool fireTotemStanding)
+    {
+        if (!knowsFireNova || !novaReady)
+            return false;
+        return fireTotemStanding;
+    }
+
+    // Forever's Magma is the fire totem Fire Nova pulses from, so a real
+    // pack earns it even while the burst is ready; there is no Nova totem
+    // in the slot for it to replace.
+    inline bool TankMagmaPulseShouldDrop(std::uint8_t attackerCount, bool manaForMagma)
+    {
+        if (!manaForMagma)
+            return false;
+        return attackerCount >= 3;
+    }
+
     // Fire slot order (one fire totem at a time): Fire Nova is the pack pick
     // and owns the slot whenever it is available; Magma is only the fallback
     // while Fire Nova is on cooldown and no Nova totem stands; Searing is the

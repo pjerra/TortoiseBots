@@ -426,6 +426,15 @@ namespace ai
         CastShadowOfDeathAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "shadow of death") {}
     };
 
+    class CastDeathMarkAction : public CastMeleeSpellAction
+    {
+    public:
+        // Forever's delayed-detonation finisher: stores a share of the damage
+        // dealt per combo point and pays it out after 6 s. The trigger
+        // requires full CP plus a durable target.
+        CastDeathMarkAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "death mark") {}
+    };
+
     class CastMarkForDeathAction : public CastMeleeSpellAction
     {
     public:
@@ -502,6 +511,15 @@ namespace ai
     {
     public:
         CastBackstabAction(PlayerbotAI* ai) : CastComboAction(ai, "backstab") {}
+    };
+
+    class CastMutilateAction : public CastComboAction
+    {
+    public:
+        // Forever 399956/1241582/1241584: both-weapon strike, same dagger main
+        // hand as Backstab. The Assassination builder prefers it when trained
+        // and falls back to Backstab through its action node.
+        CastMutilateAction(PlayerbotAI* ai) : CastComboAction(ai, "mutilate") {}
     };
 
     class CastHemorrhageAction : public CastComboAction

@@ -26,10 +26,11 @@ Priests provide comprehensive healing coverage through layered spell ladders, da
 
 ### The Priest Healing Ladder
 Priests select healing spells based on health bands (bands follow [Combat settings](../server/settings/combat.md); all lines below use the defaults Critical 20 / Low 50 / Medium 70 / Almost-Full 90):
-- **Critical (below 20%):** *Power Word: Shield* + *Flash Heal* (missing *Flash Heal* rows fall through to *Greater Heal* / *Heal* / *Lesser Heal*).
-- **Low (20–50%):** *Power Word: Shield* + *Greater Heal* (+ *Heal* / *Lesser Heal* fallbacks at low level). The same heavy-damage and low-mana pace rule as the medium band applies here, so the pick never downgrades from fast *Flash Heal* to a slow cast as the bar crosses the band line; loose mobs on non-tanks keep *Flash Heal* ahead.
+- **Critical (below 20%):** *Power Word: Shield* + *Penance* (Discipline) + *Flash Heal* (missing *Flash Heal* rows fall through to *Greater Heal* / *Heal* / *Lesser Heal*).
+- **Low (20–50%):** *Power Word: Shield* + *Penance* (Discipline) + *Greater Heal* (+ *Heal* / *Lesser Heal* fallbacks at low level). The same heavy-damage and low-mana pace rule as the medium band applies here, so the pick never downgrades from fast *Flash Heal* to a slow cast as the bar crosses the band line; loose mobs on non-tanks keep *Flash Heal* ahead.
 - **Medium (50–70%):** *Power Word: Shield* + *Greater Heal* / *Heal* / *Lesser Heal* by deficit (Holy also uses *Renew* for light wounds). Heavy incoming damage (the bar would leave the band before a slow cast lands) switches the pick to fast *Flash Heal* while the healer's mana is comfortable; a low-mana healer keeps the efficient heals unless the member is about to fall into the critical band.
-- **Almost-Full (70–90%):** *Renew* (Discipline shields first).
+- **Almost-Full (70–90%):** *Renew* (Discipline shields first). The tank also keeps its own *Renew* whenever it is below the almost-full line, even while another member is more wounded and owns the party-wide HoT row.
+- **Tank Prayer:** *Prayer of Mending* is placed on the main tank whenever the party has no copy of it out; the prayer heals the next damage the tank takes and then jumps to another member.
 - **Multiple Injured:** *Prayer of Healing* when 3 or more members of the priest's own party within 30 yards are hurt at or below 70%. The spell only reaches the priest's party, so hurt raid members in other parties do not trigger it.
 
 Direct heals are downranked to match target wounds per [shared downranking rules](overview.md#shared-bot-behaviors), using the lowest rank covering missing health. Full ranks are used at or below critical health (20% default) — or when heavy incoming damage would push the target below it before the cast lands. *Desperate Prayer* serves as a self-only emergency heal.
@@ -81,22 +82,13 @@ The bot verifies that the target does not have the *Weakened Soul* debuff before
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever priests on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Discipline / Holy / Shadow) | Key Talents |
 | :--- | :--- | :--- | :--- |
-| **Holy** | Healer | `13 / 38 / 0` | Spirit of Redemption, Spiritual Guidance, Spiritual Healing, Prayer of Mending, Holy Nova. |
-| **Shadow** | Ranged DPS | `15 / 0 / 36` | Mind Flay, Shadowform, Vampiric Embrace, Vampiric Touch, Shadow Weaving. |
-| **Discipline** | Healer / Support | `40 / 11 / 0` | Power Infusion, Penance, Divine Aegis, Renewed Hope, Soul Warding. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Holy:** Improved Renew, Holy Specialization, Divine Fury, Inspiration, Holy Nova, Blessed Recovery, Holy Reach, Improved Healing, Spirit of Redemption, Spiritual Guidance, Litany of Light, Spiritual Healing, Prayer of Mending, Twilight Focus and Holy Specialization; the last 13 points go to Discipline (Wand Specialization, Twin Disciplines, Martyrdom, Mental Strength, Mental Agility, Inner Focus).
-- **Shadow:** Shadow Focus, Improved Mind Blast, Mind Flay, Improved Mind Flay, Improved Shadow Word: Pain, Vampiric Embrace, Shadow Weaving, Dark Inspiration, Silence, Devouring Contagion, Darkness, Early Demise, Shadowform, Shadow Reach and Spirit Tap; the last 15 points go to Discipline (Twin Disciplines, Mental Strength, Mental Agility, Inner Focus, Meditation).
-- **Discipline:** Twin Disciplines, Silent Resolve, Mental Strength, Inner Focus, Improved Power Word: Shield, Meditation, Mental Agility, Improved Inner Fire, Soul Warding, Penance, Renewed Hope, Divine Aegis, Power Infusion and Power in Light; the last 11 points go to Holy (Improved Renew, Twilight Focus, Divine Fury, Holy Specialization).
-
-</details>
-
-The Shadow premade skips *Vampiric Touch* in play: the talent is taken in the build but the bot never casts it.
+| **Holy** | Healer | `18 / 33 / 0` | Spirit of Redemption, Spiritual Guidance, Spiritual Healing, Prayer of Mending, Divine Fury. |
+| **Shadow** | Ranged DPS | `13 / 0 / 38` | Mind Flay, Shadowform, Vampiric Embrace, Shadow Weaving, Darkness. |
+| **Discipline** | Healer / Support | `31 / 20 / 0` | Power Infusion, Penance, Divine Aegis, Renewed Hope, Soul Warding. |
 
 ---
 

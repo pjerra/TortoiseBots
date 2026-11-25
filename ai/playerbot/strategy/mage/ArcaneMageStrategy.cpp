@@ -40,6 +40,25 @@ void ArcaneMageStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
     MageStrategy::InitCombatTriggers(triggers);
 
+    // Forever: Arcane Blast (talent node 105806) is the filler. It outranks
+    // the Missiles default action, which takes over while the blast is not
+    // known yet or not affordable (its 15% base-mana cost grows per cast).
+    triggers.push_back(new TriggerNode(
+        "arcane blast",
+        NextAction::array(0, new NextAction("arcane blast", ACTION_NORMAL + 1), NULL)));
+
+    // Arcane Wrath (talent node 113627): a 3.5 s arcane nuke on a 6 s
+    // cooldown, so it is spent whenever it is ready instead of a blast.
+    triggers.push_back(new TriggerNode(
+        "arcane wrath",
+        NextAction::array(0, new NextAction("arcane wrath", ACTION_NORMAL + 2), NULL)));
+
+    // Missile Barrage proc (talent node 105809): the next channel is shorter
+    // and cheaper, so it goes before both fillers.
+    triggers.push_back(new TriggerNode(
+        "missile barrage",
+        NextAction::array(0, new NextAction("arcane missiles", ACTION_NORMAL + 3), NULL)));
+
     // MAG-5: rupture (damage + self buff) while the missiles buff is down;
     // the arcane-missiles default owns the GCD while buffed.
     // Turtle-only spell: no Forever class can learn it (no SkillLineAbility row on 70959).

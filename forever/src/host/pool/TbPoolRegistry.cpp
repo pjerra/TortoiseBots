@@ -80,6 +80,7 @@ struct State
     bool unknownRows = false;       // a ready row the auth database gave no answer for: not stale, not usable, asked again on the next read
     std::uint32_t createPerMinute = 30;
     std::uint32_t maxCharacters = world::DefaultMaxPoolCharacters;
+    bool censusComposition = true;
     std::vector<Account> accounts;
     std::vector<Character> characters;
     std::uint32_t pendingCharacters = 0;    // rows whose character is not made (or not registered) yet: they count toward the cap
@@ -411,6 +412,7 @@ void LoadConfig()
     s.enabled = sConfigMgr->GetBoolDefault("TortoiseBots.Pool.Enable", false);
     s.createPerMinute = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.CreatePerMinute", 30), 0, 600));
     s.maxCharacters = std::uint32_t(std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Pool.MaxCharacters", int32(world::DefaultMaxPoolCharacters)), 0, 100000));
+    s.censusComposition = sConfigMgr->GetBoolDefault("TortoiseBots.Pool.CensusComposition", true);
     if (!reload)
         return;
     // A config reload re-reads everything: the keys, the two tables and the rows. A server started with the key off and turned on
@@ -457,6 +459,14 @@ std::uint32_t MaxCharacters()
     if (!s.configured)
         LoadConfig();
     return s.enabled ? s.maxCharacters : 0;
+}
+
+bool CensusComposition()
+{
+    State& s = Get();
+    if (!s.configured)
+        LoadConfig();
+    return s.censusComposition;
 }
 
 std::vector<Account> const& Accounts()

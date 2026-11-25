@@ -19,6 +19,9 @@ public:
         creators["flash heal on party"] = &flash_heal_on_party;
         creators["renew"] = &renew;
         creators["renew on party"] = &renew_on_party;
+        creators["renew on tank"] = &renew_on_tank;
+        creators["penance on party"] = &penance_on_party;
+        creators["prayer of mending on tank"] = &prayer_of_mending_on_tank;
         creators["resurrection"] = &resurrection;
     }
 
@@ -78,6 +81,12 @@ private:
     ACTION_NODE_P(renew, "renew", "remove shadowform");
 
     ACTION_NODE_P(renew_on_party, "renew on party", "remove shadowform");
+
+    ACTION_NODE_P(renew_on_tank, "renew on tank", "remove shadowform");
+
+    ACTION_NODE_P(penance_on_party, "penance on party", "remove shadowform");
+
+    ACTION_NODE_P(prayer_of_mending_on_tank, "prayer of mending on tank", "remove shadowform");
 
     ACTION_NODE_P(resurrection, "resurrection", "remove shadowform");
 };

@@ -97,6 +97,18 @@ namespace ai
     SNARE_TRIGGER(ConcussionBlowTrigger, "concussion blow");
     SNARE_TRIGGER(HamstringTrigger, "hamstring");
     SNARE_TRIGGER(MockingBlowTrigger, "mocking blow");
+    // Spearing Strike is Battle Stance only (client SpellShapeshift mask
+    // 65536) and a 20 s cooldown: arm it only from the stance that casts it,
+    // so an Arms warrior inside a Berserker dance does not fail the cast.
+    class SpearingStrikeTrigger : public SpellCanBeCastedTrigger
+    {
+    public:
+        SpearingStrikeTrigger(PlayerbotAI* ai) : SpellCanBeCastedTrigger(ai, "spearing strike") {}
+        bool IsActive() override
+        {
+            return ai->HasAura("battle stance", bot) && SpellCanBeCastedTrigger::IsActive();
+        }
+    };
     class MockingBlowTauntTrigger : public LoseAggroTrigger
     {
     public:
@@ -262,13 +274,12 @@ namespace ai
         HeroicStrikeTrigger(PlayerbotAI* ai) : SpellCanBeCastedTrigger(ai, "heroic strike") {}
         bool IsActive() override
         {
-            // Rage dump, not a builder: hold heroic strike until 40+ rage so
-            // bloodthirst/whirlwind (30/25 rage) fire first, then dump every
-            // spare swing above that (donor FuryWarriorStrategy runs HS on
-            // "medium rage available" = 40, 79bd4281). The old 60-rage floor
-            // almost never held on a boss: heroic strike fired 6 times in a
-            // 77 s Patchwerk window while rage sat in the 40-60 band.
-            if (AI_VALUE2(uint8, "rage", "self target") < 40)
+            // Rage dump, not a builder: hold heroic strike until the bar also
+            // pays for the best builder the level has (HeroicStrikeRageFloor
+            // explains the three steps), then dump every spare swing above
+            // that (donor FuryWarriorStrategy runs HS on "medium rage
+            // available" = 40, 79bd4281, which stays the level-40+ floor).
+            if (!ShouldHeroicStrike(bot->GetLevel(), AI_VALUE2(uint8, "rage", "self target")))
                 return false;
             return SpellCanBeCastedTrigger::IsActive()
                 && (AI_VALUE2(uint8, "health", "current target") > 20 || ai->IsTank(bot));

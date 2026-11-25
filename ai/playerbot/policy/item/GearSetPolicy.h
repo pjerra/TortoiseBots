@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GearReplacementsData.h"
+#include "runtime/GearEffectiveLevelPolicy.h"
 
 #include <algorithm>
 #include <array>
@@ -13,6 +14,9 @@ namespace ai
 {
 
 inline constexpr uint32_t kClassicItemMaxId = 25000;
+// Forever items live in their own id range (the live table holds weapon and armour ids from 200000 to 291874).
+inline constexpr uint32_t kForeverItemBandMinId = 200000;
+inline constexpr uint32_t kForeverItemBandMaxId = 292000;
 
 struct GearLevelBracket
 {
@@ -38,10 +42,19 @@ struct GearItemCandidate
     bool unique = false;
 };
 
-// Forever custom items allowed in classic gear sets (empty in v1; explicit opt-in only).
-inline bool IsAllowedForeverCustomItem(uint32_t /*itemId*/)
+// Id range generated gear may draw from: on Forever the classic table plus Forever's own item range (the live table
+// holds weapon and armour ids from 200000 to 291874). The Turtle build keeps its classic-only rule.
+inline bool IsItemInGearBand(uint32_t itemId)
 {
+    if (itemId == 0)
+        return false;
+    if (itemId < kClassicItemMaxId)
+        return true;
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+    return itemId >= kForeverItemBandMinId && itemId < kForeverItemBandMaxId;
+#else
     return false;
+#endif
 }
 
 // Trap / missing / spell-not-item IDs < 25000 from forever/data/waterys/forever-item-traps.csv
@@ -72,7 +85,7 @@ inline bool IsClassicItemCandidate(uint32_t itemId,
         return false;
     if (requiredExpansion != 0)
         return false;
-    if (itemId >= kClassicItemMaxId && !IsAllowedForeverCustomItem(itemId))
+    if (!IsItemInGearBand(itemId))
         return false;
     if (quality > 4) // 4 = Epic
         return false;
@@ -337,8 +350,14 @@ inline bool CandidateFitsSlotPolicy(GearItemCandidate const& c,
         return false;
 
     GearLevelBracket const bracket = LevelBracketForLevel(level);
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+    // Many Forever rows store RequiredLevel 0; the effective level is derived from the item level instead.
+    if (TortoiseBots::GearEffectiveRequiredLevel(c.requiredLevel, c.itemLevel) > bracket.maxRequiredLevel)
+        return false;
+#else
     if (c.requiredLevel > bracket.maxRequiredLevel)
         return false;
+#endif
     if (c.itemLevel < bracket.minItemLevel || c.itemLevel > bracket.maxItemLevel)
         return false;
 

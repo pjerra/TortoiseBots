@@ -1,8 +1,9 @@
 // The class spells a real player gets from its class quests, as a reviewed allow-list. Core-free, so a unit test proves the policy
 // (forever/tools/test_class_quest_spells.cpp) and the host half (TbClassQuestSpells.cpp) only reads the world.
 //
-// The table never teaches anything else, and nothing in it is taught without a class-masked, non-repeatable quest of the running
-// world DB that teaches the spell (the host builds the index from sObjectMgr->GetQuestTemplates()).
+// The table never teaches anything else, and nothing in it is taught without a non-repeatable quest of the running
+// world DB that teaches the spell, either class-masked or with the class implied by the spell it teaches (the host
+// builds the index from sObjectMgr->GetQuestTemplates()).
 #pragma once
 
 #include <cstdint>
@@ -109,13 +110,14 @@ struct QuestRaw
 };
 
 // The allow-listed spells this quest teaches its class. What a quest shows it gives (its display spells) counts too, and so does
-// the spell cast on accept; only ids in the allow-list for the class are kept.
+// the spell cast on accept; only ids in the allow-list for the class are kept. A quest with no class mask counts when the spell it
+// teaches has a row for the class: the spell implies the class (Forever's class-spell quests carry no mask).
 inline std::vector<uint32_t> CollectTaught(QuestRaw const& q, uint8_t classId)
 {
     std::vector<uint32_t> taught;
-    if (!classId || classId > 32 || !q.classMask || q.repeatable)
+    if (!classId || classId > 32 || q.repeatable)
         return taught;
-    if (!(q.classMask & (1u << (classId - 1))))
+    if (q.classMask && !(q.classMask & (1u << (classId - 1))))
         return taught;
 
     auto add = [&](uint32_t spellId)

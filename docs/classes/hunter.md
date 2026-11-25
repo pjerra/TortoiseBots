@@ -26,6 +26,7 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 
 ### Beast Mastery & Marksmanship (Ranged DPS)
 - Opens with *Hunter's Mark* and *Auto Shot*. With a living tank in the group the mark goes only on the mob the tank is fighting.
+- *Auto Shot* needs a bow, gun or crossbow in the ranged slot and matching arrows or bullets in the bags. Bots keep a level-fitting ammo stack topped up on login, on level-up and while playing, and a hunter below level 5 whose ranged slot is empty gets the starter bow back. A hunter with no ranged weapon logs one line on login and fights in melee until it gets one.
 - Fires *Aimed Shot* (Marksmanship, once trained, within range) or *Arcane Shot* on cooldown.
 - Uses *Steady Shot* as a filler when it is trained.
 - Uses *Multi-Shot* only when the splash around the target catches a second fighting enemy, and never into a crowd-controlled mob standing beside it.
@@ -41,7 +42,6 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 ### Survival (Melee / Ranged Hybrid)
 - Fights at range with the full shot kit and weaves melee strikes when enemies close in.
 - Uses *Raptor Strike* and *Mongoose Bite* on cooldown without requiring a dodge proc.
-- Employs *Counterattack* after parrying incoming strikes (parry legality is enforced by the core).
 
 ### Dead-Zone & Melee Weaving
 - If enemies close inside Auto Shot minimum range, ranged hunters trade into melee using *Wing Clip*, *Raptor Strike*, and *Mongoose Bite*, then step back out.
@@ -70,9 +70,10 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 
 ## Custom abilities
 
-- **Aspect of the Viper:** a hunter aspect that trades damage for mana regeneration; the bot switches to it when mana is low and back to *Aspect of the Hawk* once mana recovers.
+- **Aspect of the Beast:** manual only (`.bot choice aspect beast`); on ForeverCore the class-line autotrain teaches it (13161).
+- **Aspect of the Viper:** a hunter aspect that trades damage for mana regeneration; the bot switches to it when mana is low and back to *Aspect of the Hawk* once mana recovers. On ForeverCore the client's Viper (415423) is on the Beast Mastery line but no trainer row, preset or class-line pass grants it, so the switch stays idle there.
 - **Aspect of the Wolf:** Not on ForeverCore yet.
-- **Lacerate:** Not on ForeverCore yet.
+- **Lacerate:** the client's Lacerate on ForeverCore is a pet ability (Survival-line ranks); the hunter's own `lacerate` action has no trigger, so the bot never casts it itself.
 
 ---
 
@@ -92,20 +93,13 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever hunters on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Beast Mastery / Marksmanship / Survival) | Key Talents |
 | :--- | :--- | :--- | :--- |
-| **Beast Mastery** | Ranged DPS | `36 / 15 / 0` | Bestial Wrath, Frenzy, Intimidation, Spirit Bond, Unleashed Fury. |
-| **Marksmanship** | Ranged DPS | `11 / 40 / 0` | Trueshot Aura, Mortal Shots, Barrage, Scatter Shot, Sniper Shot. |
-| **Survival** | Ranged DPS | `10 / 0 / 41` | Counterattack, Lacerating Strikes, Expose Prey, Predator's Edge, Clever Traps. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Beast Mastery:** Deadly Aspects, Endurance Training, Focused Fire, Bestial Swiftness, Unleashed Fury, Ferocity, Improved Mend Pet, Intimidation, Spirit Bond, Bestial Discipline, Frenzy and Bestial Wrath; the last 15 points go to Marksmanship (Lethal Attacks, Efficiency, Hawk Eye, Rapid Killing).
-- **Marksmanship:** Lethal Attacks, Efficiency, Careful Aim, Improved Arcane Shot, Trueshot Aura, Mortal Shots, Barrage, Scatter Shot, Ranged Weapon Specialization, Sniper Shot and Hawk Eye; the last 11 points go to Beast Mastery (Deadly Aspects, Endurance Training, Focused Fire).
-- **Survival:** Deflection, Survivalist, Savage Strikes, Improved Wing Clip, Surefooted, Deterrence, Clever Traps, Survival Tactics, Counterattack, Predator's Edge, Expose Prey, Survivalist's Discipline, Lightning Reflexes, Lacerating Strikes and Entrapment; the last 10 points go to Beast Mastery (Endurance Training, Deadly Aspects).
-
-</details>
+| **Beast Mastery** | Ranged DPS | `31 / 20 / 0` | Bestial Wrath, Frenzy, Intimidation, Unleashed Fury, Careful Aim. |
+| **Marksmanship** | Ranged DPS | `5 / 41 / 5` | Trueshot Aura, Mortal Shots, Barrage, Sniper Shot, Rapid Recuperation. |
+| **Survival** | Ranged DPS | `5 / 15 / 31` | Predator's Edge, Improved Tracking, Lethal Attacks, Expose Prey, Survivalist's Discipline. |
 
 ---
 

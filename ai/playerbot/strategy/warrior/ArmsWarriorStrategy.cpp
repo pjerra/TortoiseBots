@@ -80,6 +80,14 @@ void ArmsWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "mortal strike",
         NextAction::array(0, new NextAction("mortal strike", ACTION_NORMAL + 3), NULL)));
 
+    // Forever's Arms talent strike (75% weapon damage, more against
+    // giants/dragonkin, 15 rage, 20 s cooldown): below Mortal Strike and
+    // above the Heroic Strike swing dump, so the cooldown is never held for
+    // a plain swing.
+    triggers.push_back(new TriggerNode(
+        "spearing strike",
+        NextAction::array(0, new NextAction("spearing strike", ACTION_NORMAL + 2), NULL)));
+
     // Turtle-only spell: no Forever class can learn it (no SkillLineAbility row on 70959).
 #if !defined(TORTOISEBOTS_CORE_FOREVER) || !TORTOISEBOTS_CORE_FOREVER
     triggers.push_back(new TriggerNode(

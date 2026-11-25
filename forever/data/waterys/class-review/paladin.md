@@ -31,14 +31,17 @@ before 1502) into lower-tier Holy talents; the CSV's `TOP-UP` rows are not enoug
 | Crusader Aura | **absent by name** | action/trigger `CrusaderAuraTrigger` is dead |
 | Bulwark of the Righteous (51346/51565) | **absent** | `CastBulwarkAction`/trigger dead |
 | Hand of Freedom | **absent by name** | buff action dead |
-| Hand of Reckoning | **exists** (407774/409911) | action may resolve; verify the exact name |
-| Righteous Defense | **absent by name** | taunt action dead |
+| Hand of Reckoning | **runecarving rune only**: enchant 6844 "Hand of Reckoning" applies 407774/409911, from Engrave Gloves 410001, itself from the Libram of Justice (item 208851); the taunt ability is 1219206 | no SkillLineAbility, trainer row, quest or preset grants it; bots do not engrave, so the taunt is dead and its rows are compiled out on Forever |
+| Righteous Defense | **absent by name** | taunt action dead, row compiled out on Forever |
 | Hand of Protection/Sacrifice | present under Classic names | verify exact names live |
 
 ## Dead conditions and custom differences
 
-- Dead or name-sensitive: `crusader aura`, `bulwark of the righteous`, `hand of freedom`,
-  `righteous defense`; the strategies still schedule them (`PaladinActions.h`/`PaladinAiObjectContext.cpp`).
+- Dead or name-sensitive: `crusader aura`, `bulwark of the righteous`, `hand of freedom`; the strategies still schedule them
+  (`PaladinActions.h`/`PaladinAiObjectContext.cpp`).
+- No paladin taunt on Forever: `righteous defense` is absent and `hand of reckoning` is only the runecarving glove rune
+  above. Both protection/tank rows are behind the Forever guard in `ProtectionPaladinStrategy.cpp` and
+  `TankPaladinStrategy.cpp`; on Forever the tank keeps a Judgement-only `lose aggro` row.
 - Custom Forever: **Holy Strike 678** replaces the old Retribution strike; keep the changed behavior.
 - Turtle talents with no exact counterpart: Holy 446, 456; Retribution/Protection custom points were
   dropped/top-upped. Position/row-custom mappings (1421, 1425, 1426, 1429, 1430, 1432, 1446, 1502, 1521,
@@ -52,4 +55,4 @@ before 1502) into lower-tier Holy talents; the CSV's `TOP-UP` rows are not enoug
 | Retribution | Holy Strike 678 | yes — Forever strike |
 | Retribution | Crusader Strike | yes under near-name IDs (2537/8823/409914); exact action name needs live check |
 | All | Crusader Aura, Bulwark of the Righteous, Hand of Freedom, Righteous Defense | no exact name (dead action candidates) |
-| Protection | Hand of Reckoning 407774/409911 | yes by name; verify exact action |
+| Protection | Hand of Reckoning | only as a runecarving glove rune; no bot learn path (row compiled out) |

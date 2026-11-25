@@ -64,6 +64,20 @@ bool MarkForDeathTrigger::IsActive()
 	return AI_VALUE2(uint8, "health", "current target") > 50;
 }
 
+bool DeathMarkTrigger::IsActive()
+{
+	// The stored damage lands 6 s later: spend the 10 s cooldown and the full
+	// combo bar only on a target that will still be there to take it. Same
+	// gate as the Tortoise delayed-detonation finisher it replaces on Forever.
+	if (!SpellCanBeCastedTrigger::IsActive())
+		return false;
+
+	if (AI_VALUE2(uint8, "combo", "current target") < 5)
+		return false;
+
+	return AI_VALUE2(uint8, "health", "current target") > 30;
+}
+
 bool AlmostDeadFinisherTrigger::IsActive()
 {
     // Any banked combo point qualifies (donor: no CP gate); the target must

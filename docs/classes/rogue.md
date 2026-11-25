@@ -32,9 +32,9 @@ Rogues deliver exceptional single-target physical melee DPS, pre-combat crowd co
 - A stealthed rogue still ends a pull's join window on time.
 
 ### Combo Points & Finisher Priority
-- **Builders:** Uses *Sinister Strike* (Combat), *Backstab* (Assassination), or *Hemorrhage* (Subtlety).
+- **Builders:** Uses *Sinister Strike* (Combat), *Mutilate* with a *Backstab* fallback (Assassination, once Mutilate is trained at 40), or *Hemorrhage* (Subtlety).
 - **Slice and Dice:** Combat prioritizes *Slice and Dice* above *Eviscerate*; Assassination and Subtlety prioritize *Eviscerate*.
-- **Spenders:** At 4 or more combo points, casts *Eviscerate*; *Rupture* fires at 4 combo points for Combat and at 3 or more for Assassination and Subtlety. Dumps banked combo points (1+) into *Eviscerate* if the target falls below 25% health.
+- **Spenders:** At 4 or more combo points, casts *Eviscerate*; *Rupture* fires at 4 combo points for Combat and at 3 or more for Assassination and Subtlety. Dumps banked combo points (1+) into *Eviscerate* if the target falls below 25% health. With a full combo bar, *Death Mark* outranks *Eviscerate* on targets above 30% health, storing the damage for six seconds before it lands.
 - *Expose Armor* is withheld if the target already carries *Sunder Armor*.
 
 ### Cooldowns & Defensive Play
@@ -57,7 +57,8 @@ When enabled via configuration, rogues in 5-man dungeons use the same threat-dro
 
 ## Custom abilities
 
-- **Death Mark:** learned by the Subtlety preset; the bot does not cast it yet.
+- **Death Mark:** Forever's delayed-detonation finisher. Spent at a full combo bar on targets above 30% health; the stored damage lands six seconds later.
+- **Mutilate:** Forever's Assassination builder, learned from the class line and the trainer at 40; it replaces Backstab, which stays as the fallback.
 - **Surprise Attack, Noxious Assault, Envenom, Shadow of Death and Mark for Death:** Not on ForeverCore yet.
 
 ---
@@ -74,20 +75,13 @@ When enabled via configuration, rogues in 5-man dungeons use the same threat-dro
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever rogues on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Assassination / Combat / Subtlety) | Key Talents |
 | :--- | :--- | :--- | :--- |
-| **Combat** | Melee DPS | `15 / 36 / 0` | Adrenaline Rush, Blade Flurry, Hack and Slash, Flash of Steel, Riposte. |
-| **Assassination** | Melee DPS | `41 / 10 / 0` | Cold Blood, Seal Fate, Mutilate, Vile Poisons, Improved Kidney Shot. |
-| **Subtlety** | Melee DPS | `15 / 0 / 36` | Hemorrhage, Preparation, Death Mark, Boot Knife, Premeditation. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Combat:** Lightning Reflexes, Precision, Deflection, Riposte, Endurance, Improved Sprint, Weapon Expertise, Aggression, Flawless Execution, Dual Wield Specialization, Blade Flurry, Hack and Slash, Flash of Steel, Adrenaline Rush and Coup de Grace; the last 15 points go to Assassination (Malice, Ruthlessness, Improved Slice and Dice, Lethality, Vigor).
-- **Assassination:** Malice, Ruthlessness, Improved Slice and Dice, Lethality, Vigor, Vile Poisons, Cold Blood, Improved Poisons, Venom, Relentless Strikes, Improved Kidney Shot, Seal Fate, Mutilate, Remorseless Attacks and Improved Gouge; the last 10 points go to Combat (Efficient Strikes, Coup de Grace, Precision, Deflection).
-- **Subtlety:** Opportunity, Improved Ambush, Dirty Deeds, Premeditation, Serrated Blades, Initiative, Elusiveness, Ghostly Strike, Setup, Preparation, Hemorrhage, Heightened Senses, Camouflage, Boot Knife, Death Mark, Master of Deception and Dirty Tricks; the last 15 points go to Assassination (Malice, Ruthlessness, Improved Slice and Dice, Lethality, Vigor).
-
-</details>
+| **Combat** | Melee DPS | `16 / 35 / 0` | Adrenaline Rush, Blade Flurry, Hack and Slash, Flash of Steel, Weapon Expertise. |
+| **Assassination** | Melee DPS | `37 / 13 / 1` | Cold Blood, Seal Fate, Mutilate, Vile Poisons, Improved Poisons. |
+| **Subtlety** | Melee DPS | `16 / 7 / 28` | Hemorrhage, Preparation, Premeditation, Serrated Blades, Dirty Deeds. |
 
 ---
 

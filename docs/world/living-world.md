@@ -60,7 +60,7 @@ A pool bot's session ends after 30 to 90 minutes (rolled), it stays away for 5 t
 | **Capital errands** | On by default (`TortoiseBots.World.CapitalErrands`): in a capital a bot runs mailbox, trainer and bank errands, duels other bots at the gates, and learns riding and buys its mount from its own gold at 40 and 60. Auction-house errands need `TortoiseBots.World.Auction`. |
 | **Quest parties** | Free bots with the same group quest form a party nearby; see [Grouping](social.md#grouping). |
 | **Pickpocket & lockboxes** | Rogues pick pockets and open lockboxes they carry; a lockbox the bot cannot open is mailed to a rogue in its own guild. On by default (`TortoiseBots.World.Pickpocket`, `TortoiseBots.World.Lockboxes`, `TortoiseBots.World.LockboxMail`). |
-| **Profession upkeep** | Enchanters disenchant junk and enchant their own gear; both on by default (`TortoiseBots.World.Disenchant`, `TortoiseBots.World.EnchantGear`). |
+| **Profession upkeep** | Enchanters disenchant junk and enchant their own gear; both on by default (`TortoiseBots.World.Disenchant`, `TortoiseBots.World.EnchantGear`). At level 60 a bot's gear enchant follows the common Forever choice for its spec and slot, and slots players leave empty stay empty. |
 | **Passing buffs** | A pool bot passing a real player buffs them and keeps walking; see [Passing buffs](social.md#passing-buffs). |
 
 <details>
@@ -106,13 +106,13 @@ Teleports are never routine movement. There is no taxi travel yet: the flight-pa
 <a id="initial-skills--professions"></a>
 ## Progression
 
-Pool characters are created at level 1 and level up by playing. There is no level seeding and no level ladder on this build; bots start where a new character starts and earn their levels.
+Pool characters are created at level 1. On a fresh bot's first login the module rolls its start level between `AiPlayerbot.RandomBotStartLevelMin` and `AiPlayerbot.RandomBotStartLevelMax` (defaults `1` and `60`), and from then on it levels by playing. The level ladder (`AiPlayerbot.LevelLadder`, on) only decides which level bands are online at a time; it never changes a bot's level. See [the bot pool](../server/bot-pool.md#spawning-a-bot-start-level-and-gear).
 
 | What bots get | Setting |
 | :--- | :--- |
 | **Class spells** on login and on every level-up, free | `TortoiseBots.AutoLearnOnLevel` (on) |
-| **Talent points** spent on login and level-up following a premade build (never a reset) | `TortoiseBots.AutoTalentsOnLevel` (on) |
-| **Class-quest spells** (stances, forms, totems, pets, racials) when the running world has the quest | `TortoiseBots.ClassQuestSpells` (off) |
+| **Talent points** spent on login and level-up following a premade build (never a reset); the builds are the level-60 picks of Forever players for each spec | `TortoiseBots.AutoTalentsOnLevel` (on) |
+| **Class-quest spells** (stances, forms, totems, pets, racials) when a quest of the running world teaches them, class-masked or implied by the spell | `TortoiseBots.ClassQuestSpells` (off; the class-line autotrain already teaches these, so turning it on adds a family-0 row such as the paladin's *Sense Undead*) |
 | **At level 5, a class-sensible pair of primary professions plus First Aid and Cooking** | `TortoiseBots.AutoProfessions` (on) |
 | **Profession tools** (pick, knife, hammer, spanner, rod, pole) in a free bag slot | `TortoiseBots.AutoTools` (on) |
 | **Food and water** fitting the bot's level, on login and level-up | `TortoiseBots.AutoFood` (on) |
@@ -128,7 +128,7 @@ Bots keep what they find and equip what is better:
 - **Loot upgrades:** with [`AiPlayerbot.AutoEquipUpgradeLoot`](../server/settings/world-population.md#aiplayerbotautoequipupgradeloot) on (it is), a bot equips a drop that beats the item in the slot. [`AiPlayerbot.EquipUpgradeThreshold`](../server/settings/world-population.md#aiplayerbotequipupgradethreshold) (1.1) is the margin an item must clear.
 - **Pool gear top-up:** [`AiPlayerbot.PoolGearTopUpOnLevel`](../server/settings/world-population.md#aiplayerbotpoolgeartopuponlevel) is off; when on, a pool bot fills empty slots and replaces clearly outdated grey and white gear once per level, never green or better.
 - **Autogear for your own bots:** `.bot autogear <bot>` re-gears one of your own bots; pool bots are refused and keep progressing on their own. The command is off until [`AiPlayerbot.OwnedBotAutogearEnabled`](../server/settings/world-population.md#aiplayerbotownedbotautogearnabled) is turned on, and it stays within the quality and item-level caps. The player-facing `.autogear` builds a level-appropriate outfit within [`AiPlayerbot.RandomGearMaxLevel`](../server/settings/world-population.md#aiplayerbotrandomgearmaxlevel) and [`AiPlayerbot.RandomGearMaxItemLevelAboveLevel`](../server/settings/world-population.md#aiplayerbotrandomgearmaxitemlevelabovelevel), skipping the item ids in [`AiPlayerbot.RandomGearBlacklist`](../server/settings/world-population.md#aiplayerbotrandomgearblacklist).
-- **No starting kit:** the Turtle build's hand-made starting bags, ammo pouches, thrown weapons and seed gear are not part of this build. Bots start with what the core gives a new character.
+- **Spawn kit:** a fresh pool bot rolls its start level on its first login and, at level 5 or above, receives one level- and spec-fitting gear kit ([`TortoiseBots.Pool.GearOnCreate`](../server/configuration.md#forevercore-module-keys-tortoisebotsconf), on by default). The Turtle build's hand-made starting bags, ammo pouches and thrown-weapon seeding are still not part of this build; ammo, tools and food come from the module's own upkeep.
 
 <a id="mount-rules"></a>
 ## Mounts
@@ -148,6 +148,6 @@ Bots keep themselves going between fights:
 ## Not on ForeverCore yet
 
 - Flight paths and boat travel for free bots; they walk.
-- The Turtle starting kit (bags, quivers, ammo pouches, thrown-weapon seeding) and the seed-time gear roll.
+- The Turtle starting kit's bags, quivers, ammo pouches and thrown-weapon seeding. (A fresh pool bot does get the module's own one-time spawn kit, above.)
 - Camping sessions with a tent; the "stay at an inn hub" leisure trip exists, the camp kit does not.
 - Offline AHBot stocking and buying; online free bots use the auction house directly when `TortoiseBots.World.Auction = 1` (see [Bot economy](economy.md)).

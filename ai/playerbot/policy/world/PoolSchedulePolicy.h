@@ -11,6 +11,11 @@
 //    3 min" is a floor to reach, not a licence for twenty sessions in one tick;
 //  - logins alternate factions; within the faction the bot that has been offline longest goes first (`last_logout`, never
 //    logged out first);
+//  - the level ladder (on by default): the levels are cut into bands of LevelLadderBandSize (1-5, 6-10, ...) plus the level
+//    cap on its own; every low band gets an equal share of the online target and the cap's band gets LevelLadderMaxLevelShare
+//    percent of it. The band with the largest shortfall fills first and inside it the highest level goes first, so the field
+//    spreads over the levels and the leaders play until the cap. The cap's share is a hard cap: the other max-level characters
+//    stay offline as a reserve. Off, the faction's longest-offline bot goes first as before; the ladder never plans logouts;
 //  - an account holds one session (D2): a bot that is Loading, Online or Leaving occupies its account for every other character
 //    of it, and the host folds in the world's own sessions and the bot manager's other bots through `accountOnline`; the online
 //    count is therefore capped by the number of accounts the pool sits on;
@@ -79,12 +84,12 @@ inline PoolFaction OtherFaction(PoolFaction faction)
     return faction == PoolFaction::Alliance ? PoolFaction::Horde : PoolFaction::Alliance;
 }
 
-// Races 1, 3, 4 and 7 are the Alliance's on 1.12; the pool never creates another race (PoolCompositionPolicy).
+// Races 1, 3, 4, 7 and 95 are the Alliance's; 96 and every other pool race are the Horde's.
 inline PoolFaction PoolFactionOfRace(std::uint8_t race)
 {
     switch (race)
     {
-        case 1: case 3: case 4: case 7: return PoolFaction::Alliance;
+        case 1: case 3: case 4: case 7: case 95: return PoolFaction::Alliance;
         default: return PoolFaction::Horde;
     }
 }
@@ -94,6 +99,7 @@ struct PoolBotState
     std::uint64_t guid = 0;
     std::uint32_t accountId = 0;      // 0 = unknown (a test bot): such a bot occupies no account
     PoolFaction faction = PoolFaction::Alliance;
+    std::uint8_t level = 1;            // the ladder's band input, clamped to 1..maxLevel
     PoolPhase phase = PoolPhase::Offline;
     bool accountOnline = false;        // the world's session or another bot of the module on the account (the pool's own are in `bots`)
     bool bound = false;                // got a master: out of the count, never logged out, never logged in again
@@ -116,6 +122,11 @@ struct PoolScheduleSettings
     std::int64_t sessionMaxMs = 90 * kPoolMinuteMs;
     std::int64_t offlineMinMs = 5 * kPoolMinuteMs;
     std::int64_t offlineMaxMs = 20 * kPoolMinuteMs;
+    // The server's level cap (MaxPlayerLevel, 60 on the shipped data) and the ladder's three decisions.
+    std::uint32_t maxLevel = 60;
+    bool levelLadder = true;
+    std::uint32_t levelLadderBandSize = 5;
+    std::uint32_t levelLadderMaxLevelSharePct = 10;
 };
 
 struct PoolPassInput
@@ -163,6 +174,110 @@ inline std::int64_t PoolSessionLengthMs(PoolScheduleSettings const& settings, st
 inline std::int64_t PoolOfflineLengthMs(PoolScheduleSettings const& settings, std::uint32_t roll)
 {
     return RollPoolLengthMs(settings.offlineMinMs, settings.offlineMaxMs, roll);
+}
+
+// The level ladder's band math. The levels 1..maxLevel-1 are cut into bands of bandSize (1-5, 6-10, ...) and the level cap
+// maxLevel stands alone in the last band. `bandSize` clamps to 1..maxLevel-1, so there are always at least two bands, and
+// maxLevel to what a uint8 level holds.
+inline constexpr std::uint32_t kPoolLevelMax = 255;
+
+inline std::uint32_t PoolLadderMaxLevel(std::uint32_t maxLevel)
+{
+    return std::min<std::uint32_t>(kPoolLevelMax, maxLevel > 1 ? maxLevel : 2);
+}
+
+inline std::uint32_t PoolLadderBandSize(std::uint32_t maxLevel, std::uint32_t bandSize)
+{
+    std::uint32_t const last = PoolLadderMaxLevel(maxLevel) - 1;
+    return std::min(last, std::max<std::uint32_t>(1, bandSize));
+}
+
+inline std::uint32_t PoolLadderBandCount(std::uint32_t maxLevel, std::uint32_t bandSize)
+{
+    std::uint32_t const maxL = PoolLadderMaxLevel(maxLevel);
+    std::uint32_t const size = PoolLadderBandSize(maxL, bandSize);
+    return (maxL - 2) / size + 2;      // ceil((maxL-1) / size) low bands, plus the cap's band
+}
+
+inline std::uint32_t PoolLadderBandOf(std::uint32_t level, std::uint32_t maxLevel, std::uint32_t bandSize)
+{
+    std::uint32_t const maxL = PoolLadderMaxLevel(maxLevel);
+    std::uint32_t const clamped = std::min(maxL, std::max<std::uint32_t>(1, level));
+    if (clamped >= maxL)
+        return PoolLadderBandCount(maxL, bandSize) - 1;
+    return (clamped - 1) / PoolLadderBandSize(maxL, bandSize);
+}
+
+inline std::string PoolLadderBandName(std::uint32_t band, std::uint32_t maxLevel, std::uint32_t bandSize)
+{
+    std::uint32_t const maxL = PoolLadderMaxLevel(maxLevel);
+    std::uint32_t const bands = PoolLadderBandCount(maxL, bandSize);
+    if (band + 1 >= bands)
+        return std::to_string(maxL);
+    std::uint32_t const size = PoolLadderBandSize(maxL, bandSize);
+    std::uint32_t const low = band * size + 1;
+    std::uint32_t const high = std::min(maxL - 1, low + size - 1);
+    return std::to_string(low) + "-" + std::to_string(high);
+}
+
+// The last band's share is a hard cap (at most 100 percent); the other bands split the rest, one level of difference at most,
+// the lower bands taking the remainder first. The bands' targets always add up to the online target.
+inline std::uint32_t PoolLadderBandTarget(std::uint32_t band, std::uint32_t targetOnline, std::uint32_t maxLevel,
+                                          std::uint32_t bandSize, std::uint32_t maxLevelSharePct)
+{
+    std::uint32_t const maxL = PoolLadderMaxLevel(maxLevel);
+    std::uint32_t const bands = PoolLadderBandCount(maxL, bandSize);
+    std::uint32_t const share = std::min<std::uint32_t>(100, maxLevelSharePct);
+    std::uint32_t const capTarget = std::uint32_t(std::uint64_t(targetOnline) * share / 100);
+    if (band + 1 >= bands)
+        return capTarget;
+    std::uint32_t const lowBands = bands - 1;
+    std::uint32_t const rest = targetOnline - capTarget;
+    return rest / lowBands + (band < rest % lowBands ? 1u : 0u);
+}
+
+inline std::uint8_t PoolLadderLevel(std::uint32_t level, std::uint32_t maxLevel)
+{
+    std::uint32_t const maxL = PoolLadderMaxLevel(maxLevel);
+    return std::uint8_t(std::min(maxL, std::max<std::uint32_t>(1, level)));
+}
+
+// The ladder's state for one pass: the band math of the settings and the online count per band, which every pick's shortfall
+// reads. Built once per pass, so the pick is a comparison and never a rescan (TB's first version rescanned per pick: 70 ms
+// a tick at 300 bots).
+struct PoolLadderView
+{
+    std::uint32_t maxLevel = 60;
+    std::uint32_t bandSize = 5;
+    std::uint32_t maxLevelSharePct = 10;
+    std::uint32_t targetOnline = 0;
+    std::vector<std::uint32_t> onlinePerBand;
+};
+
+inline PoolLadderView PoolLadderViewOf(std::vector<PoolBotState> const& bots, PoolScheduleSettings const& settings)
+{
+    PoolLadderView view;
+    view.maxLevel = PoolLadderMaxLevel(settings.maxLevel);
+    view.bandSize = PoolLadderBandSize(view.maxLevel, settings.levelLadderBandSize);
+    view.maxLevelSharePct = std::min<std::uint32_t>(100, settings.levelLadderMaxLevelSharePct);
+    view.targetOnline = settings.targetOnline;
+    view.onlinePerBand.assign(PoolLadderBandCount(view.maxLevel, view.bandSize), 0);
+    for (PoolBotState const& bot : bots)
+    {
+        if (bot.bound || bot.phase == PoolPhase::Offline)
+            continue;
+        ++view.onlinePerBand[PoolLadderBandOf(bot.level, view.maxLevel, view.bandSize)];
+    }
+    return view;
+}
+
+inline std::int64_t PoolLadderShortfall(PoolBotState const& bot, PoolLadderView const& view)
+{
+    std::uint32_t const band = PoolLadderBandOf(bot.level, view.maxLevel, view.bandSize);
+    std::uint32_t const target = PoolLadderBandTarget(band, view.targetOnline, view.maxLevel, view.bandSize,
+                                                      view.maxLevelSharePct);
+    std::int64_t const online = band < view.onlinePerBand.size() ? std::int64_t(view.onlinePerBand[band]) : 0;
+    return std::int64_t(target) - online;
 }
 
 // `.tb pool population <n|low|high>`: the runtime word to an online target. `low` and `high` are the configured presets; a
@@ -245,6 +360,7 @@ struct PoolBotFacts
     bool alive = true;
     bool inCombat = false;
     bool inBg = false;                 // BG: Player::InBattleground() only; a queue entry does not hold a session
+    std::uint32_t level = 0;           // the character's level, 0 = unknown (the track keeps its level)
 };
 
 struct PoolSyncOutcome
@@ -312,6 +428,8 @@ inline PoolSyncOutcome PoolSyncBot(PoolBotState& bot, PoolBotFacts const& facts,
                                    std::int64_t now, Roll&& roll)
 {
     PoolSyncOutcome out;
+    if (facts.level)
+        bot.level = PoolLadderLevel(facts.level, settings.maxLevel);
     switch (bot.phase)
     {
         case PoolPhase::Offline:
@@ -419,6 +537,30 @@ inline bool PoolOldestEndFirstPtr(PoolBotState const* a, PoolBotState const* b) 
 inline bool PoolDueOffline(PoolBotState const& bot, std::int64_t nowMs, std::vector<std::uint32_t> const& occupiedAccounts)
 {
     return !bot.bound && bot.phase == PoolPhase::Offline && !PoolAccountBusy(bot, occupiedAccounts) && nowMs >= bot.offlineUntilMs;
+}
+
+// The cap's band is only picked while it is short: a full band leaves its remaining characters offline as the reserve.
+inline bool PoolLadderEligible(PoolBotState const& bot, PoolLadderView const& view)
+{
+    std::uint32_t const band = PoolLadderBandOf(bot.level, view.maxLevel, view.bandSize);
+    if (band + 1 < PoolLadderBandCount(view.maxLevel, view.bandSize))
+        return true;
+    return PoolLadderShortfall(bot, view) > 0;
+}
+
+// The band with the largest shortfall first (a covered band counts as a shortfall of zero, so the overflow goes to the
+// leaders), inside a band the highest level, then the bot offline longest.
+inline bool PoolLadderBefore(PoolBotState const& a, PoolBotState const& b, PoolLadderView const& view)
+{
+    std::int64_t const as = std::max<std::int64_t>(0, PoolLadderShortfall(a, view));
+    std::int64_t const bs = std::max<std::int64_t>(0, PoolLadderShortfall(b, view));
+    if (as != bs)
+        return as > bs;
+    std::uint8_t const al = PoolLadderLevel(a.level, view.maxLevel);
+    std::uint8_t const bl = PoolLadderLevel(b.level, view.maxLevel);
+    if (al != bl)
+        return al > bl;
+    return PoolLongestOfflineFirst(a, b);
 }
 
 inline PoolPass PlanPoolPass(PoolPassInput const& in)
@@ -537,6 +679,12 @@ inline PoolPass PlanPoolPass(PoolPassInput const& in)
     if (allowed > out.eligible)
         allowed = out.eligible;
 
+    // The ladder's per-band online counts, once per pass: the pick below is a comparison over them, never a rescan. At the
+    // target (allowed 0) nothing is planned, so the counts are not built.
+    PoolLadderView ladder;
+    if (settings.levelLadder && allowed)
+        ladder = PoolLadderViewOf(bots, settings);
+
     std::vector<std::uint64_t> taken;
     for (std::uint32_t i = 0; i < allowed; ++i)
     {
@@ -550,7 +698,14 @@ inline PoolPass PlanPoolPass(PoolPassInput const& in)
                     continue;
                 if (std::find(taken.begin(), taken.end(), bot.guid) != taken.end())
                     continue;
-                if (!best || PoolLongestOfflineFirst(bot, *best))
+                if (settings.levelLadder)
+                {
+                    if (!PoolLadderEligible(bot, ladder))
+                        continue;
+                    if (!best || PoolLadderBefore(bot, *best, ladder))
+                        best = &bot;
+                }
+                else if (!best || PoolLongestOfflineFirst(bot, *best))
                     best = &bot;
             }
         }
@@ -558,6 +713,8 @@ inline PoolPass PlanPoolPass(PoolPassInput const& in)
             break;
         out.logins.push_back(best->guid);
         taken.push_back(best->guid);
+        if (settings.levelLadder)
+            ++ladder.onlinePerBand[PoolLadderBandOf(best->level, ladder.maxLevel, ladder.bandSize)];
         out.nextFaction = OtherFaction(best->faction);
     }
 

@@ -18,7 +18,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 | :--- | :--- | :--- |
 | **Affliction** | Ranged DPS | Multi-target DoT spreading and Drain Life sustain. |
 | **Demonology** | Ranged DPS / Tanky | Heavy demon empowerment, Soul Link damage sharing, Demonic Sacrifice, and high durability. |
-| **Destruction** | Ranged DPS | Fire burst damage, Shadow Bolt nukes, and instant Conflagrate explosions. |
+| **Destruction** | Ranged DPS | Fire burst damage, Incinerate nukes, and instant Conflagrate explosions. |
 
 ---
 
@@ -27,6 +27,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 ### Affliction
 - Applies and maintains *Curse of Agony*, *Siphon Life*, and *Immolate* on primary targets. *Corruption* upkeep runs through the shared warlock rotation.
 - Spreads *Corruption*, *Siphon Life*, and *Immolate* across secondary attackers under the AoE strategy.
+- Channels *Wrack* between DoT refreshes; while it channels, *Corruption*, *Siphon Life* and *Bane of Agony* tick faster.
 - Uses *Life Tap* (own health) to replenish mana.
 - Channels *Drain Life* for self-sustain and *Drain Soul* on dying enemies (at or below 20% health) to harvest shards.
 
@@ -39,7 +40,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 ### Destruction
 - Defaults to *Curse of the Elements* once trained, *Curse of Agony* before that (gated by the spellbook, no level check in the bot). The curse outranks *Immolate*, so the curse — not Immolate — lands first.
 - Delivers burst damage using *Conflagrate* (only while Immolate ticks with 7 seconds or less left) and *Shadowburn*.
-- Casts *Shadow Bolt* as primary nuke and channels *Rain of Fire* on packs of 3 or more clustered enemies. *Shadowburn* fires through the shared warlock rotation on dying targets.
+- Casts *Incinerate* as the primary nuke (extra damage while Immolate ticks) and *Shadow Bolt* before Incinerate is learned and against fire-immune enemies. Channels *Rain of Fire* on packs of 3 or more clustered enemies. *Shadowburn* fires through the shared warlock rotation on dying targets.
 - Cancels *Rain of Fire* channels if fewer than 2 enemies remain in the target area, or a mob under the party's crowd control stands in it.
 
 <details>
@@ -83,20 +84,13 @@ Warlocks provide sustained Shadow and Fire DPS through curses, damage-over-time 
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever warlocks on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Affliction / Demonology / Destruction) | Key Talents |
 | :--- | :--- | :--- | :--- |
-| **Affliction** | Ranged DPS | `41 / 0 / 10` | Siphon Life, Shadow Mastery, Nightfall, Wrack, Pandemic. |
-| **Demonology** | Ranged DPS / Tanky | `7 / 44 / 0` | Soul Link, Master Demonologist, Demonic Sacrifice, Demonic Knowledge, Demonic Pact. |
-| **Destruction** | Ranged DPS | `7 / 0 / 44` | Conflagrate, Ruin, Shadowburn, Incinerate, Shadow and Flame. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Affliction:** Improved Corruption, Suppression, Improved Drains, Grim Reach, Improved Bane of Agony, Fel Concentration, Amplify Curse, Pandemic, Malevolence, Nightfall, Siphon Life, Soul Siphon, Shadow Mastery and Wrack; the last 10 points go to Destruction (Bane, Cataclysm, Destructive Reach).
-- **Demonology:** Improved Imp, Demonic Embrace, Fel Vitality, Demonic Aegis, Demonic Sacrifice, Master Summoner, Fel Domination, Demonic Brand, Decimation, Soul Link, Demonic Knowledge, Master Demonologist, Demonic Pact, Unholy Power, Improved Health Funnel, Improved Voidwalker and Demonic Energies; the last 7 points go to Affliction (Improved Life Tap, Improved Corruption).
-- **Destruction:** Improved Shadow Bolt, Bane, Cataclysm, Ruin, Shadowburn, Intensity, Conflagrate, Pyroclasm, Bane of Havoc, Fire and Brimstone, Shadow and Flame, Incinerate, Destructive Reach, Aftermath and Agonizing Flames; the last 7 points go to Affliction (Improved Life Tap, Improved Corruption).
-
-</details>
+| **Affliction** | Ranged DPS | `35 / 11 / 5` | Siphon Life, Shadow Mastery, Nightfall, Wrack, Pandemic. |
+| **Demonology** | Ranged DPS / Tanky | `10 / 36 / 5` | Soul Link, Master Demonologist, Demonic Sacrifice, Demonic Knowledge, Demonic Pact. |
+| **Destruction** | Ranged DPS | `7 / 11 / 33` | Conflagrate, Ruin, Shadowburn, Incinerate, Shadow and Flame. |
 
 ---
 

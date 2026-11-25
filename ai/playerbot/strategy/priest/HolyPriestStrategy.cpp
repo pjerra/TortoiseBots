@@ -83,6 +83,17 @@ void HolyPriestStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "party member almost full health",
         NextAction::array(0, new NextAction("renew on party", ACTION_LIGHT_HEAL), NULL)));
 
+    // Forever heals: the prayer waits on the tank for the next hit, and the
+    // tank keeps its Renew while the party HoT row follows a more wounded
+    // member.
+    triggers.push_back(new TriggerNode(
+        "prayer of mending",
+        NextAction::array(0, new NextAction("prayer of mending on tank", ACTION_LIGHT_HEAL + 1), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "tank needs renew",
+        NextAction::array(0, new NextAction("renew on tank", ACTION_LIGHT_HEAL - 1), NULL)));
+
     // Pre-cast above the heal rows so the next heal crits; the trigger
     // self-gates on the trained spell, the cooldown, mana and a target.
     triggers.push_back(new TriggerNode(
@@ -117,6 +128,14 @@ void HolyPriestStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers
     triggers.push_back(new TriggerNode(
         "party member almost full health",
         NextAction::array(0, new NextAction("renew on party", ACTION_NORMAL), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "prayer of mending",
+        NextAction::array(0, new NextAction("prayer of mending on tank", ACTION_NORMAL + 1), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "tank needs renew",
+        NextAction::array(0, new NextAction("renew on tank", ACTION_NORMAL - 1), NULL)));
 
     triggers.push_back(new TriggerNode(
         "party member to heal out of spell range",

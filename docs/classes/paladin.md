@@ -35,7 +35,7 @@ Paladins provide resilient group utility, customizable auras, coordinated blessi
 
 ### Protection (Tank)
 - Maintains *Righteous Fury* in and out of combat to boost holy threat generation.
-- Taunts loose mobs with *Hand of Reckoning* when it is learned. *Righteous Defense* is Not on ForeverCore yet.
+- Has no taunt on ForeverCore: *Hand of Reckoning* exists only as a runecarving glove rune (the Libram of Justice grants the engraving), and *Righteous Defense* does not exist here, so the tank holds threat with damage and *Judgement* and cannot pull a mob off a party member.
 - Drops *Consecration* against 3 or more attackers in melee reach while above medium mana (40% default), or against 2 at 70%+ mana.
 - Keeps *Holy Shield* active on cooldown for block rating and reflective holy damage.
 - Judges *Seal of Righteousness* on the primary target for sustained threat.
@@ -86,20 +86,13 @@ When enabled, paladin bots coordinate to maintain *Judgement of Wisdom* and *Jud
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever paladins on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Holy / Protection / Retribution) | Key Talents |
 | :--- | :--- | :--- | :--- |
-| **Holy** | Healer | `35 / 16 / 0` | Holy Shock, Divine Favor, Illumination, Holy Power, Light's Vigil. |
-| **Protection** | Tank | `0 / 41 / 10` | Holy Shield, Reckoning, Shieldsworn, Iron Creed, Swift Judgement. |
-| **Retribution** | Melee DPS | `10 / 5 / 36` | Seal of Command, Repentance, Vengeance, Champion of the Light, Sanctified Judgement. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Holy:** Spiritual Focus, Healing Light, Reverence, Divine Favor, Illumination, Holy Conduit, Infusion of Light, Oath of Light, Holy Shock, Boundless Light, Purifying Power, Holy Power, Light's Vigil, Divine Precision and Consecrated Ground; the last 16 points go to Protection (Divine Intellect, Guardian's Favor, Sacred Duty, Redoubt, Toughness, Improved Hammer of Justice).
-- **Protection:** Redoubt, Precision, Guardian's Favor, Sacred Duty, Shield Specialization, Toughness, Templar's Bulwark, Improved Righteous Fury, Anticipation, Holy Shield, Stoicism, Iron Creed, Shieldsworn, Improved Hammer of Justice, Swift Judgement and Reckoning; the last 10 points go to Retribution (Benediction, Improved Judgement, Deflection).
-- **Retribution:** Benediction, Improved Judgement, Conviction, Seal of Command, Vindication, Pursuit of Justice, Two-Handed Weapon Specialization, Sacred Arbiter, Eye for an Eye, Repentance, Vengeance, Champion of the Light, Unsealed Wrath, Sanctified Judgement and Deflection; the last 10 points go to Holy (Divine Strength, Improved Seals) and 5 to Protection (Divine Intellect).
-
-</details>
+| **Holy** | Healer | `31 / 7 / 13` | Holy Shock, Divine Favor, Illumination, Holy Power, Light's Vigil. |
+| **Protection** | Tank | `0 / 35 / 16` | Holy Shield, Reckoning, Shieldsworn, Iron Creed, Swift Judgement. |
+| **Retribution** | Melee DPS | `12 / 8 / 31` | Seal of Command, Repentance, Vengeance, Champion of the Light, Sanctified Judgement. |
 
 ---
 

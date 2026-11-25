@@ -32,18 +32,25 @@ uint32_t ScoreClassicStat(uint32_t statType, int32_t value, bool isCaster,
     if (!name)
         return 0;
 
-    // Spell-damage / healing items score 0 for non-caster classes (e.g. warrior).
+    auto weight = [&weights](std::string const& stat) {
+        auto it = weights.find(stat);
+        return it == weights.end() ? 0u : it->second;
+    };
+
+    // Spell power (45) takes the healing bucket when the scale prices that higher.
     std::string key(name);
+    if (key == "splpwr")
+        key = ai::ClassicItemStatSpellPowerWeightName(statType, weight("splpwr"), weight("splheal"));
+
+    // Spell-damage / healing items score 0 for non-caster classes (e.g. warrior).
     if (!isCaster && (key == "splpwr" || key == "splheal" ||
         key == "firsplpwr" || key == "natsplpwr" || key == "frosplpwr" ||
         key == "shasplpwr" || key == "arcsplpwr" ||
         key == "spellhitrtng" || key == "spellcritstrkrtng"))
         return 0;
 
-    auto it = weights.find(key);
-    if (it == weights.end())
-        return 0;
-    return static_cast<uint32_t>(value) * it->second;
+    uint32_t const score = static_cast<uint32_t>(value) * weight(key);
+    return ai::ClassicItemStatRounded(score, ai::ClassicItemStatRatingDivisor(statType));
 }
 
 } // namespace
@@ -103,7 +110,7 @@ int main()
         {"frosplpwr", 11}, {"splpwr", 11}, {"int", 3}
     };
     std::unordered_map<std::string, uint32_t> const warriorWeights = {
-        {"str", 4}, {"atkpwr", 2}, {"critstrkrtng", 56}
+        {"str", 4}, {"atkpwr", 2}, {"critstrkrtng", 56}, {"hitrtng", 56}
     };
     CHECK(ScoreClassicStat(87, 15, true, frostMageWeights) > 0);
     CHECK(ScoreClassicStat(42, 15, true, frostMageWeights) > 0);
@@ -113,12 +120,57 @@ int main()
 
     // 4. Healing (41) vs intellect ordering for a holy priest.
     std::unordered_map<std::string, uint32_t> const holyPriestWeights = {
-        {"splheal", 29}, {"int", 25}, {"manargn", 26}
+        {"splheal", 61}, {"int", 33}, {"manargn", 26}
     };
     uint32_t const healScore = ScoreClassicStat(41, 10, true, holyPriestWeights);
     uint32_t const intScore = 10 * holyPriestWeights.at("int");
     CHECK(healScore > intScore);
     std::cout << "  [PASS] healing outscores equal intellect for holy priest\n";
+
+    // 4b. Spell power (45) grants damage and healing on ForeverCore, spell damage
+    //     (42) damage only: a healer scores 45 at its healing weight and 42 at 0.
+    std::unordered_map<std::string, uint32_t> const holyPriestNoDamage = {{"splheal", 61}};
+    CHECK(ScoreClassicStat(45, 10, true, holyPriestNoDamage) == 610);
+    CHECK(ScoreClassicStat(42, 10, true, holyPriestNoDamage) == 0);
+    CHECK(ScoreClassicStat(45, 10, true, frostMageWeights) == 110);   // splpwr only
+    std::unordered_map<std::string, uint32_t> const restoDruidWeights = {{"splpwr", 10}, {"splheal", 21}};
+    CHECK(ScoreClassicStat(45, 10, true, restoDruidWeights) == 210);  // better weight
+    CHECK(ScoreClassicStat(42, 10, true, restoDruidWeights) == 100);  // damage only
+    std::cout << "  [PASS] spell power scores healing, spell damage stays damage\n";
+
+    // 5. Item stats that the scale prices per percent are stored as rating points
+    //    (level 60 CombatRatings). The divisor turns them back into percent, so
+    //    2% crit and 2% hit score like two point-weights - and a stat whose item
+    //    stat is already a raw value is not divided.
+    CHECK(ai::ClassicItemStatRatingDivisor(32) == 14);   // crit rating
+    CHECK(ai::ClassicItemStatRatingDivisor(21) == 14);   // spell crit rating
+    CHECK(ai::ClassicItemStatRatingDivisor(31) == 10);   // hit rating
+    CHECK(ai::ClassicItemStatRatingDivisor(18) == 10);   // spell hit rating
+    CHECK(ai::ClassicItemStatRatingDivisor(13) == 12);   // dodge rating
+    CHECK(ai::ClassicItemStatRatingDivisor(14) == 15);   // parry rating
+    CHECK(ai::ClassicItemStatRatingDivisor(15) == 5);    // block rating
+    CHECK(ai::ClassicItemStatRatingDivisor(37) == 10);   // expertise rating
+    CHECK(ai::ClassicItemStatRatingDivisor(12) == 1);    // defense skill
+    CHECK(ai::ClassicItemStatRatingDivisor(48) == 1);    // block value
+    CHECK(ai::ClassicItemStatRatingDivisor(45) == 1);    // spell power
+    CHECK(ScoreClassicStat(32, 28, false, warriorWeights) == 2 * warriorWeights.at("critstrkrtng"));
+    CHECK(ScoreClassicStat(31, 20, false, warriorWeights) == 2 * warriorWeights.at("hitrtng"));
+    CHECK(ScoreClassicStat(38, 10, false, warriorWeights) == 10 * warriorWeights.at("atkpwr"));
+    std::cout << "  [PASS] rating stats score in percent, raw stats unchanged\n";
+
+    // 6. Rounding: nearest percent, and a non-zero stat never scores 0.
+    CHECK(ai::ClassicItemStatRounded(28, 14) == 2);
+    CHECK(ai::ClassicItemStatRounded(21, 14) == 2);    // 1.5 rounds up
+    CHECK(ai::ClassicItemStatRounded(20, 10) == 2);
+    CHECK(ai::ClassicItemStatRounded(13, 14) == 1);    // 0.93 rounds up
+    CHECK(ai::ClassicItemStatRounded(4, 10) == 1);     // 0.4 keeps one point
+    CHECK(ai::ClassicItemStatRounded(1, 14) == 1);
+    CHECK(ai::ClassicItemStatRounded(0, 14) == 0);     // no stat, no point
+    CHECK(ai::ClassicItemStatRounded(9, 1) == 9);
+    std::unordered_map<std::string, uint32_t> const protPaladinWeights = {{"hitrtng", 1}, {"exprtng", 1}};
+    CHECK(ScoreClassicStat(31, 4, false, protPaladinWeights) == 1);
+    CHECK(ScoreClassicStat(37, 4, false, protPaladinWeights) == 1);
+    std::cout << "  [PASS] rating division rounds and keeps one point\n";
 
     std::cout << "0 failed\n";
     return 0;

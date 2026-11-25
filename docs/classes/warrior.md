@@ -31,7 +31,7 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
   - Maintains *Shield Block* on cooldown, which opens up *Revenge*.
   - Stacks *Sunder Armor* to 5 stacks, refreshing before expiry. With [`AiPlayerbot.AnnounceSunderStacks`](../server/settings/class-behaviour.md#aiplayerbotannouncesunderstacks) on (off by default), says "5 Sunders on <target>" once per elite or boss target when a real player is in the group; damage-dealing warriors do the same.
   - Casts *Shield Slam* on cooldown (or when procced by Improved Shield Slam).
-  - Uses *Thunder Clap* against 2 or more melee attackers.
+  - Uses *Thunder Clap* against 2 or more melee attackers. On Forever the spell needs Battle or Defensive Stance; the tank stays in Defensive, so it can cast it.
   - Opens with *Shield Slam* when it is ready and treats *Sunder Armor* as the filler while the stack builds.
 - **Mitigation & Taunts:**
   - Activates *Shield Wall* at low health (20–50%) and holds *Last Stand* for critical health emergencies (below 20%). Both lines are the `CriticalHealth` (20) and `LowHealth` (50) defaults.
@@ -44,9 +44,11 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
 - **Opening (both specs):** With `AiPlayerbot.WarriorGapCloser` on (off by default), out of combat and with the target 8-25 yards away, opens with *Charge* (Fury swaps to Battle Stance for it and back to Berserker Stance after); a crowd-controlled mob is never charged, and in a dungeon only a mob already in the fight is.
 - **Arms:**
   - Fights in Battle Stance, maintaining *Rend*, casting *Mortal Strike* on cooldown and *Overpower* on dodges. It swaps to Berserker Stance for *Pummel* and *Intercept*, then back to Battle Stance, but never dances for anything else — and never casts *Thunder Clap* in a group (a tank-only spell; solo Arms keeps it).
+  - Casts *Spearing Strike* when its build has the talent (a Forever Arms talent: 15 rage, 20 s cooldown, 75% weapon damage with a bonus against giants, dragonkin and mounted targets) between *Mortal Strike* and *Heroic Strike*; it only fires from Battle Stance.
   - Cleaves packs with *Sweeping Strikes* (Battle Stance, 3 or more attackers in melee) and *Whirlwind* (only while already in Berserker Stance). *Sweeping Strikes* and its rage spenders agree on the pack size, so on two targets Arms keeps its single-target cycle instead of holding damage back for a buff that never fires. *Sweeping Strikes* is never started, and is dropped, beside a mob under the party's crowd control.
 - **Fury:**
   - Fights in Berserker Stance, centering rage spend on *Bloodthirst* and *Whirlwind*. The build takes Dual-Wield Specialization.
+  - Skips *Thunder Clap* on Forever: the spell needs Battle or Defensive Stance, and the Fury kit is pinned to Berserker Stance. A Battle swap would keep only the Tactical Mastery rage while the Berserker upkeep row pulls it straight back, so the row stands down instead of failing a cast every time.
   - Activates *Death Wish* and *Recklessness* in hard fights; uses *Retaliation* at high health against 2 or more melee attackers.
   - Rests in Berserker Stance between fights, so there is no Battle/Berserker swap per pull.
 - **Snaring:** *Piercing Howl* only lands on a mob inside its own 10-yard radius (in a raid, only a runner beside the warrior); a refused Howl falls back to *Hamstring* in a dungeon, and both DPS specs skip it in a raid.
@@ -70,7 +72,7 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
   - *Arms:* Uses *Pummel* first (stepping into Berserker Stance and back to Battle), falling back to *Shield Bash* without stance dancing.
   - Interrupts only fire on active cast bars or channels; delayed instants never trigger interrupts.
 - **Shouts:** Maintains *Battle Shout* on party members (skipping if an equal or stronger *Blessing of Might* is active, or below 10 rage). Protection maintains *Demoralizing Shout*. *Intimidating Shout* is off in dungeons and raids (the `aoe fear` override is not registered on ForeverCore yet).
-- **Rage gates:** *Disarm* is only cast on a target that carries a weapon and only with the 20 rage it costs; *Bloodrage* is held while its cooldown runs, below medium health (70%), or below 20 rage to spend. Unusable rows are skipped, so low-rage ticks go to *Sunder Armor* and *Revenge* instead.
+- **Rage gates:** *Disarm* is only cast on a target that carries a weapon and only with the 20 rage it costs; *Bloodrage* is held while its cooldown runs, below medium health (70%), or below 20 rage to spend. *Heroic Strike* keeps its rage until the best builder the level has is also affordable: 25 rage below level 20 (Thunder Clap's 20), 30 from 20 to 39 (Whirlwind's 25 at 36), and 40 from 40 (Bloodthirst, Mortal Strike and Shield Slam cost 30). Unusable rows are skipped, so low-rage ticks go to *Sunder Armor* and *Revenge* instead.
 
 ---
 
@@ -78,20 +80,13 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
 
 Bots spend one talent point per level from 10 to 60 along a preset build. The server checks each point against the class trait tree before it is spent.
 
+The presets follow the level-60 picks of Forever warriors on aotc.gg (read 2026-11-24): a talent that about 60% of that spec's level-60 players take is spent at their usual rank, while talents players take while levelling and drop by 60 are left out, because a bot cannot respec. Points go in the preset's own order, so a levelling bot holds the final build's talents as its level allows.
+
 | Spec Name | Role | 60 Points (Arms / Fury / Protection) | Key Talents |
 | :--- | :--- | :--- | :--- |
-| **Fury** | Melee DPS | `16 / 35 / 0` | Bloodthirst, Death Wish, Flurry, Dual Wield Specialization, Improved Whirlwind. |
-| **Protection** | Tank | `10 / 0 / 41` | Shield Slam, Concussion Blow, Last Stand, Bastion, Improved Revenge. |
-| **Arms** | Melee DPS | `33 / 18 / 0` | Mortal Strike, Sweeping Strikes, Weaponmaster, Impale, Deep Wounds. |
-
-<details>
-<summary>Leveling order</summary>
-
-- **Fury:** Cruelty, Unbridled Wrath, Piercing Howl, Blood Craze, Furious Precision, Dual Wield Specialization, Improved Execute, Death Wish, Improved Berserker Rage, Flurry, Improved Whirlwind, Bloodthirst and Enrage; the last 16 points go to Arms (Improved Heroic Strike, Improved Rend, Improved Tactical Mastery, Improved Overpower, Anger Management, Deep Wounds, Deflection).
-- **Protection:** Shield Specialization, Anticipation, Defiance, Master of Defense, Improved Sunder Armor, Vanguard, Improved Bloodrage, Concussion Blow, Focused Rage, Bastion, Shield Slam, Improved Revenge, Last Stand, Improved Thunder Clap, Improved Shield Bash and Improved Shield Wall; the last 10 points go to Arms (Improved Heroic Strike, Deflection, Improved Tactical Mastery, Improved Charge).
-- **Arms:** Deflection, Improved Rend, Improved Charge, Improved Tactical Mastery, Improved Overpower, Anger Management, Deep Wounds, Two-Handed Weapon Specialization, Impale, Sweeping Strikes, Weaponmaster, Improved Slam and Mortal Strike; the last 18 points go to Fury (Cruelty, Unbridled Wrath, Piercing Howl, Blood Craze, Enrage).
-
-</details>
+| **Fury** | Melee DPS | `17 / 34 / 0` | Bloodthirst, Death Wish, Flurry, Dual Wield Specialization, Improved Whirlwind. |
+| **Protection** | Tank | `4 / 15 / 32` | Shield Slam, Concussion Blow, Last Stand, Bastion, Defiance. |
+| **Arms** | Melee DPS | `32 / 19 / 0` | Mortal Strike, Sweeping Strikes, Weaponmaster, Impale, Spearing Strike. |
 
 ---
 

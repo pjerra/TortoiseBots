@@ -7,7 +7,7 @@ mod-playerbots	5397110cba48	travel manager and node graph	ai/playerbot/TravelMgr
 mod-playerbots	5397110cba48	dungeon/raid play and battleground tactics	ai/playerbot/strategy/*; forever/src/host/TbTactics.cpp	adapt	yes (slice); raids use plan tables	behaviour understood and reimplemented; no donor files vendored
 mod-playerbots	b6696bdb	bot text seed (data)	data/sql/world/20260913090000_world.sql	keep as repository data	no	the text manager is not in the Forever slice, so no runtime text comes from it
 Shyalya/tortoise-wow	1f9497e	foundational PlayerBots tree	ai/playerbot tree	keep	yes (slice)	baseline lineage; retained notices still need a file-by-file map
-Shyalya/tortoise-wow	05ba90b2	spec weight scales (data)	data/sql/world/20260916090001_world.sql; forever/sql/world/2026_11_20_20_tortoisebots_weightscales.sql	adapt	yes (data)	29 scales, 223 weights in the Forever delivery
+Shyalya/tortoise-wow	05ba90b2	spec weight scales (data)	data/sql/world/20260916090001_world.sql; forever/sql/world/2026_11_20_20_tortoisebots_weightscales.sql	adapt	yes (data)	29 scales, 238 weights in the Forever delivery (stat mix retuned from the Forever level-60 player data)
 T-imothy/tortoise-wow	0fb4d7c	fishing spots and AV named points (data)	data/sql/world/20261013150000_world.sql; data/sql/world/20261013100000_world.sql	keep	yes (data)	Forever reads the rows through ai_playerbot_named_location
 jrad7/mod-dungeon-clear	da0bdfbc	pull aggro-count estimate	ai/playerbot/PullAggroEstimatePolicy.h	adapt	no caller in the slice	rewritten with the vanilla wake-up rules; the Forever run controller does not call it
 jrad7/mod-dungeon-clear	da0bdfbc	resurrection-hold idea	runtime/RezHoldPolicy.h	adapt	yes (slice host TbRunFacts)	rewritten with 1.12 classes and spells; no block copied

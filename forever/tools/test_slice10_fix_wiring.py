@@ -84,6 +84,51 @@ class ClassIds(unittest.TestCase):
             self.assertRegex(FACTORY, r"static_assert\(unsigned\(TortoiseBots::slice::hybrid::%s\) == unsigned\(%s\)" % (policy, core))
 
 
+class RunStartTankRole(unittest.TestCase):
+    """`.tb run start <tank>` commits the named tank's role, then logs which bot the AI treats as tank."""
+
+    def setUp(self):
+        self.run = (ROOT / "forever/src/host/run/TbRun.cpp").read_text()
+
+    def test_bot_led_start_commits_the_role_before_the_check(self):
+        body = region(self.run, "StartOutcome StartRun(", "StartOutcome StartPlayerLedRun(")
+        self.assertIn("PrepareRunTank(leader)", body)
+        self.assertLess(body.index("PrepareRunTank(leader)"), body.index("StartCheck("),
+                        "the admission check reads the forced role first: commit it before")
+        self.assertIn("LogRunTank(leader", body)
+
+    def test_player_led_start_commits_the_role_before_the_check(self):
+        body = self.run[self.run.index("StartOutcome StartPlayerLedRun("):]
+        self.assertIn("PrepareRunTank(tank)", body)
+        self.assertLess(body.index("PrepareRunTank(tank)"), body.index("PlayerLedStartCheck("),
+                        "the admission check reads the forced role first: commit it before")
+        self.assertIn("LogRunTank(tank", body)
+
+    def test_only_classes_with_a_run_tank_are_ordered(self):
+        body = region(self.run, "bool PrepareRunTank(", "void LogRunTank(")
+        self.assertIn("CanLeadRun", body)
+        self.assertIn("SetBotRole", body)
+        self.assertIn("BOT_ROLE_TANK", body)
+        log = region(self.run, "void LogRunTank(", "RunRec* Find(")
+        self.assertIn("PlayerbotAI::IsTank", log)
+
+    def test_bot_led_refusals_precede_the_role_commit(self):
+        body = region(self.run, "StartOutcome StartRun(", "StartOutcome StartPlayerLedRun(")
+        prepare = body.index("PrepareRunTank(leader)")
+        for refusal in ('refuse("not-leader"', 'refuse("group-raid"', 'refuse("already-running"', 'refuse("wrong-map"',
+                        'refuse("player-in-group"', 'refuse("bags"', 'refuse("not-commanded"', 'refuse("loot-method"', 'refuse("no-step"'):
+            self.assertLess(body.index(refusal), prepare, refusal + " reads only the world: it goes before the role commit")
+        # the one check that reads the committed role still refuses safely: it puts the old role back
+        self.assertIn("RestoreRunTank(leader, previousRole, tankRoleSet)", body)
+
+    def test_player_led_refusals_precede_the_role_commit(self):
+        body = self.run[self.run.index("StartOutcome StartPlayerLedRun("):]
+        prepare = body.index("PrepareRunTank(tank)")
+        for refusal in ('refuse("already-running"', 'refuse("wrong-map"', 'refuse("bags"', 'refuse("loot-method"'):
+            self.assertLess(body.index(refusal), prepare, refusal + " reads only the world: it goes before the role commit")
+        self.assertIn("RestoreRunTank(tank, previousRole, tankRoleSet)", body)
+
+
 class StaleTankRole(unittest.TestCase):
     """A refusal must leave no tank bit behind, and every run read of a member's tank-ness must be capability-aware."""
 
