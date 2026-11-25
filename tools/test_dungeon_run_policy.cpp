@@ -4609,6 +4609,81 @@ static void TestWipeAndLeadDeathPause()
     CHECK(r.autoRegroups == kAutoRegroupsPerStep); // the wipes' budget is untouched by the lead's death
 }
 
+// A member revived at the entrance that walks back through the same hostiles and dies again (a live Wailing Caverns
+// run: 126 deaths in 3 h, no pause). The same member dead kMemberDeathsPerStep times at
+// one step pauses the run with its name; two deaths do not; another step and a resume start the count over; the lead
+// bot's own deaths keep their old bounds.
+static void MemberDies(Run& r, Facts& f, const std::string& name)
+{
+    f.deadNames = {name};
+    f.dead = 1;
+    f.alive = 4;
+    Tick(r, f);
+    f.deadNames.clear();
+    f.dead = 0;
+    f.alive = 5;
+    if (r.state == State::Running)
+        Tick(r, f);
+}
+
+static void TestMemberDeathLoopPauses()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 40), Step(PlanStepKind::Move, 80)};
+    {
+        Run r = Start(&plan);
+        Facts f = Party(0);
+        MemberDies(r, f, "Mage");
+        MemberDies(r, f, "Mage");
+        MemberDies(r, f, "Healer"); // another member's death is its own count
+        CHECK(r.state == State::Running);
+        f.deadNames = {"Mage"};
+        f.dead = 1;
+        f.alive = 4;
+        Tick(r, f);
+        CHECK(r.state == State::Paused);
+        CHECK(r.note.find("a death loop: Mage died 3 times at this step") == 0);
+        // A resume starts the count over: the same bot still dead is no new death, one more is the first.
+        f.deadNames.clear();
+        f.dead = 0;
+        f.alive = 5;
+        CHECK(Resume(r));
+        MemberDies(r, f, "Mage");
+        MemberDies(r, f, "Mage");
+        CHECK(r.state == State::Running);
+    }
+    {
+        // Two deaths at step 0, one at step 1: no loop.
+        Run r = Start(&plan);
+        Facts f = Party(0);
+        MemberDies(r, f, "Mage");
+        MemberDies(r, f, "Mage");
+        r.step = 1;
+        MemberDies(r, f, "Mage");
+        CHECK(r.state == State::Running);
+        CHECK(r.note.find("a death loop") == std::string::npos);
+    }
+    {
+        // The lead bot dead three times: not this pause (its own regroup and revive bounds hold it).
+        Run r = Start(&plan);
+        Facts f = Party(0);
+        for (int i = 0; i < 3; ++i)
+        {
+            f.leadAlive = false;
+            f.deadNames = {"Tanky"};
+            f.dead = 1;
+            f.alive = 4;
+            Tick(r, f);
+            f.leadAlive = true;
+            f.deadNames.clear();
+            f.dead = 0;
+            f.alive = 5;
+            Tick(r, f);
+        }
+        CHECK(r.note.find("a death loop") == std::string::npos);
+    }
+}
+
 // A dead lead bot whose party cannot raise it does not spin: the regroup sends `revive party` and its own revive
 // clock (kRegroupReviveMs) ends in the pause a resume rescues from.
 static void TestDeadLeadPausesOnTheRegroupsRevive()
@@ -38133,6 +38208,7 @@ int main()
     TestHopPullsNearUnitsFirst();
     TestHopNeverPullsAnEventUnit();
     TestWipeAndLeadDeathPause();
+    TestMemberDeathLoopPauses();
     TestDeadLeadPausesOnTheRegroupsRevive();
     TestFewDeadReviveBeforePull();
     TestFewDeadRuleSkipsEvents();

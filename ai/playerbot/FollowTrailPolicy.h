@@ -126,6 +126,21 @@ namespace ai
         return 0;
     }
 
+    // Flees in a row each back a caster along the trail; without a bound they carry it far from the party into
+    // packs it has not met. In a dungeon a flee's back-off point stays within kFleeTrailLeashYd of the group's tank
+    // (MovementAction::FleeAlongLeadTrail); with no living tank known every point is allowed.
+    constexpr float kFleeTrailLeashYd = 30.0f;
+
+    inline bool FleeTrailPointLeashed(float pointX, float pointY, bool tankKnown, float tankX, float tankY,
+        float leashYd = kFleeTrailLeashYd)
+    {
+        if (!tankKnown)
+            return true;
+        float const dx = pointX - tankX;
+        float const dy = pointY - tankY;
+        return dx * dx + dy * dy <= leashYd * leashYd;
+    }
+
     // Record the leader's current position. Returns true when the trail changed
     // (a point was added or the trail was reset). The caller owns the leader's
     // game state and passes its position.

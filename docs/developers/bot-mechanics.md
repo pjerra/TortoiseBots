@@ -57,7 +57,7 @@ The class actions re-check range and castability on their own turn; a refusal en
 | :--- | :--- |
 | Formations | `default`/`near`, `melee`, `queue`, `chaos`, `circle`, `line`, `shield`, `arrow`, `far`, `custom`. Offsets are relative to the master's orientation. |
 | Catch-up mount | With `AiPlayerbot.BoostFollow` on, a bot far behind mounts to catch up; it does not mount inside combat. |
-| Flee and kite | The `flee` strategy reacts to panic, being outnumbered, and critical health with no master; `kite` is registered too. A bot answering a real player keeps following the player's orders instead of running away on its own. |
+| Flee and kite | The `flee` strategy reacts to panic, being outnumbered, and critical health with no master; `kite` is registered too. A bot answering a real player keeps following the player's orders instead of running away on its own. In a dungeon a caster's flee backs off along the party's trail, but never to a point more than 30 yd from the group's tank. |
 | Dungeon follow stall | A bot behind the leader inside a dungeon that has not moved a yard for 2 s (beyond follow range + 3 yd, while not eating, casting or rooted) latches a rescue: ledge step-down first, else a module `MoveTo` along the navmesh path, at most once per 2 s, backing off to 8 s, and giving up for a minute after five walks that could not start. Past sight range the same rescue arms at once. `DungeonFollowStallPolicy.h`, `FollowActions.cpp`. |
 | Party facing | Tanks holding a mob sidestep so it faces away from the party (`tank face needed`); melee DPS sidestep out of frontal and tail cleaves (`rear flank`). |
 

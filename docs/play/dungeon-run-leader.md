@@ -235,6 +235,7 @@ The run protects itself with these rules:
 - A big pack (8+ joiners) stand walk is watched every tick.
 - It regroups by itself after 3 dead or a wipe, within the fight ceiling of 180 s (420 s on a boss), by reviving the party, gathering it, and walking back.
 - It waits for every fallen member until that bot is back alive within 20 yd of the lead bot.
+- It pauses when the same member dies 3 times at one step, naming it: a bot revived at the entrance that walks back alone through the same pack would otherwise die and revive without end. A resume or the next step starts the count over; the lead bot's own deaths and wipes keep their own limits.
 - It recovers a lead bot that is back at the entrance alone by regrouping on it and walking back over the plan's own points.
 - It always holds for a party resurrection when a living resurrector is available (`AiPlayerbot.DungeonRunRezHold` is hard-coded on in ForeverCore; the setting has no effect).
 - A revived bot over 40 yd away or 8 yd of height walks back; the run leader does not summon bots on ForeverCore (summon orders are refused as `unsupported`).

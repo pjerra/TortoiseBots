@@ -102,6 +102,7 @@ constexpr float kPlayerPullYd = 60.0f;              // no pull or boss while a p
 constexpr std::uint32_t kPlayerGatherWaitMs = 60000; // a regroup waits this long for a living player to come within kGatherYd
 constexpr std::uint32_t kPlayerHoldCapMs = 300000;   // a step held (or a regroup waiting) for a player this long pauses
 constexpr std::uint32_t kAutoRegroupsPerStep = 2; // regroups the run does by itself per step, then it pauses
+constexpr std::uint32_t kMemberDeathsPerStep = 3; // one member dead this often at one step: a death loop, the run pauses
 constexpr std::uint32_t kGatherTries = 2;         // a gather refused this often: the run goes on without it
 constexpr std::uint32_t kHeldSummonTries = 3;     // a held bot's summon refused this often: it stays held, the party walks back without it
 // A held bot's accepted summon that never brings it to the lead bot answers nothing: PlayerConvenience drops it
@@ -2696,6 +2697,11 @@ struct Run
     // together. The run starts nothing new until each is alive and within
     // kGatherYd of the lead bot again (WaitForFallen).
     std::unordered_set<std::string> waitFor;
+    // Each member's deaths at one step (MemberDeathLoopTick): the step they were counted at, and the dead of the last
+    // tick (a name new in Facts::deadNames is a new death).
+    std::unordered_map<std::string, std::uint32_t> stepDeaths;
+    std::size_t stepDeathsStep = static_cast<std::size_t>(-1);
+    std::unordered_set<std::string> deadLastTick;
     // The living party held where it won the fight while the lead bot (and
     // the bots revived with it at the entrance) walk the plan's way back to
     // it (LeadRevivedAway): the glue keeps each named bot on stay at its spot,
@@ -4217,6 +4223,39 @@ inline void NoteDeadSeen(Run& r, const Facts& f)
 {
     for (const std::string& name : f.deadNames)
         r.deadSeenMs[name] = r.runMs;
+}
+
+// A member revived away from the party (at the entrance after a release) that walks back alone through the same
+// hostiles dies again and again: it is up between its deaths, so the regroup's "still dead after" clock never runs
+// out (each gather restarts it), and WaitForFallen's regroups are not counted against kAutoRegroupsPerStep. Each
+// member's deaths at the current step are counted (a name new in Facts::deadNames); the same member dead
+// kMemberDeathsPerStep times there pauses the run with its name, before another revive sends it the same way. The
+// lead bot's own deaths and wipes keep their bounds (LeadRevivedAway, kAutoRegroupsPerStep), so the pause waits for
+// a tick with the lead bot alive. The counts start over at another step and on a resume. True: the run paused.
+inline bool MemberDeathLoopTick(Run& r, const Facts& f)
+{
+    if (r.stepDeathsStep != r.step)
+    {
+        r.stepDeaths.clear();
+        r.stepDeathsStep = r.step;
+    }
+    for (const std::string& name : f.deadNames)
+        if (!r.deadLastTick.count(name))
+            ++r.stepDeaths[name];
+    r.deadLastTick = std::unordered_set<std::string>(f.deadNames.begin(), f.deadNames.end());
+    if (!f.leadAlive)
+        return false;
+    for (const std::string& name : f.deadNames)
+    {
+        auto it = r.stepDeaths.find(name);
+        if (it == r.stepDeaths.end() || it->second < kMemberDeathsPerStep)
+            continue;
+        Pause(r, "a death loop: " + name + " died " + std::to_string(it->second) + " times at this step (revived away "
+            "from the party, it dies again on its way back): bring it to the party (or set "
+            "AiPlayerbot.RunTeleportReturnYd), then .bot run resume");
+        return true;
+    }
+    return false;
 }
 
 // r12-19z29 Uldaman leg 5 (2026-10-22): a direct step's straggler summoned already this step (the mid-step
@@ -6522,6 +6561,7 @@ inline bool Resume(Run& r)
     r.fighting = false;
     r.autoRegroups = 0;
     r.nearWipeMarks.clear(); // the commander's resume starts a fresh near-wipe count
+    r.stepDeaths.clear(); // ... and a fresh death-loop count (MemberDeathLoopTick)
     r.wipeEventOn = false;   // a party still at the wipe level on resume is the first mark of it
     r.wipeStopDue = false;
     r.otherPartRescues = 0; // a resume gives the lead bot in another part fresh rescue teleports
@@ -22160,6 +22200,8 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
         r.returnHold.clear();
     UpdateSummonOutcomes(r, f);
     NoteDeadSeen(r, f);
+    if (MemberDeathLoopTick(r, f))
+        return order;
     NoteLeadDeath(r, f);
     NoteLeadPath(r, f);
     if (FactStep(r) == s)
