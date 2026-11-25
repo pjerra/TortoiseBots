@@ -399,6 +399,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
     AtScopeExit const battlegroundKit([&] { ApplyBattlegroundCombatKit(player, facade, combatEngine); });
     if (!player)
         return;
+    combatEngine->addStrategy("dungeon");
     combatEngine->addStrategy("racials");
     // TB gives every bot `pvp` (AiFactory.cpp:664-671). Outside a battleground its `enemy player near` row only sees
     // players already attacking the bot unless it holds the world-PvP seek role (EnemyPlayersValue.cpp).
@@ -510,6 +511,7 @@ static_assert(TortoiseBots::world::ClassDruid == CLASS_DRUID, "FreeKitPolicy.h: 
 void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* nonCombatEngine)
 {
     AtScopeExit const battlegroundKit([&] { ApplyBattlegroundNonCombatKit(player, facade, nonCombatEngine); });
+    nonCombatEngine->addStrategy("dungeon");
     if (nonCombatEngine)
     {
         nonCombatEngine->addStrategy("maintenance");

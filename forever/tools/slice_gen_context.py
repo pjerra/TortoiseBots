@@ -555,7 +555,13 @@ BG2_KEYS = {
     "trigger": "",
     "value": "enemy flag carrier, team flag carrier",
 }
-KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS, LIFE_RPG_KEYS, LIFE_QUEST_KEYS, LIFE_TOWN_KEYS, GUILD_KEYS, SOCIAL_KEYS, R3A_KEYS, EMOTE_KEYS, DUEL_KEYS, WPVP_KEYS, BG2_KEYS)
+BOSS5_KEYS = {
+    "strategy": "dungeon, boss tactics",
+    "action": "enable boss tactics strategy, disable boss tactics strategy, boss tactics interrupt, boss tactics kill first, boss tactics step behind, boss tactics avoid cast, boss tactics stand",
+    "trigger": "enter boss tactics, leave boss tactics, boss tactics interrupt, boss tactics kill first, boss tactics front, boss tactics avoid cast, boss tactics stand",
+    "value": "",
+}
+KEYS = _join(SLICE_KEYS, SLICE2_KEYS, SLICE3_KEYS, SLICE4_KEYS, SLICE8_KEYS, SLICE10_KEYS, SLICE11_KEYS, SLICE9_KEYS, W1_KEYS, W6_KEYS, W2_KEYS, W3_KEYS, W8_KEYS, CH_KEYS, PC_CHAT_KEYS, PC_CHAT_B_KEYS, WL0_KEYS, REACTIONS_KEYS, COMBAT_ITEMS_KEYS, CLASS_EXTRAS_KEYS, STORE_KEYS, BEHAVIOR_KEYS, STRAT_STORE_KEYS, PRESET_KEYS, S209_KEYS, PULL_KEYS, COLLISION_KEYS, SIT_KEYS, JUMP_KEYS, DEBUG_KEYS, MOUNT_KEYS, TRAVEL_KEYS, STUCK_KEYS, LIFE_RPG_KEYS, LIFE_QUEST_KEYS, LIFE_TOWN_KEYS, GUILD_KEYS, SOCIAL_KEYS, R3A_KEYS, EMOTE_KEYS, DUEL_KEYS, WPVP_KEYS, BG2_KEYS, BOSS5_KEYS)
 
 # Local context class names and the full-build context class each one copies the shape of (order = registration order).
 KIND_ORDER = ("strategy", "action", "trigger", "value")

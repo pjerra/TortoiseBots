@@ -3,8 +3,8 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 389 keys, 380 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 317 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 391 keys, 382 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 315 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
@@ -37,6 +37,10 @@ AiPlayerbot.DungeonRunAuraTactics = 0
 
 # AiPlayerbot.DungeonRunAuraGatedTargets  (bool, PlayerbotAIConfig.cpp:150)
 AiPlayerbot.DungeonRunAuraGatedTargets = 0
+
+# AiPlayerbot.DungeonRunTotemFocus  (bool, PlayerbotAIConfig.cpp:153)
+#   TBF: not read, this line has no effect (forever/docs/RUN-KNOBS-139-NOTES.md)
+AiPlayerbot.DungeonRunTotemFocus = 0
 
 # AiPlayerbot.DungeonRunPackFocusSparesTacticUnits  (bool, PlayerbotAIConfig.cpp:155)
 #   TBF: not read, this line has no effect (forever/docs/RUN-KNOBS-139-NOTES.md)
@@ -1101,6 +1105,9 @@ AiPlayerbot.ProtPaladinDungeonWisdom = 1
 
 # AiPlayerbot.HolyPaladinMeleeWeave  (bool, PlayerbotAIConfig.cpp:1490)
 AiPlayerbot.HolyPaladinMeleeWeave = 1
+
+# AiPlayerbot.DungeonTactics  (bool, PlayerbotAIConfig.cpp:1492)
+AiPlayerbot.DungeonTactics = 1
 
 # AiPlayerbot.RaidReactions  (bool, PlayerbotAIConfig.cpp:1495)
 AiPlayerbot.RaidReactions = 0

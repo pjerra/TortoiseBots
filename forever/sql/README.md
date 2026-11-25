@@ -52,3 +52,11 @@ docker exec -i forever-db mysql -utrinity -p"$(cat ~/forever-run/.db_pass)" worl
 (Run on the build VM, from the module folder. The user `trinity` and the password in `~/forever-run/.db_pass` are the ones `~/forever-run/setup.sh` writes into `WorldDatabaseInfo` (`forever-db;3306;trinity;<password>;world`): use the file, never type or print the password. The command above names the Ragefire Chasm plan; any file of the table goes the same way.)
 Then restart the worldserver where the table is read at start (the trainer table, the plan loader) and check the rows (`.tb plan ragefire_chasm check <bot>`, `.tb train <bot>`).
 No file here names its database (no `` `world`. `` prefix): the updater connects to the database of the folder it reads, and a file can be piped into a client already connected to the server's MySQL.
+
+`world/2026_11_21_30_tortoisebots_boss_tactics_rfc.sql` creates the guarded
+boss-stand table and seeds six verified RFC tactic rows plus one tank stand.
+See `forever/docs/FIVE-MAN-TACTICS.md`; no raid or molten-pack rules are imported.
+
+`world/2026_11_22_30_tortoisebots_boss_tactics_wc.sql` seeds Wailing Caverns (map 43): 17 interrupt rows
+(Druid of the Fang, Deviate Shambler, the four Fanglords, Skum, Verdan) and kill Druids of the Fang first,
+each backed by `forever/data/waterys/wc/wc-casts.csv`. Apply it after the plans file (which creates `ai_boss_tactic`).

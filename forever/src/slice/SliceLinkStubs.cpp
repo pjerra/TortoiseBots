@@ -103,21 +103,17 @@ inline void NoteMisc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacySe
 namespace ai
 {
 // BossTacticsMgr.cpp / DungeonPlanMgr.cpp are real files now (slice 5): GetBossTactics, GetDungeonPlans, LoadBossTactics and LoadDungeonPlans
-// are theirs. BossStandMgr.cpp is not in the slice: its loader stays a stand-in.
-void LoadBossStands() { NoteBoss(); }
+// and BossStandMgr.cpp now own their real loaders.
 
 // BossTacticsActions.cpp
 // The per-update bracket PlayerbotAI::UpdateAI opens around the scan (PlayerbotAI.cpp:383): it opens no scan slot here, so it is not counted
 // (it was the hottest unported counter: once per bot per tick, no feature behind it; R8).
-BossTacticsScanScope::BossTacticsScanScope() {}
-BossTacticsScanScope::~BossTacticsScanScope() {}
 bool AoeTauntStillNeeded(PlayerbotAI*, Player*) { NoteBoss(); return false; }
 bool AreaTauntRefusedByPost(PlayerbotAI*, Player*, const char*) { NoteBoss(); return false; }
 // R9: the real function answers true when there is no live anchor row (the move is allowed, the point is left as it is); false means "the clamped
 // point has no floor", which refuses the move. There is never an anchor here.
 bool ClampMoveToBossAnchor(PlayerbotAI*, Player*, float&, float&, float&) { NoteBoss(); return true; }
 bool DispelCastBlocked(PlayerbotAI*, Unit*, std::uint32_t) { NoteBoss(); return false; }
-BossStandTarget FindBossStand(PlayerbotAI*, Player*) { NoteBoss(); return BossStandTarget{}; }
 TankPostHealDuty FindTankPostHealDuty(PlayerbotAI*, Player*) { NoteBoss(); return TankPostHealDuty{}; }
 std::uint32_t GateHoldFighters(PlayerbotAI*, std::uint32_t, float) { NoteBoss(); return 0; }
 // "Whether a healer may top up the target": with no boss row (no live heal reserve) the real answer is today's mana rule, `mana >= mediumMana`
@@ -268,7 +264,6 @@ std::string CompositeChatFilter::Filter(std::string message)
 // BossTacticsActions.cpp (feature "boss and raid tactics": counted once per second, like the slice-1 stand-ins above).
 // ScanBossTactics: absent = a fight with no boss row. Value: no units, no rows. Effect (PartyMemberToDispel.cpp): `rows` is empty, so the dispel pick is the
 // plain tier search (`ranked` false); CollectDispelAuras / NearestGroupMemberYd / LogDispel* below are only reached when rows exist, so never.
-BossTacticsFight ScanBossTactics(PlayerbotAI*, Player*) { NoteBoss(); return BossTacticsFight{}; }
 // Absent = the unit carries no dispellable aura. Value: `out` left as the caller passed it (empty). Effect: no aura is offered to the dispel verdict (LESS).
 void CollectDispelAuras(Unit*, uint32, std::vector<AuraOnMember>&) { NoteBoss(); }
 // Absent = "a large value when the unit has none" (BossTacticsActions.h:55): the carrier counts as alone, i.e. clear. Value: the largest float, the same

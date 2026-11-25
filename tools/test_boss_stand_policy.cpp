@@ -81,7 +81,18 @@ int main()
     CHECK(ParseStandRole("healer") == StandRole::Healer);
     CHECK(ParseStandRole("melee") == StandRole::Melee);
     CHECK(ParseStandRole("Ranged") == StandRole::None);
-    CHECK(ParseStandRole("tank") == StandRole::None);
+    CHECK(ParseStandRole("tank") == StandRole::Tank);
+    {
+        BossStandTable roles;
+        BossStandRow tank=Row(1,0,0,8,StandRole::Tank,0,0,0,1,0,0,0,1);
+        tank.map=389;tank.bossEntry=11517;
+        CHECK(roles.Add(tank));
+        BossStandRow melee=tank;melee.role=StandRole::Melee;melee.y=5;
+        CHECK(roles.Add(melee));roles.Seal();
+        auto const* rows=roles.Rows(389,11517);CHECK(rows && rows->size()==2);
+        auto seats=ActiveStandPoints(*rows,StandRole::Tank,0,0,0,NoAura);
+        CHECK(seats.size()==1 && seats.front()->role==StandRole::Tank);
+    }
     CHECK(StandRoleOf(true, false, true) == StandRole::Melee);    // a tank is never moved as a caster
     CHECK(StandRoleOf(false, true, true) == StandRole::Healer);   // a healer is ranged too: healer first
     CHECK(StandRoleOf(false, false, true) == StandRole::Ranged);

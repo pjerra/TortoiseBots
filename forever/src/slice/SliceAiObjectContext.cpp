@@ -19,6 +19,7 @@
 #include "playerbot/strategy/actions/AddLootAction.h"
 #include "playerbot/strategy/actions/AhAction.h"
 #include "playerbot/strategy/actions/AttackAction.h"
+#include "playerbot/strategy/actions/BossTacticsActions.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
 #include "playerbot/strategy/actions/BuffAction.h"
 #include "playerbot/strategy/actions/BuyAction.h"
@@ -96,6 +97,7 @@
 #include "playerbot/strategy/generic/AttackEnemyPlayersStrategy.h"
 #include "playerbot/strategy/generic/AutoCcStrategy.h"
 #include "playerbot/strategy/generic/BattlegroundStrategy.h"
+#include "playerbot/strategy/generic/BossTacticsStrategy.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
 #include "playerbot/strategy/generic/ChatCommandHandlerStrategy.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
@@ -105,6 +107,7 @@
 #include "playerbot/strategy/generic/DebugStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
 #include "playerbot/strategy/generic/DuelStrategy.h"
+#include "playerbot/strategy/generic/DungeonStrategy.h"
 #include "playerbot/strategy/generic/EmoteStrategy.h"
 #include "playerbot/strategy/generic/FleeStrategy.h"
 #include "playerbot/strategy/generic/FocusStrategy.h"
@@ -137,6 +140,7 @@
 #include "playerbot/strategy/generic/UsePotionsStrategy.h"
 #include "playerbot/strategy/generic/WorldPacketHandlerStrategy.h"
 #include "playerbot/strategy/generic/WorldPvpStrategy.h"
+#include "playerbot/strategy/triggers/BossTacticsTriggers.h"
 #include "playerbot/strategy/triggers/BotStateTriggers.h"
 #include "playerbot/strategy/triggers/ChatCommandTrigger.h"
 #include "playerbot/strategy/triggers/GenericTriggers.h"
@@ -251,7 +255,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (73 of its keys)
+    // the registry of StrategyContext (75 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -330,6 +334,8 @@ namespace slice
             creators["pvp"] = [](PlayerbotAI* ai) { return new AttackEnemyPlayersStrategy(ai); };
             creators["world pvp"] = [](PlayerbotAI* ai) { return new WorldPvpStrategy(ai); };
             creators["battleground"] = [](PlayerbotAI* ai) { return new BattlegroundStrategy(ai); };
+            creators["dungeon"] = [](PlayerbotAI* ai) { return new DungeonStrategy(ai); };
+            creators["boss tactics"] = [](PlayerbotAI* ai) { return new BossTacticsStrategy(ai); };
         }
     };
 
@@ -372,7 +378,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (132 of its keys)
+    // the registry of ActionContext (139 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -510,6 +516,13 @@ namespace slice
             creators["mount anim"] = [](PlayerbotAI* ai) { return new MountAnimAction(ai); };
             creators["attack duel opponent"] = [](PlayerbotAI* ai) { return new AttackDuelOpponentAction(ai); };
             creators["attack enemy player"] = [](PlayerbotAI* ai) { return new AttackEnemyPlayerAction(ai); };
+            creators["enable boss tactics strategy"] = [](PlayerbotAI* ai) { return new BossTacticsEnableStrategyAction(ai); };
+            creators["disable boss tactics strategy"] = [](PlayerbotAI* ai) { return new BossTacticsDisableStrategyAction(ai); };
+            creators["boss tactics interrupt"] = [](PlayerbotAI* ai) { return new BossTacticsInterruptAction(ai); };
+            creators["boss tactics kill first"] = [](PlayerbotAI* ai) { return new BossTacticsKillFirstAction(ai); };
+            creators["boss tactics step behind"] = [](PlayerbotAI* ai) { return new BossTacticsStepBehindAction(ai); };
+            creators["boss tactics avoid cast"] = [](PlayerbotAI* ai) { return new BossTacticsAvoidCastAction(ai); };
+            creators["boss tactics stand"] = [](PlayerbotAI* ai) { return new BossTacticsStandAction(ai); };
         }
     };
 
@@ -615,7 +628,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (160 of its keys)
+    // the registry of TriggerContext (167 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -781,6 +794,13 @@ namespace slice
             creators["new player nearby"] = [](PlayerbotAI* ai) { return new NewPlayerNearbyTrigger(ai); };
             creators["no attackers"] = [](PlayerbotAI* ai) { return new NoAttackersTrigger(ai); };
             creators["enemy player near"] = [](PlayerbotAI* ai) { return new EnemyPlayerNear(ai); };
+            creators["enter boss tactics"] = [](PlayerbotAI* ai) { return new BossTacticsEnterTrigger(ai); };
+            creators["leave boss tactics"] = [](PlayerbotAI* ai) { return new BossTacticsLeaveTrigger(ai); };
+            creators["boss tactics interrupt"] = [](PlayerbotAI* ai) { return new BossTacticsInterruptTrigger(ai); };
+            creators["boss tactics kill first"] = [](PlayerbotAI* ai) { return new BossTacticsKillFirstTrigger(ai); };
+            creators["boss tactics front"] = [](PlayerbotAI* ai) { return new BossTacticsFrontTrigger(ai); };
+            creators["boss tactics avoid cast"] = [](PlayerbotAI* ai) { return new BossTacticsAvoidCastTrigger(ai); };
+            creators["boss tactics stand"] = [](PlayerbotAI* ai) { return new BossTacticsStandTrigger(ai); };
         }
     };
 
@@ -1167,7 +1187,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 85, kActions = 216, kTriggers = 241, kValues = 274;
+    constexpr unsigned kStrategies = 87, kActions = 223, kTriggers = 248, kValues = 274;
 }
 }
 
