@@ -30,6 +30,25 @@ int main()
     CHECK(ShouldSavageBite(49, true));
     CHECK(kBearSavageBiteRage == 50);
 
+    // Primal Bite: Clearcasting or 20+ rage (its own cost).
+    CHECK(!ShouldPrimalBite(19, false));
+    CHECK(ShouldPrimalBite(20, false));
+    CHECK(ShouldPrimalBite(100, false));
+    CHECK(ShouldPrimalBite(0, true));
+    CHECK(kBearPrimalBiteRage == 20);
+
+    // Lacerate: build to five stacks, then refresh only in the last 4 s.
+    CHECK(!ShouldLacerate(14, 0, 0));
+    CHECK(ShouldLacerate(15, 0, 0));
+    CHECK(ShouldLacerate(15, 4, 0));
+    CHECK(!ShouldLacerate(15, 5, 4001));
+    CHECK(ShouldLacerate(15, 5, 4000));
+    CHECK(ShouldLacerate(15, 5, 0));
+    CHECK(!ShouldLacerate(0, 5, 4000));
+    CHECK(kBearLacerateMinRage == 15);
+    CHECK(kBearLacerateMaxStacks == 5);
+    CHECK(kBearLacerateRefreshMs == 4000);
+
     std::cout << "  [PASS] maul queued from 15 rage, savage bite gated on rage/clearcasting\n";
     std::cout << "All TortoiseBots bear rage policy tests passed.\n";
     return 0;

@@ -280,6 +280,8 @@ namespace ai
                 creators["berserk"] = [](PlayerbotAI* ai) { return new BerserkTrigger(ai); };
                 creators["clearcasting"] = [](PlayerbotAI* ai) { return new ClearcastingTrigger(ai); };
                 creators["savage bite"] = [](PlayerbotAI* ai) { return new SavageBiteTrigger(ai); };
+                creators["primal bite"] = [](PlayerbotAI* ai) { return new PrimalBiteTrigger(ai); };
+                creators["lacerate"] = [](PlayerbotAI* ai) { return new LacerateTrigger(ai); };
                 creators["maul rage available"] = [](PlayerbotAI* ai) { return new RageAvailable(ai, kBearMaulMinRage); };
             }
         };
@@ -365,6 +367,9 @@ namespace ai
                 creators["challenging roar"] = [](PlayerbotAI* ai) { return new CastChallengingRoarAction(ai); };
                 creators["enrage"] = [](PlayerbotAI* ai) { return new CastEnrageAction(ai); };
                 creators["savage bite"] = [](PlayerbotAI* ai) { return new CastSavageBiteAction(ai); };
+                creators["primal bite"] = [](PlayerbotAI* ai) { return new CastPrimalBiteAction(ai); };
+                creators["lacerate"] = [](PlayerbotAI* ai) { return new CastLacerateAction(ai); };
+                creators["wild growth"] = [](PlayerbotAI* ai) { return new CastWildGrowthAction(ai); };
                 creators["stealth"] = [](PlayerbotAI* ai) { return new CastProwlAction(ai); };
                 creators["unstealth"] = [](PlayerbotAI* ai) { return new DruidUnstealthAction(ai); };
                 creators["check stealth"] = [](PlayerbotAI* ai) { return new CheckStealthAction(ai); };

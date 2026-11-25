@@ -107,8 +107,15 @@ inline char const* const* TotemChoicesForSlot(int slot, std::uint32_t& count)
 {
     static char const* const earth[] = {"stoneclaw totem", "stoneskin totem", "earthbind totem",
         "strength of earth totem", "tremor totem"};
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+    // Fire Nova is a burst around the standing totem on this data, not a
+    // totem drop, so the fire slot has no such order.
+    static char const* const fire[] = {"searing totem", "magma totem",
+        "flametongue totem", "fire resistance totem", "frost resistance totem"};
+#else
     static char const* const fire[] = {"searing totem", "magma totem", "fire nova totem",
         "flametongue totem", "fire resistance totem", "frost resistance totem"};
+#endif
     static char const* const water[] = {"healing stream totem", "mana spring totem", "mana tide totem",
         "poison cleansing totem", "disease cleansing totem", "fire resistance totem"};
     static char const* const air[] = {"windfury totem", "grace of air totem", "tranquil air totem",
@@ -116,7 +123,13 @@ inline char const* const* TotemChoicesForSlot(int slot, std::uint32_t& count)
     switch (slot)
     {
     case 0: count = 5; return earth;
-    case 1: count = 6; return fire;
+    case 1:
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+        count = 5;
+#else
+        count = 6;
+#endif
+        return fire;
     case 2: count = 6; return water;
     case 3: count = 6; return air;
     default: count = 0; return nullptr;

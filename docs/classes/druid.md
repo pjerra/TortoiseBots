@@ -27,6 +27,7 @@ Druids fulfill Tank, Healer, Melee DPS, or Ranged Caster roles using flexible sh
 
 ### Feral (Bear Tank)
 - Fights in Dire Bear Form throughout combat, generating threat using *Swipe* and *Demoralizing Roar*.
+- Stacks *Lacerate* to five and refreshes it near expiry (bleed plus high threat), and spends the rage dump on *Primal Bite* (high threat, 6 s cooldown) from 20 rage.
 - Taunts loose mobs using *Growl* and *Challenging Roar*.
 - Keeps *Maul* queued every swing from 15 rage instead of waiting for 40.
 - Uses *Enrage* when healthy (at or above 70% health) and rage-starved (below 20 rage).
@@ -44,6 +45,7 @@ Druids fulfill Tank, Healer, Melee DPS, or Ranged Caster roles using flexible sh
 
 ### Restoration (Healer)
 - Maintains *Rejuvenation* and *Regrowth* HoTs (Heal-over-Time spells) on injured allies.
+- Casts *Wild Growth* when two or more members are hurt together: an instant group HoT on the most wounded member that also heals their party.
 - Between 20% and 70% health, casts *Regrowth* first and falls through to *Healing Touch* while Regrowth's heal-over-time is still running on the target, or when the druid has not learned Regrowth yet.
 - While that target still needs no direct heal, keeps *Rejuvenation* on it; idles by blanketing *Rejuvenation* on hurt allies missing it (outbidding grenades), and saves raid *Faerie Fire* for bosses while holding 80% mana.
 - Casts direct heals (*Healing Touch*) downranked to match target wounds per [shared downranking rules](overview.md#shared-bot-behaviors). Heal-over-time spells never downrank.
@@ -80,8 +82,11 @@ Movement slows like daze or chill do not break form. Physical roots break form o
 ## Custom abilities
 
 - **Swiftmend:** consumes a running *Rejuvenation* or *Regrowth* heal-over-time for an instant heal, and only casts when one is running.
+- **Lacerate:** the bear's stacking bleed (five stacks, 15 s) and steady threat; refreshed only near expiry.
+- **Primal Bite:** the bear's high-threat rage dump on a 6 s cooldown, from 20 rage.
+- **Wild Growth:** an instant group heal-over-time on a 6 s cooldown, aimed at the most wounded member.
 - **Tree of Life Form:** Not on ForeverCore yet.
-- **Savage Bite:** Not on ForeverCore yet.
+- **Savage Bite:** Not on ForeverCore yet; *Primal Bite* is the bear's rage dump on this data.
 
 ---
 

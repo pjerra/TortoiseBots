@@ -105,6 +105,21 @@ namespace ai
         }
     };
 
+    // Group heal-over-time on the most wounded member (their party is the
+    // splash). Instant, on a 6 s cooldown, 550 mana at the top rank: not
+    // worth starting from a low bar that the next direct heal needs.
+    class CastWildGrowthAction : public CastAoeHealSpellAction
+    {
+    public:
+        CastWildGrowthAction(PlayerbotAI* ai) : CastAoeHealSpellAction(ai, "wild growth", 25, HealManaEfficiency::HIGH) {}
+        bool isUseful() override
+        {
+            if (AI_VALUE2(uint8, "mana", "self target") < sPlayerbotAIConfig.lowMana)
+                return false;
+            return CastAoeHealSpellAction::isUseful();
+        }
+    };
+
 	class CastReviveAction : public ResurrectPartyMemberAction
 	{
 	public:
@@ -644,6 +659,18 @@ namespace ai
     {
     public:
         CastSavageBiteAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "savage bite") {}
+    };
+
+    class CastPrimalBiteAction : public CastMeleeSpellAction
+    {
+    public:
+        CastPrimalBiteAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "primal bite") {}
+    };
+
+    class CastLacerateAction : public CastMeleeSpellAction
+    {
+    public:
+        CastLacerateAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "lacerate") {}
     };
 
     class CastBashAction : public CastMeleeInterruptSpellAction

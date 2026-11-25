@@ -47,17 +47,18 @@ Priest	Holy	Chastise	available, not in preset	forever/data/waterys/talent-trees-
 Priest	Holy	Ascendance	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/priest/HolyPriestStrategy.cpp	no Forever spell by this name
 Shaman	Enhancement	Stormstrike	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/shaman/EnhancementShamanStrategy.cpp:59	nature burst
 Shaman	Elemental	Water Shield	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/shaman/ElementalShamanStrategy.cpp:437	mana regeneration
-Shaman	Restoration	Chain Heal, Healing Wave	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp:73-101	heal kit
+Shaman	Restoration	Chain Heal, Healing Wave	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp:72-118	heal kit
+Shaman	Restoration	Riptide	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp	instant heal/HoT in the low and medium bands
 Shaman	all	Searing, Magma, Mana Spring, Healing Stream, Windfury, Grace of Air, Grounding, Tremor, Earthbind, Stoneclaw, Strength of Earth totems	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/ShamanAiObjectContext.cpp	totem kit
 Shaman	all	Earth Shield	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/ShamanAiObjectContext.cpp	shaman trainer spell on the client
 Shaman	all	Totemic Recall	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/ShamanActions.cpp	refunds the standing set
-Shaman	all	Fire Nova	likely dead	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/ShamanActions.h:484	client has Fire Nova; the action still asks for fire nova totem
+Shaman	all	Fire Nova	available	forever/data/waterys/class-review/shaman.md:23-30	ai/playerbot/strategy/shaman/ShamanActions.h	burst around the standing fire totem (408341); the row waits for a totem
 Shaman	Elemental	Elemental Mastery	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ElementalShamanStrategy.cpp	no shaman ability by this name
 Shaman	Elemental	Earthquake	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ElementalShamanStrategy.cpp	no shaman ability by this name
 Shaman	Enhancement	Lightning Strike	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ShamanActions.h:570	no shaman ability by this name
 Shaman	Enhancement	Bloodlust	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/EnhancementShamanStrategy.cpp	no shaman ability by this name
 Shaman	Restoration	Spirit Link, Ancestral Swiftness	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp	no shaman abilities by these names
-Shaman	Tank	Earthshaker Slam, Totemic Slam	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ShamanActions.h:522,548	tank kit has no taunt on Forever
+Shaman	Tank	Earthshaker Slam, Totemic Slam	not on Forever	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/shaman/ShamanActions.h	tank kit has no taunt on Forever; the taunt rows are compiled out and lost aggro falls back to Earth Shock
 Mage	Arcane	Arcane Blast	available	forever/data/waterys/talent-builds.csv (node 105806)	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	Forever arcane filler; Arcane Missiles stays the default fallback
 Mage	Arcane	Arcane Wrath	in preset	forever/data/waterys/talent-builds.csv (node 113627)	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	talent-only: ranks have no trainer or chain row; 6 s cooldown nuke
 Mage	Arcane	Missile Barrage (proc)	in preset	forever/data/waterys/talent-builds.csv (node 105809)	ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp	proc aura 400589 spent on Arcane Missiles
@@ -81,9 +82,10 @@ Warlock	Affliction	Dark Pact	not on Forever	ai/playerbot/strategy/warlock/Warloc
 Warlock	Affliction	Dark Harvest	not on Forever	forever/data/waterys/class-review/warlock.md:34	ai/playerbot/strategy/warlock/AfflictionWarlockStrategy.cpp	no Forever spell by this name
 Warlock	Demonology	Power Overwhelming	not on Forever	forever/data/waterys/class-review/warlock.md:34	ai/playerbot/strategy/warlock/DemonologyWarlockStrategy.cpp	no Forever spell by this name
 Druid	Restoration	Swiftmend, Nature's Swiftness, Tranquility	available	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp:49-234	heal kit
+Druid	Restoration	Wild Growth	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp	instant group heal-over-time on 2+ hurt members
 Druid	Balance	Moonkin Form, Hurricane, Insect Swarm	available	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/BalanceDruidStrategy.cpp:120-296	caster kit
 Druid	all	Innervate, Rebirth, Barkskin	available	forever/data/waterys/class-review/druid.md:25-36	ai/playerbot/strategy/druid/	utility kit
-Druid	Feral	Lacerate, Primal Bite	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp	Forever feral abilities
+Druid	Feral	Lacerate, Primal Bite	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp	bear bleed stack and high-threat rage dump rows
 Druid	Feral	Berserk	unverified	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/druid/DpsFeralDruidStrategy.cpp:386	client has a druid Berserk (417141); the audit marks the Turtle id missing; no preset point buys it
 Druid	Restoration	Tree of Life Form	not on Forever	forever/data/waterys/class-notes/druid.md:7	ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp:294	no druid ability by this name
-Druid	Feral	Savage Bite, Mangle (Bear)	not on Forever	forever/data/waterys/class-notes/druid.md:12-14	ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp:70	rows stay but the spells do not resolve
+Druid	Feral	Savage Bite, Mangle (Bear)	not on Forever	forever/data/waterys/class-notes/druid.md:12-14	ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp	the Savage Bite row is compiled out for the Forever build; Primal Bite replaces it

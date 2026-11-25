@@ -64,6 +64,13 @@ void RestorationDruidStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
                              new NextAction("regrowth on party", ACTION_CRITICAL_HEAL + 1),
                              new NextAction("healing touch on party", ACTION_CRITICAL_HEAL), NULL)));
 
+    // Forever's group heal-over-time: two or more members below the medium
+    // band. Instant, so it lands ahead of the single-target casts, while the
+    // critical rows above keep their emergency priority.
+    triggers.push_back(new TriggerNode(
+        "medium aoe heal",
+        NextAction::array(0, new NextAction("wild growth", ACTION_MEDIUM_HEAL + 2), NULL)));
+
     // Regrowth is not recast while its own HoT runs; Healing Touch fills
     // that gap. Below Barkskin in the medium band so the cooldown keeps its slot.
     triggers.push_back(new TriggerNode(

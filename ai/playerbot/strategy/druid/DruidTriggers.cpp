@@ -169,6 +169,33 @@ bool SavageBiteTrigger::IsActive()
     return ShouldSavageBite(AI_VALUE2(uint8, "rage", "self target"), ai->HasAura("clearcasting", bot));
 }
 
+bool PrimalBiteTrigger::IsActive()
+{
+    if (!SpellCanBeCastedTrigger::IsActive())
+        return false;
+
+    return ShouldPrimalBite(AI_VALUE2(uint8, "rage", "self target"), ai->HasAura("clearcasting", bot));
+}
+
+bool LacerateTrigger::IsActive()
+{
+    if (!SpellCanBeCastedTrigger::IsActive())
+        return false;
+
+    Unit* target = GetTarget();
+    if (!target)
+        return false;
+
+    uint8 stacks = 0;
+    uint32 remainingMs = 0;
+    if (Aura* aura = ai->GetAura("lacerate", target))
+    {
+        stacks = aura->GetStackAmount();
+        remainingMs = aura->GetAuraDuration();
+    }
+    return ShouldLacerate(AI_VALUE2(uint8, "rage", "self target"), stacks, remainingMs);
+}
+
 bool HurricaneChannelCheckTrigger::IsActive()
 {
     Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL);

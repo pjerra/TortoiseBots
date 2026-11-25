@@ -194,10 +194,12 @@ namespace ai
                     return !AI_VALUE2(bool, "has totem", ordered.c_str());
                 if (!stored.empty() && stored != "auto")
                     return false;
-                // A standing Fire Nova Totem counts as the fire slot being
-                // taken: the drop carries a 5 s countdown and any fire totem
-                // dropped over it unsummons it before it can detonate, so the
-                // filler must not replace it.
+                // On the 1.12 data a standing Fire Nova Totem counts as the
+                // fire slot being taken: the drop carries a 5 s countdown and
+                // any fire totem dropped over it unsummons it before it can
+                // detonate, so the filler must not replace it. On the Forever
+                // data Fire Nova is a burst, never a totem, so the check is
+                // simply never true.
                 return !AI_VALUE2(bool, "has totem", "searing totem") &&
                        !AI_VALUE2(bool, "has totem", "magma totem") &&
                        !AI_VALUE2(bool, "has totem", "fire nova totem") &&
@@ -1094,10 +1096,12 @@ namespace ai
     };
 
     // Tank Fire Nova, the tank's pack pick for the fire slot: 2+ attackers
-    // inside the Nova's own detonation window (the totem lands at our feet,
-    // so the window is the pulse radius, not the 5 yd melee window), while
-    // the drop is off cooldown and no Nova totem already stands. Inherits
-    // the melee AoE pack gate and its breakable-CC interlock from AoeTrigger.
+    // inside the Nova's own burst window (the totem stands at our feet, so
+    // the window is the pulse radius, not the 5 yd melee window). On the
+    // 1.12 data the row needs the drop off cooldown with no Nova totem
+    // standing; on the Forever data it needs a fire totem standing and the
+    // burst off its own cooldown. Inherits the melee AoE pack gate and its
+    // breakable-CC interlock from AoeTrigger.
     class TankFireNovaTrigger : public AoeTrigger
     {
     public:
@@ -1106,9 +1110,10 @@ namespace ai
         bool IsActive() override;
     };
 
-    // Tank Magma: fallback for the fire slot while Fire Nova is on cooldown
-    // (never while it is ready, and never over a standing Nova totem), into a
-    // real pack (3+) with mana to burn.
+    // Tank Magma: on the 1.12 data, the fire slot's fallback while Fire Nova
+    // is on cooldown (never while it is ready, and never over a standing Nova
+    // totem); on the Forever data, the AoE fire totem that Fire Nova bursts
+    // from. Either way it needs a real pack (3+) with mana to burn.
     class TankMagmaTrigger : public MeleeMediumAoeTrigger
     {
     public:

@@ -73,6 +73,21 @@ namespace ai
         CastChainHealAction(PlayerbotAI* ai) : CastAoeHealSpellAction(ai, "chain heal") {}
     };
 
+    // Riptide: instant heal plus a HoT on a 12 s cooldown. The party row
+    // lands the instant portion on the wounded member and adds the Chain
+    // Heal bonus to that target.
+    class CastRiptideAction : public CastHealingSpellAction
+    {
+    public:
+        CastRiptideAction(PlayerbotAI* ai) : CastHealingSpellAction(ai, "riptide", 20, HealManaEfficiency::HIGH) {}
+    };
+
+    class CastRiptideOnPartyAction : public HealHotPartyMemberAction
+    {
+    public:
+        CastRiptideOnPartyAction(PlayerbotAI* ai) : HealHotPartyMemberAction(ai, "riptide", 20, HealManaEfficiency::HIGH) {}
+    };
+
     // Tortoise keeps the classic-era Earth Shield and Water Shield
     // variants as native player spells.
     class CastEarthShieldAction : public CastBuffSpellAction
@@ -472,29 +487,48 @@ namespace ai
         virtual bool isUseful() override { return CastMeleeSpellAction::isUseful() && !AI_VALUE2(bool, "has totem", name) && !TotemBlockedByOrder(ai, name); }
     };
 
+    // The fire-slot totems the bot can drop. Forever's Fire Nova bursts
+    // around whichever one stands (the core refuses the cast without any),
+    // so the action and the tank row both wait for one.
+    inline bool FireNovaFireTotemStanding(PlayerbotAI* ai)
+    {
+        AiObjectContext* ctx = ai->GetAiObjectContext();
+        return ctx->GetValue<bool>("has totem", "searing totem")->Get() ||
+            ctx->GetValue<bool>("has totem", "magma totem")->Get() ||
+            ctx->GetValue<bool>("has totem", "flametongue totem")->Get() ||
+            ctx->GetValue<bool>("has totem", "fire resistance totem")->Get() ||
+            ctx->GetValue<bool>("has totem", "frost resistance totem")->Get();
+    }
+
     class CastFireNovaAction : public CastSpellAction
     {
     public:
-        // Casts the totem DROP. "Fire Nova" is the totem's own pulse (8349
-        // line) and is never in the spellbook, so the old spell name never
-        // resolved. The action keeps the name "fire nova" (AoE-off veto and
-        // NextAction rows match it). The drop lands at our feet, so it
-        // targets the bot as the magma and searing totems do: a self-only
-        // spell at an enemy target fails the range check in isPossible.
+        // Tortoise casts the totem DROP; Forever casts the burst around the
+        // standing fire totem. Both keep the action name "fire nova" (AoE-off
+        // veto and NextAction rows match it) and target the bot: the spell is
+        // a self-only cast, so a hostile target fails the range check.
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+        CastFireNovaAction(PlayerbotAI* ai) : CastSpellAction(ai, "fire nova") {}
+#else
         CastFireNovaAction(PlayerbotAI* ai) : CastSpellAction(ai, "fire nova totem") {}
+#endif
         std::string getName() override { return "fire nova"; }
         virtual std::string GetTargetName() override { return "self target"; }
         virtual bool isUseful() override
         {
-            // 1.12 Fire Nova is a totem DROP (not a pulse of an existing
-            // totem): refuse to place it when the target is out of
-            // detonation range of the drop point, like the magma melee
-            // gate. Gate lives in ShamanFireGatePolicy.h so the unit test
-            // pins this exact logic.
+            // Neither variant is worth placing when the target sits outside
+            // the 10 yd burst of the totem at our feet.
             Unit* target = AI_VALUE(Unit*, "current target");
             if (!target)
                 return false;
-            return FireNovaDropShouldFire(bot->GetDistance(target)) && CastSpellAction::isUseful();
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+            if (!FireNovaPulseShouldFire(FireNovaFireTotemStanding(ai), bot->GetDistance(target)))
+                return false;
+#else
+            if (!FireNovaDropShouldFire(bot->GetDistance(target)))
+                return false;
+#endif
+            return CastSpellAction::isUseful();
         }
     };
 

@@ -5,6 +5,7 @@ and the Forever rows stay in it (a row hidden behind the Turtle-only guard is de
     python3 forever/tools/test_forever_spell_rows.py
 """
 import os
+import re
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -16,16 +17,23 @@ ROWS = {
     'ai/playerbot/strategy/mage/FrostMageStrategy.cpp': ['icicles'],
     'ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp': ['envenom'],
     'ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp': ['shadow of death', 'mark for death', 'smoke bomb'],
+    'ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp': ['savage bite'],
 }
+
+# Forever-only rows (a Turtle bot simply does not know the spell): actions whose rows must exist and stay unguarded.
 FOREVER_ROWS = {
-    'ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp': ['arcane blast', 'arcane wrath', 'missile barrage'],
+    'ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp': ['arcane blast', 'arcane wrath'],
     'ai/playerbot/strategy/mage/FrostMageStrategy.cpp': ['ice lance'],
     'ai/playerbot/strategy/warlock/DestructionWarlockStrategy.cpp': ['incinerate'],
     'ai/playerbot/strategy/warlock/AfflictionWarlockStrategy.cpp': ['wrack'],
+    'ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp': ['primal bite', 'lacerate'],
+    'ai/playerbot/strategy/druid/RestorationDruidStrategy.cpp': ['wild growth'],
+    'ai/playerbot/strategy/shaman/RestorationShamanStrategy.cpp': ['riptide on party'],
 }
 
 # Forever actives the class line teaches (no talent needed): trigger -> action.
-FOREVER_ROWS = {
+FOREVER_TRIGGER_ROWS = {
+    'ai/playerbot/strategy/mage/ArcaneMageStrategy.cpp': [('missile barrage', 'arcane missiles')],
     'ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp': [('mutilate', 'mutilate'), ('death mark', 'death mark')],
     'ai/playerbot/strategy/rogue/CombatRogueStrategy.cpp': [('death mark', 'death mark')],
     'ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp': [('death mark', 'death mark')],
@@ -39,6 +47,17 @@ FOREVER_ROWS = {
         ('tank needs renew', 'renew on tank'),
     ],
 }
+
+# The action contexts that must register the Forever-only actions, so a row can fire.
+FOREVER_ACTIONS = {
+    'ai/playerbot/strategy/druid/DruidAiObjectContext.cpp': ['primal bite', 'lacerate', 'wild growth'],
+    'ai/playerbot/strategy/shaman/ShamanAiObjectContext.cpp': ['riptide', 'riptide on party'],
+}
+
+
+def read(rel):
+    with open(os.path.join(ROOT, rel), encoding='utf-8') as f:
+        return f.read()
 
 
 def guarded(text, action):
@@ -67,30 +86,49 @@ def has_row(text, trigger, action):
 class ForeverSpellRowsTest(unittest.TestCase):
     def test_turtle_only_rows_are_guarded(self):
         for rel, actions in ROWS.items():
-            text = open(os.path.join(ROOT, rel)).read()
+            text = read(rel)
             for action in actions:
                 self.assertTrue(guarded(text, action), '%s: "%s" row is not behind the Forever guard' % (rel, action))
-
-    def test_forever_rows_are_not_guarded(self):
-        for rel, actions in FOREVER_ROWS.items():
-            text = open(os.path.join(ROOT, rel)).read()
-            for action in actions:
-                self.assertFalse(guarded(text, action), '%s: "%s" row is hidden from the Forever build' % (rel, action))
 
     def test_guard_detects_an_unguarded_row(self):
         text = 'triggers.push_back(new TriggerNode("x", NextAction::array(0, new NextAction("envenom", 1), NULL)));'
         self.assertFalse(guarded(text, 'envenom'))
 
+    def test_forever_rows_are_not_guarded(self):
+        for rel, actions in FOREVER_ROWS.items():
+            text = read(rel)
+            for action in actions:
+                self.assertFalse(guarded(text, action), '%s: "%s" row is hidden from the Forever build' % (rel, action))
+        for rel, rows in FOREVER_TRIGGER_ROWS.items():
+            text = read(rel)
+            for _, action in rows:
+                self.assertFalse(guarded(text, action), '%s: "%s" row is hidden from the Forever build' % (rel, action))
+
+    def test_forever_rows_exist(self):
+        for rel, actions in FOREVER_ROWS.items():
+            text = read(rel)
+            for action in actions:
+                self.assertIn('NextAction("%s"' % action, text, '%s: no "%s" row' % (rel, action))
+
     def test_forever_actives_have_rows(self):
-        for rel, rows in FOREVER_ROWS.items():
-            text = open(os.path.join(ROOT, rel)).read()
+        for rel, rows in FOREVER_TRIGGER_ROWS.items():
+            text = read(rel)
             for trigger, action in rows:
-                self.assertTrue(has_row(text, trigger, action),
-                    '%s: no "%s" -> "%s" row' % (rel, trigger, action))
+                self.assertTrue(has_row(text, trigger, action), '%s: no "%s" -> "%s" row' % (rel, trigger, action))
 
     def test_row_matcher_requires_the_pair(self):
         text = 'new TriggerNode("tank needs renew", NextAction::array(0, new NextAction("renew on party", 1), NULL))'
         self.assertFalse(has_row(text, 'tank needs renew', 'renew on tank'))
+
+    def test_forever_rows_have_actions(self):
+        for rel, actions in FOREVER_ACTIONS.items():
+            text = read(rel)
+            for action in actions:
+                self.assertIn('creators["%s"]' % action, text, '%s: no action creator for "%s"' % (rel, action))
+
+    def test_fire_nova_casts_the_forever_name(self):
+        text = read('ai/playerbot/strategy/shaman/ShamanActions.h')
+        self.assertIn('CastSpellAction(ai, "fire nova")', text)
 
 
 if __name__ == '__main__':
