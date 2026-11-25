@@ -1,0 +1,61 @@
+# Raid consumables (issue #22 round 1): one row = one item a bot's role keeps up, per category.
+#
+# role     tank | melee | ranged | caster | healer        (the brain's BotConsumableRole, UseConsumableAction.h:18-25)
+# category flask | battle | guardian | food | weapon | scroll   (the core's exclusivity groups: a flask fills both elixir slots)
+# item_id  the item the bot carries (mode 1) or the row the cast stands for (mode 2)
+# spell_id the item's on-use spell: what a triggered mode-2 cast of the row casts (weapon rows: on the main-hand item)
+# aura_id  the aura that spell leaves on the bot (what "held" means); 0 for a weapon row, whose effect is a temporary enchant
+# min_level the item's own required level
+# weapon   a weapon row's main-hand weapon family: edged | blunt | any (a stone goes on a blade, a weightstone on a blunt
+#          weapon, an oil on any weapon); empty on the other categories
+# note     the item's name at the pin (forever-test1, 2026-11-24), and the classic name where the data renamed it
+#
+# Every id below was read from the pin's stores: the item ids from world.armory_item, the spell and aura ids from the live
+# server's own spell records (`.tb spell`), and the auras are the buffs those spells apply (the food rows are the modern
+# "Nutritious Food" spells, which leave a 15-minute "Well Fed" on the bot: 1248421/1248422/1249520). The host keeps a row
+# only when the item exists, the item lists that spell, and the spell leaves that aura (a weapon row: its temporary enchant
+# effect); a row that fails is logged and dropped, never guessed at.
+#
+# The loadout a role promises is a flask or a battle and a guardian elixir, a food buff and a weapon stone or oil. Every
+# role resolves each of those with a row or declares it not covered below: a role with a flask row does not need both elixir
+# rows (a flask fills both slots); the melee and hunter flasks are the tank flask (Flask of the Titans) and their guardian
+# elixir the armor elixir, both of which those specs use in raids.
+#
+# Row order is the mode-1 priority inside one role and category: the first row whose item is in the bags wins (the melee
+# battle slot lists the Elixir of the Mongoose before the Elixir of Giants, since more melee specs want agility).
+role,category,item_id,spell_id,aura_id,min_level,weapon,note
+tank,flask,13510,17626,17626,50,,Flask of the Titans
+melee,flask,13510,17626,17626,50,,Flask of the Titans (the tank flask is melee and hunter prep too)
+ranged,flask,13510,17626,17626,50,,Flask of the Titans (the tank flask is melee and hunter prep too)
+caster,flask,13512,17628,17628,50,,Flask of Supreme Power
+healer,flask,13511,17627,17627,50,,Flask of Distilled Wisdom
+melee,battle,13452,17538,17538,46,,Elixir of the Mongoose
+ranged,battle,13452,17538,17538,46,,Elixir of the Mongoose
+melee,battle,9206,11405,11405,48,,Elixir of Giants (the pin names item 9206 Elixir of Greater Strength)
+caster,battle,13454,17539,17539,47,,Greater Arcane Elixir
+tank,guardian,13445,11348,11348,43,,Elixir of Superior Defense (the pin names it Elixir of Greater Defense)
+melee,guardian,13445,11348,11348,43,,Elixir of Superior Defense (the pin names it Elixir of Greater Defense)
+ranged,guardian,13445,11348,11348,43,,Elixir of Superior Defense (the pin names it Elixir of Greater Defense)
+healer,guardian,20007,24363,24363,40,,Mageblood Potion (the pin names it Mageblood Elixir)
+melee,food,20452,1248401,1248422,45,,Smoked Desert Dumplings (strength; Well Fed 1248422)
+ranged,food,18254,1248396,1248421,35,,Runn Tum Tuber Surprise (agility at the pin; Well Fed 1248421)
+caster,food,13931,1249513,1249520,35,,Nightfin Soup (spell power; Well Fed 1249520)
+melee,weapon,18262,22756,0,50,edged,Elemental Sharpening Stone (edged weapon)
+melee,weapon,12404,16138,0,35,edged,Dense Sharpening Stone (edged weapon)
+caster,weapon,20749,25122,0,45,any,Brilliant Wizard Oil
+healer,weapon,20748,25123,0,45,any,Brilliant Mana Oil
+#
+# Not covered: the slots a role promises (a food buff and a weapon stone or oil, on top of a flask or the two elixirs) that
+# the table has no item for, and the elixir leg a role cannot get because the table only fills the other one. The read-out
+# prints them per bot (`consnotcovered=` in `.tb state`), so a role is never called ready for a slot the table cannot fill.
+# The generator refuses a role with neither a row nor a line here, a line that contradicts a row, and a role whose elixir
+# slot is neither a flask row nor both elixir rows nor declared. Replace a line with rows once the pin's data has an item
+# for the slot.
+role,category,reason
+tank,battle,the table's battle elixirs are the damage ones; a tank's elixir slot is its flask and the armor elixir
+caster,guardian,the table's guardian elixirs are the armor and the healer mana ones; a caster's elixir slot is its flask and the spell power elixir
+tank,food,the table's food buffs are strength/agility/spell power; none is a tank buff
+tank,weapon,a tank may wield a blunt weapon; the table's stones are for edged weapons
+ranged,weapon,a bow or gun takes no temporary weapon enchantment
+healer,battle,the table's battle elixirs are the damage ones; a healer's elixir slot is its flask and the mana elixir
+healer,food,the table's food buffs are strength/agility/spell power; none is a healing buff

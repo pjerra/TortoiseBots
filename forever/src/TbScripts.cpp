@@ -98,6 +98,7 @@
 #include "host/TbAutoTools.h"
 #include "host/TbAutoHunterPet.h"
 #include "host/TbAutoFood.h"
+#include "host/TbRaidConsumables.h"
 #include "host/TbMountShop.h"
 #include "host/TbH3.h"
 #include "host/TbH4.h"
@@ -262,6 +263,7 @@ public:
             TortoiseBots::cmd::LoadBindings();     // P2: the key or the graces changed, or persistence was just turned on
         TortoiseBots::cmd::LoadFeeds();            // P4: the map layers' keys and ranges (the boss roster is built by the world start, below)
         TortoiseBots::player::LoadConfig();        // R1: the `.bot` keys (TortoiseBots.Player.Commands, MaxBots)
+        TortoiseBots::raidcons::LoadConfig();      // #22: the raid-consumable keys (off by default)
     }
 
     // `reload all` is the operator's "read the database again". The plan tables are the module's own (ai_dungeon_plan and
@@ -343,6 +345,9 @@ public:
         tbcompat::InitSpellTable();
         // The spell-school tables (#48): the names resolve in the spell mirror, which is ready just above.
         TortoiseBots::school::BuildIndex();
+        // #22: the raid-consumable table, every row checked against the item and spell mirrors now that they answer.
+        TortoiseBots::raidcons::LoadConfig();
+        TortoiseBots::raidcons::BuildIndex();
         // The class quests' spells, once, from the loaded quest store; a quest reload rebuilds it.
         tbhost::autotrain::LoadConfig();
         tbhost::autotrain::BuildIndex();

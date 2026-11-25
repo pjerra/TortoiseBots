@@ -811,3 +811,37 @@ TortoiseBots.AutoFood = 1
 #                     (combat, death, instances) plus the master and cooldown checks of the player command spec (D-8).
 #        Default:     300
 #
+
+#
+#    TortoiseBots.RaidConsumables
+#        Description: Raid consumables for bots (issue #22): 0 off (default), 1 items, 2 free. With 1 a bot keeps up a flask
+#                     (or a battle and a guardian elixir), a food buff and a weapon stone or oil for its role, using only
+#                     items already in its bags: nothing is bought, mailed or created. With 2 the same buffs are a triggered
+#                     cast of the table's spell on the bot (no item), for owners who only want the result. Raid maps only
+#                     (see .Dungeons), never a battleground, out of combat, at or above the row's level. A held flask covers
+#                     both elixir slots, a held elixir keeps the flask away, and the core's spell groups decide the
+#                     stacking, so only a category that is actually missing is applied. A weapon stone or oil goes only on
+#                     the weapon family its row names (sharpen stones on bladed weapons, oils on any), and a temporary
+#                     enchantment counts as the slot being kept only when it is one of the table's own (a rogue poison or a
+#                     shaman imbue does not). Roles: tank, melee, ranged, caster, healer; the table is
+#                     forever/data/raid/consumables.csv (forever/tools/gen_data_tables.py writes the header). A value
+#                     outside 0, 1 and 2 is a config error: it is logged at load and the feature stays off. A slot a role
+#                     has no item for is declared uncovered in the table (an elixir leg, a food buff, a weapon stone or
+#                     oil), and `.tb state` prints it as consnotcovered= instead of calling the role ready. The brain wiring
+#                     is round 2: this round ships the table, the rules and the `.tb state` keys.
+#        Default:     0
+#
+#    TortoiseBots.RaidConsumables.Dungeons
+#        Description: Also in 5-man instances (never a battleground).
+#        Default:     0
+#
+#    TortoiseBots.RaidConsumables.FreeForOwned
+#        Description: Free mode also applies to a player's own bots (an owned alt, a hire). Off (default) means their free
+#                     mode falls back to items, so a server that leaves free mode on globally still makes the owner's bags
+#                     pay; pool bots and server-run free bots always follow the mode as set.
+#        Default:     0
+#
+
+TortoiseBots.RaidConsumables = 0
+TortoiseBots.RaidConsumables.Dungeons = 0
+TortoiseBots.RaidConsumables.FreeForOwned = 0

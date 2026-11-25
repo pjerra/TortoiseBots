@@ -2,6 +2,7 @@
 // (`.tb party <leader> <member>...`). The line grammar is in forever/docs/TB-COMMANDS.md; every reply goes to the sender of the command
 // through the core's ChatHandler (TbH3.h, Say).
 #include "host/TbH3.h"
+#include "host/TbRaidConsumables.h"   // #22: cons= / consmiss= (the raid consumables a bot holds and lacks)
 #include "host/TbPet.h"
 #include "host/TbHostTaxi.h"
 #include "host/TbHostTown.h"
@@ -344,6 +345,22 @@ Rec StateRec(Player* bot, Readiness& ready)
     h10::AppendHybridState(rec, bot);                         // H10 (slice 10): form, totems, imbue, seal, paura (appended: the older keys are unchanged)
     p11::AppendPetState(rec, bot);                            // P11 (slice 11): pet=, petreact=, petauto=, loyal=, ammo=, shards= (a hunter or a warlock)
     kb::AppendThrownState(rec, bot);                          // S3: thrown=, falldmg=, runrate= (appended: the older keys are unchanged)
+    // #22: the raid consumables this bot holds, `<category>:<aura id|0>;...` (0 for the weapon row, held by the main hand's
+    // temporary enchantment), the categories still due for its role, level and the map it is on (`consmiss=`, a `;` list;
+    // empty while the feature is off, the map refuses, the bot is dead or in combat), and the slots the table declares
+    // uncovered for its role (`consnotcovered=`, so an incomplete role is never read as ready). Read only.
+    {
+        std::vector<std::vector<std::string>> cons;
+        std::uint32_t aura = 0;
+        for (std::uint8_t id = 0; id < static_cast<std::uint8_t>(ai::raidcons::Category::Count); ++id)
+        {
+            ai::raidcons::Category const category = static_cast<ai::raidcons::Category>(id);
+            if (TortoiseBots::raidcons::Held(bot, category, aura))
+                cons.push_back({ ai::raidcons::CategoryWord(category), std::to_string(aura) });
+        }
+        rec.LP("cons", cons).L("consmiss", TortoiseBots::raidcons::MissingCategories(bot))
+            .L("consnotcovered", TortoiseBots::raidcons::NotCoveredCategories(bot));
+    }
     // S9 (C9): the free slots of the bot's bags and its money (copper): a run starts with at least 12 free slots, and the loot code leaves an item that would need
     // a new slot when two or fewer are free.
     rec.N("bagfree", bot->GetFreeInventorySlotCount()).N("money", bot->GetMoney());

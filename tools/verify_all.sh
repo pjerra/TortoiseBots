@@ -54,7 +54,7 @@ echo "=== 4b. Running the ForeverLua test toolkit checks ==="
 # forever/lua/check.sh: luac -p, luacheck when installed, and the mock test (lua5.4, no server).
 if command -v lua5.4 >/dev/null 2>&1 || command -v lua >/dev/null 2>&1; then
     bash forever/lua/check.sh
-    echo "✓ ForeverLua test toolkit verified (syntax, lint when available, mock test)."
+    echo "✓ ForeverLua test toolkit verified (syntax, lint and mock test where the Lua 5.4 tools are installed)."
 else
     echo "ℹ Skipping the ForeverLua test toolkit checks (no lua5.4/lua on PATH)."
 fi
