@@ -137,14 +137,14 @@ void BuildIndex()
     }
 
     auto index = std::make_shared<Index>();
+    size_t impliedEntries = 0;
     for (auto const& [questId, questPtr] : sObjectMgr->GetQuestTemplates())
     {
         Quest const* quest = questPtr.get();
-        if (!quest)
+        if (!quest || quest->IsRepeatable())
             continue;
-        // Open to all classes or repeatable: not a class quest.
-        if (!quest->GetAllowableClasses() || quest->IsRepeatable())
-            continue;
+        // A quest with no class mask still counts when the spell it teaches is on the class's list: the spell implies the class
+        // (a world's class-spell quests may carry no AllowableClasses).
         QuestRaw const raw = RawOf(questId, quest);
         for (uint8_t classId : kClasses)
         {
@@ -154,6 +154,8 @@ void BuildIndex()
                 if (!row)
                     continue;
                 index->rows[RowKey(classId, spellId)].push_back(Entry{ quest, ResolveMinLevel(*row, raw.classicMinLevel) });
+                if (!raw.classMask)
+                    ++impliedEntries;
             }
         }
     }
@@ -182,7 +184,8 @@ void BuildIndex()
         for (Entry const& entry : found->second)
             quests.insert(entry.quest->GetQuestId());
     }
-    TC_LOG_INFO("tortoisebots", "class quest spells: {} of {} rows active, {} quests", active, kAllowedCount, quests.size());
+    TC_LOG_INFO("tortoisebots", "class quest spells: {} of {} rows active, {} quests ({} entries from quests with no class mask)",
+        active, kAllowedCount, quests.size(), impliedEntries);
 
     std::lock_guard<std::mutex> lock(g_indexMutex);
     g_index = index;

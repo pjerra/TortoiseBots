@@ -20,8 +20,11 @@ TortoiseBots.Spike.FollowDistance = 3
 #    TortoiseBots.ClassQuestSpells
 #        Description: Bots learn the class spells a real player gets from its class quests (Summon Imp, the warrior stances,
 #                     the hunter pet kit, the priest racials, the druid forms and the shaman totems) when they log in and when
-#                     they gain a level. Only spells from the module's reviewed list are taught, and only through a class
-#                     quest the running world has. 0 = no index at startup and no bot is touched.
+#                     they gain a level. Only spells from the module's reviewed list are taught, and only through a quest of
+#                     the running world that teaches that spell; a quest with no AllowableClasses counts when the spell it
+#                     teaches is on the list (the spell implies the class). The class-line autotrain already teaches nearly
+#                     all of these, so what is usually left is a family-0 row such as the paladin's Sense Undead.
+#                     0 = no index at startup and no bot is touched.
 #        Default:     0 (test servers turn it on)
 #
 
