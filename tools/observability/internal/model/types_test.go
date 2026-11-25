@@ -27,6 +27,32 @@ func TestServerInfoPayloadAcceptsMixedBotsValues(t *testing.T) {
 	}
 }
 
+// The pool census is an object of small arrays; the daemon passes
+// it through untouched so the Server panel can draw pool vs census.
+func TestServerInfoPayloadKeepsPoolCensus(t *testing.T) {
+	raw := `{"v":12,"session":1,"seq":2,"ts":3,"type":"SERVER_INFO",
+		"pool_census":{"total":2,"census_composition":1,"census_spec":1,
+		"classes":[{"id":3,"count":1,"census_pm":150}],
+		"races":[{"id":95,"faction":0,"count":1,"census_pm":52}],
+		"genders":[{"id":0,"count":1,"census_pm":647},{"id":1,"count":1,"census_pm":353}],
+		"specs":[{"class":3,"tab":0,"count":1,"census_pm":610}]}}`
+
+	var info ServerInfoPayload
+	if err := json.Unmarshal([]byte(raw), &info); err != nil {
+		t.Fatalf("pool_census must unmarshal: %v", err)
+	}
+	if info.PoolCensus["total"] != float64(2) || info.PoolCensus["census_spec"] != float64(1) {
+		t.Fatalf("pool census scalars lost: %+v", info.PoolCensus)
+	}
+	classes, ok := info.PoolCensus["classes"].([]any)
+	if !ok || len(classes) != 1 {
+		t.Fatalf("class array lost: %+v", info.PoolCensus["classes"])
+	}
+	if row := classes[0].(map[string]any); row["id"] != float64(3) || row["census_pm"] != float64(150) {
+		t.Fatalf("class row lost: %+v", row)
+	}
+}
+
 // Issue #872: pre-v11 modules send no kind; the daemon backfills it from the
 // player/alt flags so old and new servers render the same.
 func TestKindFromFlags(t *testing.T) {

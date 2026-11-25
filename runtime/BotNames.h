@@ -32,6 +32,10 @@ inline char const* BotNameRaceKey(uint8_t race)
 {
     static char const* const keys[] = { "", "human", "orc", "dwarf", "nightelf", "undead",
         "tauren", "gnome", "troll", "goblin", "highelf" };
+    // The two Forever Skyborne are of high-elven descent (core comment on their player_racestats rows), so they share that
+    // pool instead of falling back to the generic names.
+    if (race == 95 || race == 96)
+        return "highelf";
     return race < sizeof(keys) / sizeof(keys[0]) ? keys[race] : "";
 }
 

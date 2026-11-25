@@ -138,18 +138,32 @@
   const GEAR_RIGHT = [9, 5, 6, 7, 10, 11, 12, 13];
   const GEAR_WEAPONS = [15, 16, 17];
 
-  // Race/class IDs from core SharedDefines.h (RACE_* 1-10, CLASS_* 1-11).
+  // Race/class IDs from core SharedDefines.h (RACE_* 1-10, CLASS_* 1-11), plus Forever's two Skyborne (95/96).
   const RACE_NAMES = {
     1: 'Human', 2: 'Orc', 3: 'Dwarf', 4: 'Night Elf', 5: 'Undead',
-    6: 'Tauren', 7: 'Gnome', 8: 'Troll', 9: 'Goblin', 10: 'High Elf'
+    6: 'Tauren', 7: 'Gnome', 8: 'Troll', 9: 'Goblin', 10: 'High Elf',
+    95: 'High Order Skyborne', 96: 'Windshaper Skyborne'
   };
 
-  // Orc, Undead, Tauren, Troll, Goblin; every other race is Alliance.
-  const HORDE_RACES = [2, 5, 6, 8, 9];
+  // Orc, Undead, Tauren, Troll, Goblin, Windshaper Skyborne; every other race is Alliance.
+  const HORDE_RACES = [2, 5, 6, 8, 9, 96];
 
   const CLASS_NAMES = {
     1: 'Warrior', 2: 'Paladin', 3: 'Hunter', 4: 'Rogue', 5: 'Priest',
     7: 'Shaman', 8: 'Mage', 9: 'Warlock', 11: 'Druid'
+  };
+
+  // A class's three spec tabs, in the core's tab order (the order the module rolls).
+  const SPEC_NAMES = {
+    1: ['Arms', 'Fury', 'Protection'],
+    2: ['Holy', 'Protection', 'Retribution'],
+    3: ['Beast Mastery', 'Marksmanship', 'Survival'],
+    4: ['Assassination', 'Combat', 'Subtlety'],
+    5: ['Discipline', 'Holy', 'Shadow'],
+    7: ['Elemental', 'Enhancement', 'Restoration'],
+    8: ['Arcane', 'Fire', 'Frost'],
+    9: ['Affliction', 'Demonology', 'Destruction'],
+    11: ['Balance', 'Feral', 'Restoration']
   };
 
   // Quality names follow core SharedDefines.h ItemQualities (0-6).
@@ -2373,6 +2387,7 @@
           ${rateRows.length ? settingsSection('RATES · CORE WORLD', rateRows) : ''}
           ${botRows.length ? settingsSection('BOTS · SLICE', botRows) : ''}
           ${diagRows.length ? settingsSection('DIAGNOSTICS · CORE', diagRows) : ''}
+          ${poolCensusSection(info.pool_census, num)}
         </div>`;
       return;
     }
@@ -2431,6 +2446,7 @@
           ['Activity priorities off', flagBadge(bots.disable_activity), cfg('DisableActivityPriorities')]
         ])}
         ${poolSection(info.pool, num, cfg)}
+        ${poolCensusSection(info.pool_census, num)}
         ${settingsSection('DIAGNOSTICS · LOGS', [
           ['PerfMon', flagBadge(diag.perf_mon), cfg('PerfMonEnabled')],
           ['bot_events log', flagBadge(diag.bot_events), 'forwarded activity stream (bot_events.csv)'],
@@ -2466,6 +2482,48 @@
       ['Character database', esc(mb), ''],
       ['Pool per band', bands || '–', '']
     ]);
+  }
+
+  // Pool composition against the live census: the module sends class, race, gender and rolled spec counts plus
+  // the per-mille census shares the pool picker uses, so this only draws them (no extra request, no character-table query).
+  function poolCensusSection(census, num) {
+    if (!census || !Number(census.total)) return '';
+    const total = Number(census.total);
+    const fmtPm = pm => `${(Number(pm || 0) / 10).toFixed(1)}%`;
+    const pct = (count, whole) => whole > 0 ? `${(100 * Number(count || 0) / whole).toFixed(1)}%` : '0.0%';
+    const line = (count, whole, censusPm) =>
+      `<strong>${num(count)}</strong> · ${pct(count, whole)} <span class="setting-dim">/ census ${fmtPm(censusPm)}</span>`;
+    const classRows = (Array.isArray(census.classes) ? census.classes : []).map(c => [
+      classNameById(c.id), line(c.count, total, c.census_pm),
+      'Pool share of every pool character against the live class share.'
+    ]);
+    const raceRows = (Array.isArray(census.races) ? census.races : []).map(r => [
+      raceNameById(r.id), line(r.count, total, r.census_pm),
+      'Pool share against the live race share; the pool is half Alliance, half Horde, so a race\'s census share is halved.'
+    ]);
+    const genderRows = (Array.isArray(census.genders) ? census.genders : []).map(g => [
+      g.id ? 'Female' : 'Male', line(g.count, total, g.census_pm),
+      'Pool share against the live gender share (the class female shares weighted by the live class mix).'
+    ]);
+    const classCount = new Map((Array.isArray(census.classes) ? census.classes : []).map(c => [c.id, Number(c.count || 0)]));
+    const specRows = (Array.isArray(census.specs) ? census.specs : []).map(s => {
+      const names = SPEC_NAMES[s.class] || [];
+      const whole = classCount.get(s.class) || 0;
+      return [`${classNameById(s.class)} · ${esc(names[s.tab] || `tab ${s.tab}`)}`, line(s.count, whole, s.census_pm),
+        'The spec tree the pool rolled for the bot (a forced .tb spec is not reflected) against the live share of that spec among the class\'s level 60 characters.'];
+    });
+    const lv = census.levels || {};
+    const poolLevels = Number(lv.known)
+      ? `pool median ${num(lv.median)} · max ${num(lv.max)} · ${num(lv.sixty)} at 60`
+      : 'pool levels unknown';
+    const flags = [
+      ['Composition', `${flagBadge(census.census_composition)} ${census.census_composition ? 'census shares' : 'balanced vanilla'}`, 'TortoiseBots.Pool.CensusComposition'],
+      ['Spec roll', `${flagBadge(census.census_spec)} ${census.census_spec ? 'census shares' : 'balanced roll'}`, 'TortoiseBots.Pool.CensusSpec'],
+      ['Levels (reference)', `${poolLevels} <span class="setting-dim">— census median 24 · peak 10 · 2.9% at 60; the pool starts at 1 and levels by playing</span>`, 'forever/data/aotc/census-levels.csv']
+    ];
+    return settingsSection('POOL · CENSUS CLASS', classRows)
+      + settingsSection('POOL · CENSUS RACE', raceRows)
+      + settingsSection('POOL · CENSUS GENDER & SPEC', flags.concat(genderRows, specRows));
   }
 
   // Pool gear summary for the diagnostic report: average equipped item level

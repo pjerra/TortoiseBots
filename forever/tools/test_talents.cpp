@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <set>
 #include <string>
@@ -56,6 +57,28 @@ int main()
         for (uint32_t g = 1; g <= 200; ++g)
             seen.insert(PickSpecTabForBot(cls, g, -1, 0, 0, 0));
         check(seen.size() == 3, "fresh pick covers all 3 tabs across 200 guids");
+    }
+
+    // 4b. The pool's census spec roll (TortoiseBots.Pool.CensusSpec): 1000 guids per class land within 3
+    // percentage points of the live spec share (spec-population.csv, per mille in kCensusSpecWeights).
+    for (uint8_t cls : classes)
+    {
+        int counts[3] = {};
+        for (uint32_t g = 1; g <= 1000; ++g)
+        {
+            int const tab = PickSpecTabForBot(cls, g, -1, 0, 0, 0, true);
+            if (tab >= 0 && tab <= 2)
+                ++counts[tab];
+        }
+        for (int tab = 0; tab < 3; ++tab)
+        {
+            double const expected = CensusSpecSharePm(cls, tab) / 10.0;
+            double const got = counts[tab] / 10.0;
+            check(counts[tab] > 0, "census spec roll reaches every tab");
+            if (std::fabs(got - expected) > 3.0)
+                std::printf("FAIL: class %u tab %d: pool %.1f%% census %.1f%%\n", unsigned(cls), tab, got, expected);
+            check(std::fabs(got - expected) <= 3.0, "census spec roll within 3 points of the file");
+        }
     }
 
     // 5. PlanNextSteps for Warrior Arms (class 1, tab 0) produces single-point steps in build order.

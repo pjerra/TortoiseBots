@@ -86,6 +86,59 @@ int main()
 
     CHECK(w::GenderAt(0) == 0 && w::GenderAt(1) == 1 && w::GenderAt(2) == 0 && w::GenderAt(3) == 1);
 
+    // A race the core refuses is retired for the rest of the job: the roll moves to the faction's next race, and when every
+    // race of the turn (or of the class) is retired the composition is empty, so the host skips it and never makes it.
+    {
+        std::uint16_t all = 0;
+        for (std::uint8_t race : { w::RaceHuman, w::RaceDwarf, w::RaceNightElf, w::RaceGnome, w::RaceSkyborneAlliance,
+                 w::RaceOrc, w::RaceUndead, w::RaceTauren, w::RaceTroll, w::RaceSkyborneHorde })
+        {
+            CHECK(w::CompositionRaceBit(race) != 0);
+            CHECK((all & w::CompositionRaceBit(race)) == 0);    // one bit per race
+            all = std::uint16_t(all | w::CompositionRaceBit(race));
+        }
+        CHECK(all == w::kCompositionAllRaces);
+        CHECK(w::CompositionRaceBit(0) == 0 && w::CompositionRaceBit(9) == 0 && w::CompositionRaceBit(97) == 0);
+    }
+
+    // Balanced: serial 0's race is Human; retiring it moves to the next of the faction's rotation, all four leaves none.
+    CHECK(w::CompositionAt(0, 0).race == w::RaceHuman);
+    {
+        std::uint16_t const human = w::CompositionRaceBit(w::RaceHuman);
+        w::PoolComposition afterHuman = w::CompositionAt(0, 0, human);
+        CHECK(afterHuman.race == w::RaceDwarf);
+        CHECK(w::IsVanillaPair(afterHuman.race, afterHuman.klass));
+        CHECK(w::CompositionAt(0, 0, std::uint16_t(human | w::CompositionRaceBit(w::RaceDwarf))).race == w::RaceNightElf);
+        w::PoolComposition none = w::CompositionAt(0, 0, std::uint16_t(human | w::CompositionRaceBit(w::RaceDwarf)
+            | w::CompositionRaceBit(w::RaceNightElf) | w::CompositionRaceBit(w::RaceGnome)));
+        CHECK(none.race == 0 && none.klass == 0);
+        // The horde rotation retires on its own: Orc moves to Undead, and all four retired leaves no composition.
+        CHECK(w::CompositionAt(1, 0, w::CompositionRaceBit(w::RaceOrc)).race == w::RaceUndead);
+        CHECK(w::CompositionAt(1, 0, w::kCompositionAllRaces).race == 0);
+    }
+
+    // Census: an alliance paladin is Human or Dwarf literally (no other race can be one), so retiring Human leaves Dwarf for
+    // every race roll and retiring both leaves no race. A refused Skyborne never comes out for any class roll.
+    {
+        w::CensusPoolComposition pick = w::CensusCompositionAt(0, 200, 0, 0);
+        CHECK(pick.klass == w::ClassPaladin && pick.race == w::RaceHuman);
+        std::uint16_t const human = w::CompositionRaceBit(w::RaceHuman);
+        for (std::uint32_t raceRoll = 0; raceRoll < 1000; ++raceRoll)
+        {
+            w::CensusPoolComposition dwarf = w::CensusCompositionAt(0, 200, raceRoll, 0, human);
+            CHECK(dwarf.klass == w::ClassPaladin && dwarf.race == w::RaceDwarf);
+        }
+        w::CensusPoolComposition empty = w::CensusCompositionAt(0, 200, 0, 0, std::uint16_t(human | w::CompositionRaceBit(w::RaceDwarf)));
+        CHECK(empty.klass == w::ClassPaladin && empty.race == 0);
+        std::uint16_t const noSkyborne = std::uint16_t(w::CompositionRaceBit(w::RaceSkyborneAlliance) | w::CompositionRaceBit(w::RaceSkyborneHorde));
+        for (std::uint32_t roll = 0; roll < 1000; ++roll)
+        {
+            w::CensusPoolComposition side = w::CensusCompositionAt(roll % 2, roll, roll * 7u, 0, noSkyborne);
+            CHECK(side.race != w::RaceSkyborneAlliance && side.race != w::RaceSkyborneHorde);
+            CHECK(w::IsCensusPair(side.race, side.klass));
+        }
+    }
+
     if (g_fail)
     {
         std::printf("RESULT: FAIL (%d of %d checks)\n", g_fail, g_checks);

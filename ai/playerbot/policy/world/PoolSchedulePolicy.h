@@ -84,12 +84,12 @@ inline PoolFaction OtherFaction(PoolFaction faction)
     return faction == PoolFaction::Alliance ? PoolFaction::Horde : PoolFaction::Alliance;
 }
 
-// Races 1, 3, 4 and 7 are the Alliance's on 1.12; the pool never creates another race (PoolCompositionPolicy).
+// Races 1, 3, 4, 7 and 95 are the Alliance's; 96 and every other pool race are the Horde's.
 inline PoolFaction PoolFactionOfRace(std::uint8_t race)
 {
     switch (race)
     {
-        case 1: case 3: case 4: case 7: return PoolFaction::Alliance;
+        case 1: case 3: case 4: case 7: case 95: return PoolFaction::Alliance;
         default: return PoolFaction::Horde;
     }
 }

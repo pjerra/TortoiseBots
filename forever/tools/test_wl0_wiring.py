@@ -1,6 +1,7 @@
 """Wiring pins for the world slice W0 (the pool: registry, creation and the fix round).
 …
 """
+import csv
 import pathlib
 import re
 import shutil
@@ -79,6 +80,10 @@ class Creation(unittest.TestCase):
         body = func(CREATE, "Step MakeOne(")
         self.assertIn("world::CompositionAt(", body)
         self.assertIn("world::GenderAt(", body)
+        self.assertIn("world::CensusCompositionAt(", body)
+        self.assertIn("if (CensusComposition())", body)
+        self.assertIn('GetBoolDefault("TortoiseBots.Pool.CensusComposition", true)', REG)
+        self.assertIn("TortoiseBots.Pool.CensusComposition = 1", CONF)
         self.assertIn("PickBotCharacterName(composition.race, composition.klass, gender)", body)
         # And the policy is the one the spec pins: the vanilla pairs, the races the test refuses.
         self.assertIn("RaceHuman = 1", POLICY)
@@ -88,6 +93,29 @@ class Creation(unittest.TestCase):
                         "IsVanillaPair(w::RaceTauren, w::ClassRogue)"):
             self.assertIn(refused, POLICY_TEST)
         self.assertIn("perRace[race] >= 12 && perRace[race] <= 13", POLICY_TEST)
+
+    def test_a_refused_composition_is_skipped_not_fatal(self):
+        # A race the realm's client data cannot create must not abort `.tb pool create`: the claim is dropped, the race is
+        # retired for the rest of the job, the pair is logged once, and the next tick rolls another composition.
+        body = func(CREATE, "Step MakeOne(")
+        self.assertIn("world::CensusCompositionAt(s.serial, urand(0, 0xffff), urand(0, 0xffff), urand(0, 999), s.retiredRaces)", body)
+        self.assertIn("world::CompositionAt(s.serial, urand(0, 0xffff), s.retiredRaces)", body)
+        self.assertIn("if (!composition.race)", body)
+        self.assertIn("s.retiredRaces |= world::CompositionRaceBit(composition.race);", body)
+        self.assertIn("s.loggedRefusals.insert(key).second", body)
+        self.assertIn("s.loggedNoRace.insert(key).second", body)
+        self.assertIn("kCompositionRefusalTries", body)
+        use = body.index("BotMgr::Instance().CreateCharacter(")
+        self.assertLess(body.index("DeleteCharacterRow(name);", use), body.index("return Step::Retry;", use))
+        self.assertNotIn('s.stop = "the core refused to create " + name', body)
+        start = func(CREATE, "CreateStart StartCreate(")
+        for text in ("s.retiredRaces = 0;", "s.refusals = 0;", "s.loggedRefusals.clear();", "s.loggedNoRace.clear();"):
+            self.assertIn(text, start)
+        self.assertEqual(func(CREATE, "void CreateUpdate(").count("s.refusals = 0;"), 2)   # Made and Queued
+        for text in ("CompositionRaceBit(", "retiredRaces", "kCompositionAllRaces"):
+            self.assertIn(text, POLICY)
+        self.assertIn("CensusCompositionAt(0, 200, 0, 0)", POLICY_TEST)
+        self.assertIn("CompositionAt(0, 0, human)", POLICY_TEST)
 
     def test_accounts_come_from_the_core_and_the_password_is_never_logged_or_stored(self):
         body = func(CREATE, "ChosenAccount AccountFor(")
@@ -715,6 +743,53 @@ class ScheduleBehaviour(unittest.TestCase):
             out = subprocess.run([str(exe)], capture_output=True, text=True)
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertIn("RESULT: PASS", out.stdout)
+
+    def test_the_census_test_passes(self):
+        """1000 picks follow the aotc census class, race and gender shares (test_pool_census_policy.cpp)."""
+        gxx = shutil.which("g++")
+        if not gxx:
+            self.skipTest("no g++")
+        with tempfile.TemporaryDirectory(prefix="pool-census-") as tmp:
+            tmp_path = pathlib.Path(tmp)
+            exe = tmp_path / "test_pool_census_policy"
+            subprocess.run([gxx, "-std=c++17", "-O1", "-Wall", "-Wextra", "-I", str(ROOT),
+                            str(ROOT / "forever/tools/test_pool_census_policy.cpp"), "-o", str(exe)],
+                           check=True, capture_output=True, text=True)
+            out = subprocess.run([str(exe)], capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("RESULT: PASS", out.stdout)
+
+    def test_the_census_tables_match_the_csv(self):
+        """The per-mille tables copied into PoolCompositionPolicy.h are the values in forever/data/aotc."""
+        def table(name):
+            m = re.search(name + r"\[\] = \{(.*?)\n\};", POLICY, re.S)
+            self.assertIsNotNone(m, name)
+            return {key: int(value) for key, value in re.findall(r"\{\s*(?:Class|Race)(\w+),\s*(\d+)\s*\}", m.group(1))}
+
+        aotc = ROOT / "forever/data/aotc"
+        with open(aotc / "census-classes.csv", newline="") as f:
+            classes = list(csv.DictReader(f))
+        totals = {"alliance": sum(int(r["alliance"]) for r in classes),
+                  "horde": sum(int(r["horde"]) for r in classes)}
+        for array, faction in (("kCensusAllianceClasses", "alliance"), ("kCensusHordeClasses", "horde")):
+            pins = table(array)
+            for row in classes:
+                key = row["class"].title()
+                self.assertEqual(pins[key], round(1000 * int(row[faction]) / totals[faction]), f"{array} {key}")
+
+        race_keys = {"Human": "Human", "Night Elf": "NightElf", "Dwarf": "Dwarf", "Gnome": "Gnome",
+                     "High Order Skyborne": "SkyborneAlliance", "Undead": "Undead", "Orc": "Orc",
+                     "Tauren": "Tauren", "Troll": "Troll", "Windshaper Skyborne": "SkyborneHorde"}
+        with open(aotc / "census-races.csv", newline="") as f:
+            races = {race_keys[r["race"]]: r for r in csv.DictReader(f)}
+        for array in ("kCensusAllianceRaces", "kCensusHordeRaces"):
+            for key, value in table(array).items():
+                self.assertEqual(value, round(10 * float(races[key]["pct_of_faction"])), f"{array} {key}")
+
+        with open(aotc / "census-class-gender.csv", newline="") as f:
+            genders = {r["class"]: r for r in csv.DictReader(f)}
+        for key, value in table("kCensusFemaleShares").items():
+            self.assertEqual(value, round(10 * float(genders[key.lower()]["female_pct"])), f"female {key}")
 
 
 MUTATIONS = {

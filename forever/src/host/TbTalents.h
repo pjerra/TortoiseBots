@@ -18,6 +18,10 @@ namespace talents
 void LoadConfig();
 bool Enabled();
 
+// TortoiseBots.Pool.CensusSpec (default 1): a pool bot's spec tab is rolled with the live server's spec shares
+// (TbTalentsPure.h); 0 is the pool's own balanced roll. The dashboard's spec census uses the same answer.
+bool PoolCensusSpecEnabled();
+
 // Logs per-class build-step -> TraitNode mapping counts at world startup.
 void LogStartupSelfCheck();
 

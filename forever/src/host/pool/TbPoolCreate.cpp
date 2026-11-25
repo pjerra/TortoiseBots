@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <set>
 #include <string>
 
 #ifdef TORTOISEBOTS_SLICE1
@@ -55,6 +56,10 @@ constexpr std::uint32_t kAccountNameTries = 64;
 constexpr std::uint32_t kConfirmCheckMs = 500;
 constexpr std::uint32_t kConfirmTimeoutMs = 30000;
 
+// Compositions the core refuses in a row before the job gives up: one refusal retires its race and the next composition is
+// tried, so this only fires when the realm can create nothing the pool rolls (a broken client data set, not one bad race).
+constexpr std::uint32_t kCompositionRefusalTries = 20;
+
 enum class Step
 {
     Made,
@@ -91,6 +96,10 @@ struct State
     std::uint32_t cap = 0;                     // TortoiseBots.Pool.MaxCharacters as it was when the job started: a reload never changes a running job
     std::uint32_t jobAccountId = 0;            // the account this job is filling (a reload of the registry's cache must not make it open another)
     std::string jobAccountName;
+    std::uint16_t retiredRaces = 0;            // races the core refused to create: never rolled again in this job
+    std::uint32_t refusals = 0;                // compositions refused since the last creation: the job stops rather than spin
+    std::set<std::uint32_t> loggedRefusals;    // (race << 8) | class: one line per pair the core refused
+    std::set<std::uint32_t> loggedNoRace;      // (faction << 8) | class: one line per pair with no race left to roll
     Pending pending;
     std::string stop;
 };
@@ -344,8 +353,34 @@ Step MakeOne(State& s)
         return Step::Failed;
     }
 
-    world::PoolComposition const composition = world::CompositionAt(s.serial, urand(0, 0xffff));
-    std::uint8_t const gender = world::GenderAt(urand(0, 1));
+    world::PoolComposition composition;
+    std::uint8_t gender = 0;
+    if (CensusComposition())
+    {
+        world::CensusPoolComposition const pick = world::CensusCompositionAt(s.serial, urand(0, 0xffff), urand(0, 0xffff), urand(0, 999), s.retiredRaces);
+        composition.race = pick.race;
+        composition.klass = pick.klass;
+        gender = pick.gender;
+    }
+    else
+    {
+        composition = world::CompositionAt(s.serial, urand(0, 0xffff), s.retiredRaces);
+        gender = world::GenderAt(urand(0, 1));
+    }
+    if (!composition.race)
+    {
+        // The core refused every race this class could roll in its faction: say so once per pair, skip the composition and
+        // let the next tick roll another class. The job stops only when nothing it rolls can be created.
+        std::uint32_t const key = (std::uint32_t((s.serial % 2u) == 0u ? 0 : 1) << 8) | composition.klass;
+        if (s.loggedNoRace.insert(key).second)
+            TC_LOG_ERROR("tortoisebots", "TortoiseBots: pool create: no race left to roll for this composition (the core refused every one it allows); it is skipped");
+        if (++s.refusals >= kCompositionRefusalTries)
+        {
+            s.stop = "the core refused every composition the pool rolled";
+            return Step::Failed;
+        }
+        return Step::Retry;
+    }
     std::string const name = PickBotCharacterName(composition.race, composition.klass, gender);
     // The name is settled before any account is made: the core's own name rules, then the characters table.
     if (name.empty() || !CheckPlayerNameCompat(name))
@@ -465,10 +500,21 @@ Step MakeOne(State& s)
     std::string const error = BotMgr::Instance().CreateCharacter(chosen.id, name, composition.race, composition.klass, gender);
     if (!error.empty())
     {
-        // The core made no character: drop the pool's row only, and stop (the spec: never retry into a loop).
+        // The core made no character, and the reason is the composition (a race the realm's client data cannot create):
+        // drop the pool's row, never roll that race again in this job, and try another composition instead of stopping.
         DeleteCharacterRow(name);
-        s.stop = "the core refused to create " + name + ": " + error;
-        return Step::Failed;
+        s.retiredRaces |= world::CompositionRaceBit(composition.race);
+        std::uint32_t const key = (std::uint32_t(composition.race) << 8) | composition.klass;
+        if (s.loggedRefusals.insert(key).second)
+            TC_LOG_ERROR("tortoisebots", "TortoiseBots: pool create: the core refused to create {} (race {}, class {}): {}; that race is not rolled again in this job",
+                name, unsigned(composition.race), unsigned(composition.klass), error);
+        if (++s.refusals >= kCompositionRefusalTries)
+        {
+            s.stop = Trinity::StringFormat("the core refused {} compositions in a row (the last: race {}, class {}: {}); the job stopped",
+                s.refusals, unsigned(composition.race), unsigned(composition.klass), error);
+            return Step::Failed;
+        }
+        return Step::Retry;
     }
 
     // Queued, not created: the saves go asynchronously to the character and login databases. The row stays `creating` and
@@ -710,6 +756,10 @@ CreateStart StartCreate(std::uint32_t count)
     s.cap = cap;                      // the job keeps the cap (and the rate above) it started with
     s.jobAccountId = 0;
     s.jobAccountName.clear();
+    s.retiredRaces = 0;
+    s.refusals = 0;
+    s.loggedRefusals.clear();
+    s.loggedNoRace.clear();
     start.started = true;
     if (count != asked)
         start.message = Trinity::StringFormat("the pool holds {} of its cap of {} character(s): creating the {} that fit (of {} asked), at {} per minute", present, cap, count, asked, rate);
@@ -1038,10 +1088,12 @@ void CreateUpdate(std::uint32_t diff)
     {
         case Step::Made:
             ++s.created;
+            s.refusals = 0;
             if (--s.remaining == 0)
                 Finish(s, "the request is complete");
             break;
         case Step::Queued:
+            s.refusals = 0;
             break;       // the claim row counts toward the cap while the database is read back
         case Step::Retry:
             break;
