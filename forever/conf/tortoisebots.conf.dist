@@ -520,6 +520,19 @@ TortoiseBots.Pool.CensusComposition = 1
 
 TortoiseBots.Pool.CensusSpec = 1
 
+#    TortoiseBots.Pool.GearOnCreate
+#        Description: The one-time spawn gear kit of a fresh pool bot. On its first login (played time 0, no spawn row
+#                     yet) a pool bot of level 5 or above gets a level- and spec-fitting outfit once: white below level
+#                     20 and green from 20, with a fixed number of green/blue slots per level band, never better than
+#                     what its own level could earn (AiPlayerbot.RandomGearMaxItemLevelAboveLevel above its level).
+#                     Classic items and Forever's own items are both used; raid, PvP, reputation and unobtainable rows
+#                     are refused. A bot that spawns below level 5 keeps the core's starter outfit for good, and no
+#                     bot is seeded twice. Off = every bot keeps the core's starter outfit.
+#        Default:     1
+#
+
+TortoiseBots.Pool.GearOnCreate = 1
+
 #
 #    TortoiseBots.Pool.TargetOnline
 #        Description: The pool's online target: `.tb pool start` keeps this many pool bots of both factions in the world (0 = the

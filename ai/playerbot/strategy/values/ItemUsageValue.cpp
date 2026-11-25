@@ -18,6 +18,9 @@
 #include "../../../../runtime/policy/ah/AhSellPolicy.h"
 #include "playerbot/TbCompatW2.h"
 #include "playerbot/ChatLinkScan.h"
+#include "playerbot/TbCompatPoolGear.h"
+#include "runtime/GearEffectiveLevelPolicy.h"
+#include "runtime/PoolGearTopUpPolicy.h"
 
 using namespace ai;
 
@@ -804,6 +807,16 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
         return ItemUsage::ITEM_USAGE_NONE;
 
     if (itemProto->InventoryType == INVTYPE_NON_EQUIP)
+        return ItemUsage::ITEM_USAGE_NONE;
+
+    // Forever rows often store RequiredLevel 0 (or the 1 placeholder) up to high item levels, so the core says a
+    // level-10 pool bot can wear an item level 62 blue. Masterless pool bots only: quest-reward choice, loot roll and
+    // vendor buy all read this usage, so the same level gate covers them; a player's own bot and explicit orders do not.
+    if ((itemProto->Class == ITEM_CLASS_WEAPON || itemProto->Class == ITEM_CLASS_ARMOR) &&
+        TortoiseBots::PoolGearTopUpEligible(sPlayerbotAIConfig.autoEquipUpgradeRespectsRequiredLevel,
+            IsPoolBotCompat(bot), PoolGearTopUpIsHiredCompat(bot), PoolGearTopUpIsClaimedCompat(bot),
+            ai->HasRealPlayerMaster()) &&
+        TortoiseBots::GearEffectiveRequiredLevel(itemProto->RequiredLevel, itemProto->ItemLevel) > bot->GetLevel())
         return ItemUsage::ITEM_USAGE_NONE;
 
     // Pick the slot to compare against. Core only reports the primary slot

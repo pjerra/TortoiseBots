@@ -16,11 +16,11 @@ This page explains how bots generate gold, repair their equipment, sell surplus 
 
 ## Economic philosophy
 
-The Forever build gives bots no extra starting money and no seed gear: the pool creates plain level-1 characters with only the core's own starting items, and everything after that is earned.
+The Forever build gives bots no extra starting money: the pool creates plain level-1 characters with only the core's own starting items, a first login may roll a start level, and a bot of level 5 or above receives one spawn kit ([`TortoiseBots.Pool.GearOnCreate`](../server/configuration.md#forevercore-module-keys-tortoisebotsconf), on by default). Everything after that is earned.
 
 - **Looted and crafted goods:** items listed on the Auction House come from creature drops, quest rewards, gathering and bot crafting.
 - **Earned gold:** bots earn coin from quests, kills and vendor sales. Nothing is granted on login.
-- **Equipment:** a bot wears what it loots, crafts, buys or is given; the optional [`AiPlayerbot.PoolGearTopUpOnLevel`](../server/settings/economy.md#aiplayerbotpoolgeartopuponlevel) only fills empty or badly outdated slots at level-up. The autogear command can dress a bot on demand.
+- **Equipment:** the spawn kit is the only gear a bot is given. After it, a bot wears what it loots, crafts, buys or is given; the optional [`AiPlayerbot.PoolGearTopUpOnLevel`](../server/settings/economy.md#aiplayerbotpoolgeartopuponlevel) only fills empty or badly outdated slots at level-up. The autogear command can dress a bot on demand.
 - **Food and tools:** [`TortoiseBots.AutoFood`](../server/configuration.md#forevercore-module-keys-tortoisebotsconf) keeps free and pool bots supplied with level-fitting food and water, and [`TortoiseBots.AutoTools`](../server/configuration.md#forevercore-module-keys-tortoisebotsconf) supplies the tool of each profession they know. Ammunition, reagents and crafting materials are bought, looted or crafted like any other item.
 
 ## Vendor liquidation & repairs

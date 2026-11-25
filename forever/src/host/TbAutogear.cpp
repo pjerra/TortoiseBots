@@ -7,6 +7,7 @@
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 #include "host/gear/TbGearGen.h"
+#include "host/gear/TbGearSourceTier.h"
 #include "host/run/TbRunHooks.h"
 
 #include "Bag.h"
@@ -249,6 +250,8 @@ void RunAutogearPass(Player* target,
             if (!CandidateFitsAutogearCaps(c.quality, c.itemLevel, maxQuality, ilvlCap))
                 continue;
             if (!ai::CandidateFitsSlotPolicy(c, playerClass, canonicalSpec, level, slot, static_cast<uint8>(maxQuality), canDualWield, mainHandIsTwoHanded))
+                continue;
+            if (!gear::SourceGateAllows(c.itemId))
                 continue;
             if (std::find(alreadyPicked.begin(), alreadyPicked.end(), c.itemId) != alreadyPicked.end())
                 continue;

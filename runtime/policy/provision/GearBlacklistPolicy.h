@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <list>
 #include <string>
 
@@ -41,9 +42,10 @@ inline bool GearWhitelistApplies(std::list<uint32_t> const& blacklist, bool whit
     return !GearBlacklistBlocks(blacklist, itemId);
 }
 
-// Test, placeholder and retired item names in any letter case. "test" counts
-// only as a whole word, so "Testament of Hope" and "The Greatest Wizzard Hat"
-// pass while "Martin Thunder3 jesse test" does not.
+// Test, placeholder and retired item names in any letter case. "test" and
+// "dnt" (do-not-use developer rows) count only as whole words, so "Testament
+// of Hope" and "The Greatest Wizzard Hat" pass while "Martin Thunder3 jesse
+// test" and "276719 DNT HEAD" do not.
 inline bool GearNameLooksRetired(std::string const& name)
 {
     std::string lower(name);
@@ -55,13 +57,21 @@ inline bool GearNameLooksRetired(std::string const& name)
             return true;
 
     auto isLetter = [](char ch) { return std::isalpha(static_cast<unsigned char>(ch)) != 0; };
-    for (size_t at = lower.find("test"); at != std::string::npos; at = lower.find("test", at + 1))
+    auto containsWord = [&lower, &isLetter](char const* word)
     {
-        bool const startsWord = at == 0 || !isLetter(lower[at - 1]);
-        bool const endsWord = at + 4 >= lower.size() || !isLetter(lower[at + 4]);
-        if (startsWord && endsWord)
+        size_t const length = std::strlen(word);
+        for (size_t at = lower.find(word); at != std::string::npos; at = lower.find(word, at + 1))
+        {
+            bool const startsWord = at == 0 || !isLetter(lower[at - 1]);
+            bool const endsWord = at + length >= lower.size() || !isLetter(lower[at + length]);
+            if (startsWord && endsWord)
+                return true;
+        }
+        return false;
+    };
+    for (char const* word : { "test", "dnt" })
+        if (containsWord(word))
             return true;
-    }
     return false;
 }
 

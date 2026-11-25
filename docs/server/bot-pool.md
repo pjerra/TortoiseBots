@@ -39,6 +39,7 @@ TortoiseBots.Enable = 1
 TortoiseBots.Pool.Enable = 1
 TortoiseBots.Pool.CreatePerMinute = 30
 TortoiseBots.Pool.MaxCharacters = 50
+TortoiseBots.Pool.GearOnCreate = 1
 ```
 
 1. Set the keys.
@@ -52,6 +53,16 @@ TortoiseBots.Pool.MaxCharacters = 50
 By default (`TortoiseBots.Pool.CensusComposition = 1`) the pool rolls each new character the way the live game looks (aotc.gg, read 2026-11-24): class by its share of the faction, race within the faction among the pairs ForeverCore can create, gender by the class's female share. The faction alternates, so the pool stays half Alliance and half Horde, and both Skyborne races are part of the mix. `0` keeps the old balanced sequence: the vanilla races in turn and a random class of the race.
 
 A pool bot's spec tree follows the live spec shares of its class (`TortoiseBots.Pool.CensusSpec = 1`); `0` keeps the pool's own roll. Hired and commanded bots always get the spec their role needs.
+
+## Spawning a bot: start level and gear
+
+Characters are made at level 1. On a bot's **first login** the module spawns it once:
+
+- `AiPlayerbot.RandomBotStartLevelMin` / `.Max` (default `1` / `60`) roll its start level, before its level-bound spells, talents and professions are synced. Bots level up by playing from there.
+- With `TortoiseBots.Pool.GearOnCreate = 1` (the default), a bot of level 5 or above gets a one-time gear kit: level- and spec-fitting white, green and blue items, from the classic table and Forever's own items. The quality follows the level band (white below 20, green from 20), with a rolled number of slots one quality up (0-1 green at 5-9, 1-2 at 10-14, 2-3 at 15-19, 0-2 blue at 20-29, 3-5 at 30-49, 6-9 at 50-60) spread over the slots that really have such a piece; within a slot the kit picks among the best-fitting pieces, so two bots of one level do not look the same. Every piece passes the source check (no raid, PvP, reputation or unobtainable gear), and no piece sits above the bot's own level plus `AiPlayerbot.RandomGearMaxItemLevelAboveLevel`. The source check classifies the item, not the quest that rewards it, so a quest reward's own level is not enforced.
+- A bot that spawns at level 1-4 keeps the core's starter outfit for good, and no bot is seeded a second time. Existing bots (played time above zero) are never touched. The record that a spawn happened is a `pool-spawn` row in the characters table `tortoise_bots_player_flag`.
+
+After the spawn a bot upgrades only from what it finds, buys or is given.
 
 ## The scheduler
 

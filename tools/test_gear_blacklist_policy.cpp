@@ -63,9 +63,12 @@ static void TestRetiredNames()
     CHECK(GearNameLooksRetired("(OLD)Medium Throwing Knife"));
     CHECK(GearNameLooksRetired("ZZZZZ sword"));
     CHECK(GearNameLooksRetired("Test Fire Sword"));
+    CHECK(GearNameLooksRetired("276719 DNT HEAD"));
+    CHECK(GearNameLooksRetired("DNT"));
 
     CHECK(!GearNameLooksRetired("Testament of Hope"));
     CHECK(!GearNameLooksRetired("The Greatest Wizzard Hat"));
+    CHECK(!GearNameLooksRetired("Dntar's Blade"));
     CHECK(!GearNameLooksRetired("Agatestone Crown"));
     CHECK(!GearNameLooksRetired("Lucky Top Hat"));
     CHECK(!GearNameLooksRetired(""));

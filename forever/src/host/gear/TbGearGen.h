@@ -49,8 +49,11 @@ std::vector<GearAuditEntry> AuditGearIndex(uint32 level);
 std::vector<ai::GearItemCandidate> const& SlotCandidates(uint8 slot);
 ai::GearItemCandidate const* FindCandidate(uint32 itemId);
 GearSetOutcome SetGearForTarget(Player* target, std::string const& specArg, uint32 levelArg, int32 qualityArg);
+// One-time spawn kit for a fresh pool bot (level >= 5): the quality mix of runtime/GearSeedMixPolicy.h, the effective
+// required level, the pool item-level cap and the source gate. Replaces the core's starting outfit; refuses below 5.
+GearSetOutcome SeedGearForTarget(Player* target, uint32 levelArg);
 // Incremental pool-bot top-up: fills only the equipment slots in `slotMask` (one bit per slot, the policy is
-// runtime/PoolGearTopUpPolicy.h), with the classic gear index and the pool-bot quality and item-level caps.
+// runtime/PoolGearTopUpPolicy.h), with the gear index and the pool-bot quality and item-level caps.
 GearSetOutcome TopUpGearForTarget(Player* target, uint32 levelArg, uint32 slotMask);
 
 } // namespace gear
