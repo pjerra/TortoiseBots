@@ -162,235 +162,224 @@ client_build,class,spec,order,talent_id,rank,name,why
 70959 trait tree,hunter,survival,14,105008,5,Careful Aim,aotc 60: 76.6% (usual 5/5); trait node id
 70959 trait tree,hunter,survival,15,110870,3,Improved Stings,aotc 60: 31.3% (usual 3/3); trait node id
 70959 trait tree,hunter,survival,16,105005,2,Rapid Killing,aotc 60: 20.4% (usual 2/2); trait node id
-70959 trait tree,rogue,assassination,1,270,5,Malice,kept from the old build
-70959 trait tree,rogue,assassination,2,273,3,Ruthlessness,kept from the old build
-70959 trait tree,rogue,assassination,3,277,3,Improved Slice and Dice,kept from the old build
-70959 trait tree,rogue,assassination,4,269,2,Lethality,kept from the old build
-70959 trait tree,rogue,assassination,5,382,2,Vigor,kept from the old build
-70959 trait tree,rogue,assassination,6,682,5,Vile Poisons,kept from the old build
-70959 trait tree,rogue,assassination,7,280,1,Cold Blood,kept from the old build
-70959 trait tree,rogue,assassination,8,268,5,Improved Poisons,kept from the old build
-70959 trait tree,rogue,assassination,9,105712,1,Venom,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,rogue,assassination,10,281,5,Relentless Strikes,kept from the old build
-70959 trait tree,rogue,assassination,11,279,2,Improved Kidney Shot,kept from the old build
-70959 trait tree,rogue,assassination,12,283,3,Seal Fate,kept from the old build
-70959 trait tree,rogue,assassination,13,105709,1,Mutilate,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,rogue,assassination,14,272,2,Remorseless Attacks,re-spent
-70959 trait tree,rogue,assassination,15,203,1,Improved Gouge,re-spent
-70959 trait tree,rogue,assassination,16,201,2,Efficient Strikes,re-spent
-70959 trait tree,rogue,assassination,17,276,3,Coup de Grace,re-spent
-70959 trait tree,rogue,assassination,18,181,3,Precision,kept from the old build
-70959 trait tree,rogue,assassination,19,187,2,Deflection,re-spent
-70959 trait tree,rogue,combat,1,186,5,Lightning Reflexes,kept from the old build
-70959 trait tree,rogue,combat,2,181,3,Precision,kept from the old build
-70959 trait tree,rogue,combat,3,187,3,Deflection,re-spent
-70959 trait tree,rogue,combat,4,301,1,Riposte,re-spent
-70959 trait tree,rogue,combat,5,204,2,Endurance,re-spent
-70959 trait tree,rogue,combat,6,222,1,Improved Sprint,kept from the old build
-70959 trait tree,rogue,combat,7,1703,2,Weapon Expertise,kept from the old build
-70959 trait tree,rogue,combat,8,1122,3,Aggression,kept from the old build
-70959 trait tree,rogue,combat,9,108100,1,Flawless Execution,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,rogue,combat,10,221,2,Dual Wield Specialization,kept from the old build
-70959 trait tree,rogue,combat,11,223,1,Blade Flurry,kept from the old build
-70959 trait tree,rogue,combat,12,242,5,Hack and Slash,kept from the old build
-70959 trait tree,rogue,combat,13,105740,5,Flash of Steel,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,rogue,combat,14,205,1,Adrenaline Rush,kept from the old build
-70959 trait tree,rogue,combat,15,276,1,Coup de Grace,re-spent
-70959 trait tree,rogue,combat,16,270,5,Malice,kept from the old build
-70959 trait tree,rogue,combat,17,273,3,Ruthlessness,kept from the old build
-70959 trait tree,rogue,combat,18,277,3,Improved Slice and Dice,kept from the old build
-70959 trait tree,rogue,combat,19,269,2,Lethality,kept from the old build
-70959 trait tree,rogue,combat,20,382,2,Vigor,re-spent
-70959 trait tree,rogue,subtlety,1,261,5,Opportunity,kept from the old build
-70959 trait tree,rogue,subtlety,2,263,3,Improved Ambush,kept from the old build
-70959 trait tree,rogue,subtlety,3,265,2,Dirty Deeds,kept from the old build
-70959 trait tree,rogue,subtlety,4,381,1,Premeditation,kept from the old build
-70959 trait tree,rogue,subtlety,5,1123,3,Serrated Blades,kept from the old build
-70959 trait tree,rogue,subtlety,6,245,1,Initiative,kept from the old build
-70959 trait tree,rogue,subtlety,7,247,2,Elusiveness,kept from the old build
-70959 trait tree,rogue,subtlety,8,303,1,Ghostly Strike,re-spent
-70959 trait tree,rogue,subtlety,9,246,2,Setup,kept from the old build
-70959 trait tree,rogue,subtlety,10,284,1,Preparation,kept from the old build
-70959 trait tree,rogue,subtlety,11,681,1,Hemorrhage,kept from the old build
-70959 trait tree,rogue,subtlety,12,1701,2,Heightened Senses,re-spent
-70959 trait tree,rogue,subtlety,13,244,1,Camouflage,kept from the old build
-70959 trait tree,rogue,subtlety,14,105750,5,Boot Knife,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,rogue,subtlety,15,110866,1,Death Mark,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,rogue,subtlety,16,241,3,Master of Deception,re-spent
-70959 trait tree,rogue,subtlety,17,105757,2,Dirty Tricks,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,rogue,subtlety,18,270,5,Malice,kept from the old build
-70959 trait tree,rogue,subtlety,19,273,3,Ruthlessness,kept from the old build
-70959 trait tree,rogue,subtlety,20,277,3,Improved Slice and Dice,re-spent
-70959 trait tree,rogue,subtlety,21,269,2,Lethality,re-spent
-70959 trait tree,rogue,subtlety,22,382,2,Vigor,re-spent
-70959 trait tree,priest,discipline,1,105849,5,Twin Disciplines,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,discipline,2,352,3,Silent Resolve,kept from the old build
-70959 trait tree,priest,discipline,3,1201,5,Mental Strength,kept from the old build
-70959 trait tree,priest,discipline,4,348,1,Inner Focus,kept from the old build
-70959 trait tree,priest,discipline,5,343,3,Improved Power Word: Shield,kept from the old build
-70959 trait tree,priest,discipline,6,347,3,Meditation,kept from the old build
-70959 trait tree,priest,discipline,7,341,3,Mental Agility,re-spent
-70959 trait tree,priest,discipline,8,346,3,Improved Inner Fire,kept from the old build
-70959 trait tree,priest,discipline,9,105839,1,Soul Warding,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,discipline,10,105834,1,Penance,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,discipline,11,105835,5,Renewed Hope,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,discipline,12,105840,3,Divine Aegis,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,discipline,13,322,1,Power Infusion,kept from the old build
-70959 trait tree,priest,discipline,14,110853,3,Power in Light,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,discipline,15,406,3,Improved Renew,kept from the old build
-70959 trait tree,priest,discipline,16,410,2,Twilight Focus,kept from the old build
-70959 trait tree,priest,discipline,17,1181,5,Divine Fury,kept from the old build
-70959 trait tree,priest,discipline,18,110855,1,Holy Specialization,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,holy,1,406,3,Improved Renew,kept from the old build
-70959 trait tree,priest,holy,2,110855,2,Holy Specialization,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,holy,3,1181,5,Divine Fury,kept from the old build
-70959 trait tree,priest,holy,4,361,3,Inspiration,kept from the old build
-70959 trait tree,priest,holy,5,442,1,Holy Nova,re-spent
-70959 trait tree,priest,holy,6,1636,1,Blessed Recovery,re-spent
-70959 trait tree,priest,holy,7,1635,2,Holy Reach,kept from the old build
-70959 trait tree,priest,holy,8,408,3,Improved Healing,kept from the old build
-70959 trait tree,priest,holy,9,1561,1,Spirit of Redemption,kept from the old build
-70959 trait tree,priest,holy,10,402,5,Spiritual Guidance,kept from the old build
-70959 trait tree,priest,holy,11,105855,2,Litany of Light,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,holy,12,404,3,Spiritual Healing,kept from the old build
-70959 trait tree,priest,holy,13,105851,1,Prayer of Mending,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,holy,14,410,3,Twilight Focus,kept from the old build
-70959 trait tree,priest,holy,15,110855,3,Holy Specialization,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,holy,16,345,2,Wand Specialization,kept from the old build
-70959 trait tree,priest,holy,17,105849,3,Twin Disciplines,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,holy,18,321,2,Martyrdom,kept from the old build
-70959 trait tree,priest,holy,19,1201,3,Mental Strength,re-spent
-70959 trait tree,priest,holy,20,341,2,Mental Agility,kept from the old build
-70959 trait tree,priest,holy,21,348,1,Inner Focus,kept from the old build
-70959 trait tree,priest,shadow,1,463,5,Shadow Focus,kept from the old build
-70959 trait tree,priest,shadow,2,481,5,Improved Mind Blast,kept from the old build
-70959 trait tree,priest,shadow,3,501,1,Mind Flay,kept from the old build
-70959 trait tree,priest,shadow,4,105825,2,Improved Mind Flay,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,shadow,5,482,2,Improved Shadow Word: Pain,kept from the old build
-70959 trait tree,priest,shadow,6,484,1,Vampiric Embrace,kept from the old build
-70959 trait tree,priest,shadow,7,461,3,Shadow Weaving,kept from the old build
-70959 trait tree,priest,shadow,8,105823,3,Dark Inspiration,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,shadow,9,541,1,Silence,re-spent
-70959 trait tree,priest,shadow,10,105819,2,Devouring Contagion,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,shadow,11,462,5,Darkness,kept from the old build
-70959 trait tree,priest,shadow,12,110854,2,Early Demise,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,shadow,13,521,1,Shadowform,kept from the old build
-70959 trait tree,priest,shadow,14,881,2,Shadow Reach,kept from the old build
-70959 trait tree,priest,shadow,15,465,1,Spirit Tap,re-spent
-70959 trait tree,priest,shadow,16,105849,5,Twin Disciplines,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,priest,shadow,17,1201,5,Mental Strength,re-spent
-70959 trait tree,priest,shadow,18,341,3,Mental Agility,kept from the old build
-70959 trait tree,priest,shadow,19,348,1,Inner Focus,kept from the old build
-70959 trait tree,priest,shadow,20,347,1,Meditation,kept from the old build
-70959 trait tree,mage,arcane,1,78,2,Wand Specialization,re-spent
-70959 trait tree,mage,arcane,2,85,3,Arcane Resilience,kept from the old build
-70959 trait tree,mage,arcane,3,74,2,Arcane Subtlety,kept from the old build
-70959 trait tree,mage,arcane,4,75,5,Arcane Concentration,kept from the old build
-70959 trait tree,mage,arcane,5,105809,2,Missile Barrage,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,mage,arcane,6,81,3,Arcane Impact,kept from the old build
-70959 trait tree,mage,arcane,7,105806,1,Arcane Blast,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,mage,arcane,8,1142,3,Arcane Meditation,kept from the old build
-70959 trait tree,mage,arcane,9,113627,1,Arcane Wrath,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,mage,arcane,10,86,1,Presence of Mind,kept from the old build
-70959 trait tree,mage,arcane,11,77,5,Arcane Mind,kept from the old build
-70959 trait tree,mage,arcane,12,421,3,Arcane Instability,kept from the old build
-70959 trait tree,mage,arcane,13,87,1,Arcane Power,kept from the old build
-70959 trait tree,mage,arcane,14,80,5,Improved Channeling,kept from the old build
-70959 trait tree,mage,arcane,15,1650,2,Magic Absorption,kept from the old build
-70959 trait tree,mage,arcane,16,82,1,Arcane Geometry,re-spent
-70959 trait tree,mage,arcane,17,1649,3,Precision,kept from the old build
-70959 trait tree,mage,arcane,18,37,2,Improved Frostbolt,kept from the old build
-70959 trait tree,mage,arcane,19,73,5,Ice Shards,re-spent
-70959 trait tree,mage,arcane,20,38,1,Frostbite,re-spent
-70959 trait tree,mage,fire,1,1141,5,Incineration,kept from the old build
-70959 trait tree,mage,fire,2,34,5,Ignite,kept from the old build
-70959 trait tree,mage,fire,3,28,2,Flame Throwing,kept from the old build
-70959 trait tree,mage,fire,4,29,1,Pyroblast,kept from the old build
-70959 trait tree,mage,fire,5,27,2,Improved Fire Blast,kept from the old build
-70959 trait tree,mage,fire,6,23,2,Burning Soul,kept from the old build
-70959 trait tree,mage,fire,7,25,3,Improved Scorch,kept from the old build
-70959 trait tree,mage,fire,8,1639,3,Master of Elements,kept from the old build
-70959 trait tree,mage,fire,9,105786,1,Heating Up,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,mage,fire,10,33,3,Critical Mass,kept from the old build
-70959 trait tree,mage,fire,11,32,1,Blast Wave,kept from the old build
-70959 trait tree,mage,fire,12,35,3,Fire Power,kept from the old build
-70959 trait tree,mage,fire,13,36,1,Combustion,kept from the old build
-70959 trait tree,mage,fire,14,26,5,Accelerant,kept from the old build
-70959 trait tree,mage,fire,15,30,1,Impact,re-spent
-70959 trait tree,mage,fire,16,78,2,Wand Specialization,re-spent
-70959 trait tree,mage,fire,17,85,3,Arcane Resilience,re-spent
-70959 trait tree,mage,fire,18,75,5,Arcane Concentration,kept from the old build
-70959 trait tree,mage,fire,19,74,2,Arcane Subtlety,kept from the old build
-70959 trait tree,mage,fire,20,1650,1,Magic Absorption,kept from the old build
-70959 trait tree,mage,frost,1,37,5,Improved Frostbolt,kept from the old build
-70959 trait tree,mage,frost,2,73,5,Ice Shards,kept from the old build
-70959 trait tree,mage,frost,3,62,2,Improved Frost Nova,kept from the old build
-70959 trait tree,mage,frost,4,66,3,Frost Channeling,kept from the old build
-70959 trait tree,mage,frost,5,105767,1,Ice Lance,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,mage,frost,6,741,2,Arctic Reach,kept from the old build
-70959 trait tree,mage,frost,7,72,1,Ice Block,kept from the old build
-70959 trait tree,mage,frost,8,67,3,Shatter,kept from the old build
-70959 trait tree,mage,frost,9,64,3,Improved Cone of Cold,kept from the old build
-70959 trait tree,mage,frost,10,69,1,Cold Snap,kept from the old build
-70959 trait tree,mage,frost,11,105764,2,Fingers of Frost,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,mage,frost,12,68,5,Winter's Chill,kept from the old build
-70959 trait tree,mage,frost,13,71,1,Ice Barrier,kept from the old build
-70959 trait tree,mage,frost,14,1649,3,Precision,kept from the old build
-70959 trait tree,mage,frost,15,38,1,Frostbite,re-spent
-70959 trait tree,mage,frost,16,78,2,Wand Specialization,re-spent
-70959 trait tree,mage,frost,17,85,3,Arcane Resilience,re-spent
-70959 trait tree,mage,frost,18,75,5,Arcane Concentration,kept from the old build
-70959 trait tree,mage,frost,19,74,2,Arcane Subtlety,kept from the old build
-70959 trait tree,mage,frost,20,1650,1,Magic Absorption,kept from the old build
-70959 trait tree,shaman,elemental,1,564,5,Convection,kept from the old build
-70959 trait tree,shaman,elemental,2,563,5,Concussion,kept from the old build
-70959 trait tree,shaman,elemental,3,721,3,Elemental Alacrity,kept from the old build
-70959 trait tree,shaman,elemental,4,561,3,Call of Flame,kept from the old build
-70959 trait tree,shaman,elemental,5,575,5,Reverberation,kept from the old build
-70959 trait tree,shaman,elemental,6,574,1,Elemental Focus,kept from the old build
-70959 trait tree,shaman,elemental,7,1642,3,Eye of the Storm,re-spent
-70959 trait tree,shaman,elemental,8,562,1,Call of Thunder,kept from the old build
-70959 trait tree,shaman,elemental,9,104759,3,Lightning Overload,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,shaman,elemental,10,1641,2,Elemental Reach,kept from the old build
-70959 trait tree,shaman,elemental,11,565,5,Elemental Fury,re-spent
-70959 trait tree,shaman,elemental,12,573,1,Lightning Mastery,kept from the old build
-70959 trait tree,shaman,elemental,13,567,2,Trial by Fire,kept from the old build
-70959 trait tree,shaman,elemental,14,1640,2,Elemental Warding,kept from the old build
-70959 trait tree,shaman,elemental,15,586,5,Improved Healing Wave,kept from the old build
-70959 trait tree,shaman,elemental,16,593,5,Tidal Focus,kept from the old build
-70959 trait tree,shaman,enhancement,1,613,5,Thundering Strikes,kept from the old build
-70959 trait tree,shaman,enhancement,2,614,5,Ancestral Knowledge,kept from the old build
-70959 trait tree,shaman,enhancement,3,104755,3,Mental Dexterity,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,shaman,enhancement,4,607,3,Improved Lightning Shield,kept from the old build
-70959 trait tree,shaman,enhancement,5,611,3,Elemental Weapons,kept from the old build
-70959 trait tree,shaman,enhancement,6,104749,1,Shamanistic Focus,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,shaman,enhancement,7,601,3,Anticipation,kept from the old build
-70959 trait tree,shaman,enhancement,8,602,5,Flurry,kept from the old build
-70959 trait tree,shaman,enhancement,9,901,1,Stormstrike,kept from the old build
-70959 trait tree,shaman,enhancement,10,616,1,Spirit Weapons,re-spent
-70959 trait tree,shaman,enhancement,11,104744,2,Mental Quickness,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,shaman,enhancement,12,104742,2,Improved Stormstrike,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,shaman,enhancement,13,104741,5,Maelstrom Weapon,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,shaman,enhancement,14,104740,1,Rage of the Farseer,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,shaman,enhancement,15,563,5,Concussion,kept from the old build
-70959 trait tree,shaman,enhancement,16,1645,3,Elemental Devastation,kept from the old build
-70959 trait tree,shaman,enhancement,17,561,3,Call of Flame,re-spent
-70959 trait tree,shaman,restoration,1,586,5,Improved Healing Wave,kept from the old build
-70959 trait tree,shaman,restoration,2,593,5,Tidal Focus,kept from the old build
-70959 trait tree,shaman,restoration,3,104734,3,Mindfulness,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,shaman,restoration,4,581,3,Ancestral Healing,kept from the old build
-70959 trait tree,shaman,restoration,5,587,3,Healing Focus,kept from the old build
-70959 trait tree,shaman,restoration,6,104732,1,Water Shield,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,shaman,restoration,7,594,5,Tidal Mastery,kept from the old build
-70959 trait tree,shaman,restoration,8,588,5,Restorative Totems,kept from the old build
-70959 trait tree,shaman,restoration,9,590,1,Mana Tide Totem,kept from the old build
-70959 trait tree,shaman,restoration,10,1648,3,Healing Way,kept from the old build
-70959 trait tree,shaman,restoration,11,591,1,Nature's Swiftness,kept from the old build
-70959 trait tree,shaman,restoration,12,592,5,Purification,kept from the old build
-70959 trait tree,shaman,restoration,13,104724,1,Riptide,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,shaman,restoration,14,614,5,Ancestral Knowledge,re-spent
-70959 trait tree,shaman,restoration,15,609,2,Guardian Totems,re-spent
-70959 trait tree,shaman,restoration,16,104755,3,Mental Dexterity,re-spent; Forever talent without a Talent.db2 row (trait node id)
+70959 trait tree,rogue,assassination,1,270,5,Malice,aotc 60: 100.0%
+70959 trait tree,rogue,assassination,2,273,3,Ruthlessness,aotc 60: 98.7%
+70959 trait tree,rogue,assassination,3,277,3,Improved Slice and Dice,aotc 60: 92.8%
+70959 trait tree,rogue,assassination,4,269,2,Lethality,aotc 60: 99.3%
+70959 trait tree,rogue,assassination,5,382,2,Vigor,aotc 60: 89.7%
+70959 trait tree,rogue,assassination,6,276,3,Coup de Grace,aotc 60: 90.9%
+70959 trait tree,rogue,assassination,7,105718,1,Blood Splatter,aotc 60: 67.0%
+70959 trait tree,rogue,assassination,8,280,1,Cold Blood,aotc 60: 91.7%
+70959 trait tree,rogue,assassination,9,268,5,Improved Poisons,aotc 60: 85.8%
+70959 trait tree,rogue,assassination,10,105712,1,Venom,aotc 60: 99.1%
+70959 trait tree,rogue,assassination,11,682,5,Vile Poisons,aotc 60: 77.9%
+70959 trait tree,rogue,assassination,12,283,3,Seal Fate,aotc 60: 98.7%
+70959 trait tree,rogue,assassination,13,281,5,Relentless Strikes,aotc 60: 98.0%
+70959 trait tree,rogue,assassination,14,105709,1,Mutilate,aotc 60: 94.3%
+70959 trait tree,rogue,assassination,15,261,1,Opportunity,aotc 60: 77.5%
+70959 trait tree,rogue,assassination,16,186,2,Lightning Reflexes,aotc 60: 61.1%
+70959 trait tree,rogue,assassination,17,105719,3,Puncturing Wounds,aotc 60: 85.4%
+70959 trait tree,rogue,assassination,18,181,3,Precision,aotc 60: 86.3%
+70959 trait tree,rogue,assassination,19,204,2,Endurance,aotc 60: 66.8%
+70959 trait tree,rogue,combat,1,201,2,Efficient Strikes,aotc 60: 99.7%
+70959 trait tree,rogue,combat,2,276,3,Coup de Grace,aotc 60: 98.6%
+70959 trait tree,rogue,combat,3,181,3,Precision,aotc 60: 99.9%
+70959 trait tree,rogue,combat,4,187,3,Deflection,aotc 60: 86.2%
+70959 trait tree,rogue,combat,5,204,2,Endurance,aotc 60: 97.1%
+70959 trait tree,rogue,combat,6,105759,2,Composure,aotc 60: 79.1%
+70959 trait tree,rogue,combat,7,108100,1,Flawless Execution,aotc 60: 97.5%
+70959 trait tree,rogue,combat,8,1122,3,Aggression,aotc 60: 99.5%
+70959 trait tree,rogue,combat,9,1703,2,Weapon Expertise,aotc 60: 97.5%
+70959 trait tree,rogue,combat,10,223,1,Blade Flurry,aotc 60: 99.7%
+70959 trait tree,rogue,combat,11,221,2,Dual Wield Specialization,aotc 60: 98.2%
+70959 trait tree,rogue,combat,12,242,5,Hack and Slash,aotc 60: 99.1%
+70959 trait tree,rogue,combat,13,105740,5,Flash of Steel,aotc 60: 98.2%
+70959 trait tree,rogue,combat,14,205,1,Adrenaline Rush,aotc 60: 95.4%
+70959 trait tree,rogue,combat,15,270,5,Malice,aotc 60: 97.9%
+70959 trait tree,rogue,combat,16,277,3,Improved Slice and Dice,aotc 60: 94.2%
+70959 trait tree,rogue,combat,17,273,3,Ruthlessness,aotc 60: 88.0%
+70959 trait tree,rogue,combat,18,269,2,Lethality,aotc 60: 94.0%
+70959 trait tree,rogue,combat,19,382,2,Vigor,aotc 60: 80.1%
+70959 trait tree,rogue,combat,20,280,1,Cold Blood,aotc 60: 70.4%
+70959 trait tree,rogue,subtlety,1,261,5,Opportunity,aotc 60: 92.3%
+70959 trait tree,rogue,subtlety,2,241,3,Master of Deception,aotc 60: 81.0%
+70959 trait tree,rogue,subtlety,3,244,3,Camouflage,aotc 60: 96.1%
+70959 trait tree,rogue,subtlety,4,1123,3,Serrated Blades,aotc 60: 92.3%
+70959 trait tree,rogue,subtlety,5,265,2,Dirty Deeds,aotc 60: 96.2%
+70959 trait tree,rogue,subtlety,6,303,1,Ghostly Strike,aotc 60: 91.5%
+70959 trait tree,rogue,subtlety,7,381,1,Premeditation,aotc 60: 97.2%
+70959 trait tree,rogue,subtlety,8,245,3,Initiative,aotc 60: 96.1%
+70959 trait tree,rogue,subtlety,9,681,1,Hemorrhage,aotc 60: 91.4%
+70959 trait tree,rogue,subtlety,10,284,1,Preparation,aotc 60: 99.7%
+70959 trait tree,rogue,subtlety,11,201,2,Efficient Strikes,aotc 60: 92.4%
+70959 trait tree,rogue,subtlety,12,247,2,Elusiveness,aotc 60: 74.9%
+70959 trait tree,rogue,subtlety,13,105757,2,Dirty Tricks,aotc 60: 76.2%
+70959 trait tree,rogue,subtlety,14,276,3,Coup de Grace,aotc 60: 95.4%
+70959 trait tree,rogue,subtlety,15,270,5,Malice,aotc 60: 93.6%
+70959 trait tree,rogue,subtlety,16,110867,1,Quick Getaway,aotc 60: 70.8%
+70959 trait tree,rogue,subtlety,17,222,2,Improved Sprint,aotc 60: 61.2%
+70959 trait tree,rogue,subtlety,18,273,3,Ruthlessness,aotc 60: 60.4%
+70959 trait tree,rogue,subtlety,19,203,3,Improved Gouge,aotc 60: 69.0%
+70959 trait tree,rogue,subtlety,20,105718,1,Blood Splatter,aotc 60: 66.3%
+70959 trait tree,rogue,subtlety,21,269,2,Lethality,aotc 60: 70.5%
+70959 trait tree,rogue,subtlety,22,382,2,Vigor,aotc 60: 67.9%
+70959 trait tree,priest,discipline,1,105849,5,Twin Disciplines,aotc 60: 96.0%
+70959 trait tree,priest,discipline,2,1201,5,Mental Strength,aotc 60: 95.9%
+70959 trait tree,priest,discipline,3,347,3,Meditation,aotc 60: 99.7%
+70959 trait tree,priest,discipline,4,343,3,Improved Power Word: Shield,aotc 60: 99.6%
+70959 trait tree,priest,discipline,5,348,1,Inner Focus,aotc 60: 96.8%
+70959 trait tree,priest,discipline,6,105839,1,Soul Warding,aotc 60: 99.4%
+70959 trait tree,priest,discipline,7,406,3,Improved Renew,aotc 60: 77.6%
+70959 trait tree,priest,discipline,8,341,3,Mental Agility,aotc 60: 90.0%
+70959 trait tree,priest,discipline,9,105834,1,Penance,aotc 60: 99.8%
+70959 trait tree,priest,discipline,10,105835,5,Renewed Hope,aotc 60: 96.8%
+70959 trait tree,priest,discipline,11,105840,3,Divine Aegis,aotc 60: 92.9%
+70959 trait tree,priest,discipline,12,110855,5,Holy Specialization,aotc 60: 90.4%
+70959 trait tree,priest,discipline,13,322,1,Power Infusion,aotc 60: 90.3%
+70959 trait tree,priest,discipline,14,1181,5,Divine Fury,aotc 60: 87.0%
+70959 trait tree,priest,discipline,15,361,3,Inspiration,aotc 60: 86.1%
+70959 trait tree,priest,discipline,16,442,1,Holy Nova,aotc 60: 49.9% (fills 31/20)
+70959 trait tree,priest,discipline,17,408,3,Improved Healing,aotc 60: 74.3%
+70959 trait tree,priest,holy,1,406,3,Improved Renew,aotc 60: 88.7%
+70959 trait tree,priest,holy,2,110855,5,Holy Specialization,aotc 60: 95.2%
+70959 trait tree,priest,holy,3,1181,5,Divine Fury,aotc 60: 96.9%
+70959 trait tree,priest,holy,4,442,1,Holy Nova,aotc 60: 73.9%
+70959 trait tree,priest,holy,5,361,3,Inspiration,aotc 60: 96.5%
+70959 trait tree,priest,holy,6,408,3,Improved Healing,aotc 60: 99.5%
+70959 trait tree,priest,holy,7,105856,1,Holy Binding,aotc 60: 65.5%
+70959 trait tree,priest,holy,8,402,5,Spiritual Guidance,aotc 60: 99.7%
+70959 trait tree,priest,holy,9,105849,5,Twin Disciplines,aotc 60: 99.6%
+70959 trait tree,priest,holy,10,404,3,Spiritual Healing,aotc 60: 97.8%
+70959 trait tree,priest,holy,11,1561,1,Spirit of Redemption,aotc 60: 82.4%
+70959 trait tree,priest,holy,12,105855,2,Litany of Light,aotc 60: 94.8%
+70959 trait tree,priest,holy,13,105851,1,Prayer of Mending,aotc 60: 79.4%
+70959 trait tree,priest,holy,14,1201,5,Mental Strength,aotc 60: 97.8%
+70959 trait tree,priest,holy,15,347,3,Meditation,aotc 60: 99.4%
+70959 trait tree,priest,holy,16,348,1,Inner Focus,aotc 60: 91.8%
+70959 trait tree,priest,holy,17,343,3,Improved Power Word: Shield,aotc 60: 63.4%
+70959 trait tree,priest,holy,18,341,1,Mental Agility,aotc 60: 45.2% (fills 18/33)
+70959 trait tree,priest,shadow,1,465,5,Spirit Tap,aotc 60: 78.8%
+70959 trait tree,priest,shadow,2,482,2,Improved Shadow Word: Pain,aotc 60: 98.1%
+70959 trait tree,priest,shadow,3,463,5,Shadow Focus,aotc 60: 96.4%
+70959 trait tree,priest,shadow,4,501,1,Mind Flay,aotc 60: 100.0%
+70959 trait tree,priest,shadow,5,105825,2,Improved Mind Flay,aotc 60: 98.6%
+70959 trait tree,priest,shadow,6,881,2,Shadow Reach,aotc 60: 88.9%
+70959 trait tree,priest,shadow,7,481,3,Improved Mind Blast,aotc 60: 67.2%
+70959 trait tree,priest,shadow,8,484,1,Vampiric Embrace,aotc 60: 100.0%
+70959 trait tree,priest,shadow,9,461,3,Shadow Weaving,aotc 60: 99.6%
+70959 trait tree,priest,shadow,10,105819,2,Devouring Contagion,aotc 60: 98.9%
+70959 trait tree,priest,shadow,11,105823,5,Dark Inspiration,aotc 60: 74.4%
+70959 trait tree,priest,shadow,12,462,5,Darkness,aotc 60: 99.8%
+70959 trait tree,priest,shadow,13,521,1,Shadowform,aotc 60: 99.9%
+70959 trait tree,priest,shadow,14,541,1,Silence,aotc 60: 76.9%
+70959 trait tree,priest,shadow,15,105849,5,Twin Disciplines,aotc 60: 98.6%
+70959 trait tree,priest,shadow,16,1201,5,Mental Strength,aotc 60: 85.9%
+70959 trait tree,priest,shadow,17,347,3,Meditation,aotc 60: 87.5%
+70959 trait tree,mage,arcane,1,80,5,Improved Channeling,aotc 60: 99.2%
+70959 trait tree,mage,arcane,2,105809,2,Missile Barrage,aotc 60: 99.8%
+70959 trait tree,mage,arcane,3,75,5,Arcane Concentration,aotc 60: 99.8%
+70959 trait tree,mage,arcane,4,105806,1,Arcane Blast,aotc 60: 99.8%
+70959 trait tree,mage,arcane,5,74,2,Arcane Subtlety,aotc 60: 97%
+70959 trait tree,mage,arcane,6,113627,1,Arcane Wrath,aotc 60: 99.5%
+70959 trait tree,mage,arcane,7,1142,3,Arcane Meditation,aotc 60: 99%
+70959 trait tree,mage,arcane,8,81,3,Arcane Impact,aotc 60: 97%
+70959 trait tree,mage,arcane,9,77,5,Arcane Mind,aotc 60: 100%
+70959 trait tree,mage,arcane,10,86,1,Presence of Mind,aotc 60: 99.5%
+70959 trait tree,mage,arcane,11,1649,3,Precision,aotc 60: 98.1%
+70959 trait tree,mage,arcane,12,421,3,Arcane Instability,aotc 60: 99.7%
+70959 trait tree,mage,arcane,13,87,1,Arcane Power,aotc 60: 98.7%
+70959 trait tree,mage,arcane,14,1141,5,Incineration,aotc 60: 91.8%
+70959 trait tree,mage,arcane,15,26,2,Accelerant,aotc 60: 87.2%
+70959 trait tree,mage,arcane,16,34,5,Ignite,aotc 60: 65.5%
+70959 trait tree,mage,arcane,17,27,2,Improved Fire Blast,aotc 60: 74.5%
+70959 trait tree,mage,arcane,18,29,1,Pyroblast,aotc 60: 63.8%
+70959 trait tree,mage,arcane,19,105786,1,Heating Up,aotc 60: 59.8%
+70959 trait tree,mage,fire,1,26,5,Accelerant,aotc 60: 90.7%
+70959 trait tree,mage,fire,2,1141,5,Incineration,aotc 60: 88.9%
+70959 trait tree,mage,fire,3,34,5,Ignite,aotc 60: 99.7%
+70959 trait tree,mage,fire,4,29,1,Pyroblast,aotc 60: 99.4%
+70959 trait tree,mage,fire,5,105786,1,Heating Up,aotc 60: 99.2%
+70959 trait tree,mage,fire,6,27,2,Improved Fire Blast,aotc 60: 92.1%
+70959 trait tree,mage,fire,7,1639,3,Master of Elements,aotc 60: 89.9%
+70959 trait tree,mage,fire,8,33,3,Critical Mass,aotc 60: 99.8%
+70959 trait tree,mage,fire,9,25,3,Improved Scorch,aotc 60: 86.3%
+70959 trait tree,mage,fire,10,35,3,Fire Power,aotc 60: 92.9%
+70959 trait tree,mage,fire,11,1649,3,Precision,aotc 60: 93.4%
+70959 trait tree,mage,fire,12,36,1,Combustion,aotc 60: 74.6%
+70959 trait tree,mage,fire,13,80,5,Improved Channeling,aotc 60: 49.3%
+70959 trait tree,mage,fire,14,75,5,Arcane Concentration,aotc 60: 72.5%
+70959 trait tree,mage,fire,15,74,2,Arcane Subtlety,aotc 60: 54.8%
+70959 trait tree,mage,fire,16,105809,2,Missile Barrage,aotc 60: 51.8%
+70959 trait tree,mage,fire,17,105806,1,Arcane Blast,aotc 60: 43.1%
+70959 trait tree,mage,fire,18,1142,1,Arcane Meditation,aotc 60: 46.4%
+70959 trait tree,mage,frost,1,37,5,Improved Frostbolt,aotc 60: 89.5%
+70959 trait tree,mage,frost,2,1649,3,Precision,aotc 60: 93.6%
+70959 trait tree,mage,frost,3,73,5,Ice Shards,aotc 60: 99.7%
+70959 trait tree,mage,frost,4,105767,1,Ice Lance,aotc 60: 99.5%
+70959 trait tree,mage,frost,5,38,3,Frostbite,aotc 60: 60.1%
+70959 trait tree,mage,frost,6,67,3,Shatter,aotc 60: 98.7%
+70959 trait tree,mage,frost,7,105764,2,Fingers of Frost,aotc 60: 98.5%
+70959 trait tree,mage,frost,8,72,1,Ice Block,aotc 60: 91.7%
+70959 trait tree,mage,frost,9,66,3,Frost Channeling,aotc 60: 84.7%
+70959 trait tree,mage,frost,10,63,3,Improved Blizzard,aotc 60: 69.7%
+70959 trait tree,mage,frost,11,69,1,Cold Snap,aotc 60: 99.9%
+70959 trait tree,mage,frost,12,71,1,Ice Barrier,aotc 60: 99.9%
+70959 trait tree,mage,frost,13,68,5,Winter's Chill,aotc 60: 73%
+70959 trait tree,mage,frost,14,64,3,Improved Cone of Cold,aotc 60: 85.2%
+70959 trait tree,mage,frost,15,741,2,Arctic Reach,aotc 60: 71.5%
+70959 trait tree,mage,frost,16,85,3,Arcane Resilience,aotc 60: 69.7%
+70959 trait tree,mage,frost,17,78,2,Wand Specialization,aotc 60: 65.6%
+70959 trait tree,mage,frost,18,75,5,Arcane Concentration,aotc 60: 82.2%
+70959 trait tree,shaman,elemental,1,563,5,Concussion,aotc 60: 98.2%
+70959 trait tree,shaman,elemental,2,564,5,Convection,aotc 60: 94.7%
+70959 trait tree,shaman,elemental,3,721,3,Elemental Alacrity,aotc 60: 100.0%
+70959 trait tree,shaman,elemental,4,561,3,Call of Flame,aotc 60: 94.3%
+70959 trait tree,shaman,elemental,5,574,1,Elemental Focus,aotc 60: 99.8%
+70959 trait tree,shaman,elemental,6,1642,3,Eye of the Storm,aotc 60: 95.1%
+70959 trait tree,shaman,elemental,7,104759,3,Lightning Overload,aotc 60: 99.9%
+70959 trait tree,shaman,elemental,8,562,1,Call of Thunder,aotc 60: 99.8%
+70959 trait tree,shaman,elemental,9,567,2,Trial by Fire,aotc 60: 78.2%
+70959 trait tree,shaman,elemental,10,565,5,Elemental Fury,aotc 60: 99.6%
+70959 trait tree,shaman,elemental,11,593,5,Tidal Focus,aotc 60: 94.1%
+70959 trait tree,shaman,elemental,12,573,1,Lightning Mastery,aotc 60: 97.5%
+70959 trait tree,shaman,elemental,13,104734,3,Mindfulness,aotc 60: 88.7%
+70959 trait tree,shaman,elemental,14,613,5,Thundering Strikes,aotc 60: 96.3%
+70959 trait tree,shaman,elemental,15,595,2,Totemic Focus,aotc 60: 49.9% (unlocks Water Shield)
+70959 trait tree,shaman,elemental,16,104732,1,Water Shield,aotc 60: 63.4%
+70959 trait tree,shaman,elemental,17,614,3,Ancestral Knowledge,aotc 60: 64.5%
+70959 trait tree,shaman,enhancement,1,613,5,Thundering Strikes,aotc 60: 99.9%
+70959 trait tree,shaman,enhancement,2,104755,3,Mental Dexterity,aotc 60: 100.0%
+70959 trait tree,shaman,enhancement,3,614,3,Ancestral Knowledge,aotc 60: 93.9%
+70959 trait tree,shaman,enhancement,4,104749,1,Shamanistic Focus,aotc 60: 99.8%
+70959 trait tree,shaman,enhancement,5,611,3,Elemental Weapons,aotc 60: 98.5%
+70959 trait tree,shaman,enhancement,6,901,1,Stormstrike,aotc 60: 100.0%
+70959 trait tree,shaman,enhancement,7,605,2,Improved Ghost Wolf,aotc 60: 92.1%
+70959 trait tree,shaman,enhancement,8,602,5,Flurry,aotc 60: 99.2%
+70959 trait tree,shaman,enhancement,9,104742,2,Improved Stormstrike,aotc 60: 99.4%
+70959 trait tree,shaman,enhancement,10,616,1,Spirit Weapons,aotc 60: 91.9%
+70959 trait tree,shaman,enhancement,11,104744,2,Mental Quickness,aotc 60: 99.6%
+70959 trait tree,shaman,enhancement,12,104741,5,Maelstrom Weapon,aotc 60: 90.8%
+70959 trait tree,shaman,enhancement,13,593,5,Tidal Focus,aotc 60: 82.3%
+70959 trait tree,shaman,enhancement,14,104740,1,Rage of the Farseer,aotc 60: 79.1%
+70959 trait tree,shaman,enhancement,15,563,5,Concussion,aotc 60: 85.2%
+70959 trait tree,shaman,enhancement,16,1645,3,Elemental Devastation,aotc 60: 84.9%
+70959 trait tree,shaman,enhancement,17,561,3,Call of Flame,aotc 60: 66.7%
+70959 trait tree,shaman,enhancement,18,574,1,Elemental Focus,aotc 60: 63.2%
+70959 trait tree,shaman,restoration,1,593,5,Tidal Focus,aotc 60: 97.6%
+70959 trait tree,shaman,restoration,2,104734,3,Mindfulness,aotc 60: 99.8%
+70959 trait tree,shaman,restoration,3,586,5,Improved Healing Wave,aotc 60: 94.9%
+70959 trait tree,shaman,restoration,4,104732,1,Water Shield,aotc 60: 99.6%
+70959 trait tree,shaman,restoration,5,587,3,Healing Focus,aotc 60: 87.1%
+70959 trait tree,shaman,restoration,6,590,1,Mana Tide Totem,aotc 60: 99.3%
+70959 trait tree,shaman,restoration,7,581,3,Ancestral Healing,aotc 60: 96.9%
+70959 trait tree,shaman,restoration,8,1648,3,Healing Way,aotc 60: 99.4%
+70959 trait tree,shaman,restoration,9,594,5,Tidal Mastery,aotc 60: 98.1%
+70959 trait tree,shaman,restoration,10,591,1,Nature's Swiftness,aotc 60: 99.3%
+70959 trait tree,shaman,restoration,11,592,5,Purification,aotc 60: 98.4%
+70959 trait tree,shaman,restoration,12,104724,1,Riptide,aotc 60: 97.6%
+70959 trait tree,shaman,restoration,13,588,5,Restorative Totems,aotc 60: 62.3%
+70959 trait tree,shaman,restoration,14,614,5,Ancestral Knowledge,aotc 60: 96.9%
+70959 trait tree,shaman,restoration,15,613,5,Thundering Strikes,aotc 60: 88.8%
 70959 trait tree,shaman,tank,1,613,5,Thundering Strikes,kept from the old build
 70959 trait tree,shaman,tank,2,614,5,Ancestral Knowledge,kept from the old build
 70959 trait tree,shaman,tank,3,609,2,Guardian Totems,kept from the old build
@@ -407,109 +396,109 @@ client_build,class,spec,order,talent_id,rank,name,why
 70959 trait tree,shaman,tank,14,104744,2,Mental Quickness,re-spent; Forever talent without a Talent.db2 row (trait node id)
 70959 trait tree,shaman,tank,15,563,5,Concussion,re-spent
 70959 trait tree,shaman,tank,16,575,5,Reverberation,kept from the old build
-70959 trait tree,warlock,affliction,1,1003,5,Improved Corruption,kept from the old build
-70959 trait tree,warlock,affliction,2,1005,5,Suppression,kept from the old build
-70959 trait tree,warlock,affliction,3,105920,3,Improved Drains,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,affliction,4,1021,2,Grim Reach,kept from the old build
-70959 trait tree,warlock,affliction,5,1284,2,Improved Bane of Agony,kept from the old build
-70959 trait tree,warlock,affliction,6,1001,3,Fel Concentration,kept from the old build
-70959 trait tree,warlock,affliction,7,1061,1,Amplify Curse,re-spent
-70959 trait tree,warlock,affliction,8,105917,3,Pandemic,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,affliction,9,110876,5,Malevolence,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,affliction,10,1002,2,Nightfall,kept from the old build
-70959 trait tree,warlock,affliction,11,1041,1,Siphon Life,kept from the old build
-70959 trait tree,warlock,affliction,12,1004,3,Soul Siphon,kept from the old build
-70959 trait tree,warlock,affliction,13,1042,5,Shadow Mastery,kept from the old build
-70959 trait tree,warlock,affliction,14,105909,1,Wrack,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,affliction,15,943,5,Bane,kept from the old build
-70959 trait tree,warlock,affliction,16,941,3,Cataclysm,kept from the old build
-70959 trait tree,warlock,affliction,17,964,2,Destructive Reach,re-spent
-70959 trait tree,warlock,demonology,1,1222,3,Improved Imp,kept from the old build
-70959 trait tree,warlock,demonology,2,1223,5,Demonic Embrace,kept from the old build
-70959 trait tree,warlock,demonology,3,1242,3,Fel Vitality,kept from the old build
-70959 trait tree,warlock,demonology,4,105902,2,Demonic Aegis,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,demonology,5,1281,1,Demonic Sacrifice,kept from the old build
-70959 trait tree,warlock,demonology,6,1227,2,Master Summoner,kept from the old build
-70959 trait tree,warlock,demonology,7,1226,1,Fel Domination,kept from the old build
-70959 trait tree,warlock,demonology,8,105896,3,Demonic Brand,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,demonology,9,105897,2,Decimation,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,demonology,10,1282,1,Soul Link,kept from the old build
-70959 trait tree,warlock,demonology,11,105893,3,Demonic Knowledge,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,demonology,12,1244,5,Master Demonologist,kept from the old build
-70959 trait tree,warlock,demonology,13,105890,1,Demonic Pact,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,demonology,14,1262,5,Unholy Power,kept from the old build
-70959 trait tree,warlock,demonology,15,1224,2,Improved Health Funnel,kept from the old build
-70959 trait tree,warlock,demonology,16,1225,3,Improved Voidwalker,kept from the old build
-70959 trait tree,warlock,demonology,17,105899,2,Demonic Energies,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,demonology,18,1007,2,Improved Life Tap,kept from the old build
-70959 trait tree,warlock,demonology,19,1003,5,Improved Corruption,kept from the old build
-70959 trait tree,warlock,destruction,1,944,5,Improved Shadow Bolt,kept from the old build
-70959 trait tree,warlock,destruction,2,943,5,Bane,kept from the old build
-70959 trait tree,warlock,destruction,3,941,3,Cataclysm,kept from the old build
-70959 trait tree,warlock,destruction,4,967,5,Ruin,kept from the old build
-70959 trait tree,warlock,destruction,5,963,1,Shadowburn,kept from the old build
-70959 trait tree,warlock,destruction,6,985,3,Intensity,kept from the old build
-70959 trait tree,warlock,destruction,7,105880,1,Conflagrate,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,destruction,8,986,2,Pyroclasm,kept from the old build
-70959 trait tree,warlock,destruction,9,105876,1,Bane of Havoc,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,destruction,10,105877,3,Fire and Brimstone,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,destruction,11,105875,5,Shadow and Flame,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,destruction,12,105874,1,Incinerate,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,warlock,destruction,13,964,2,Destructive Reach,kept from the old build
-70959 trait tree,warlock,destruction,14,982,5,Aftermath,kept from the old build
-70959 trait tree,warlock,destruction,15,965,2,Agonizing Flames,re-spent
-70959 trait tree,warlock,destruction,16,1007,2,Improved Life Tap,kept from the old build
-70959 trait tree,warlock,destruction,17,1003,5,Improved Corruption,kept from the old build
-70959 trait tree,druid,balance,1,762,5,Improved Wrath,kept from the old build
-70959 trait tree,druid,balance,2,783,3,Moonglow,kept from the old build
-70959 trait tree,druid,balance,3,763,2,Improved Moonfire,kept from the old build
-70959 trait tree,druid,balance,4,764,2,Nature's Reach,kept from the old build
-70959 trait tree,druid,balance,5,104927,2,Nature's Majesty,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,balance,6,104928,1,Nature's Splendor,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,balance,7,792,5,Vengeance,kept from the old build
-70959 trait tree,druid,balance,8,784,5,Improved Starfire,kept from the old build
-70959 trait tree,druid,balance,9,827,1,Insect Swarm,re-spent
-70959 trait tree,druid,balance,10,789,1,Nature's Grace,kept from the old build
-70959 trait tree,druid,balance,11,104935,3,Eclipse,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,balance,12,790,5,Moonfury,kept from the old build
-70959 trait tree,druid,balance,13,793,1,Moonkin Form,kept from the old build
-70959 trait tree,druid,balance,14,104924,5,Genesis,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,balance,15,823,5,Nature's Focus,re-spent
-70959 trait tree,druid,balance,16,829,3,Reflection,re-spent
-70959 trait tree,druid,balance,17,824,2,Naturalist,kept from the old build
-70959 trait tree,druid,feral,1,796,5,Ferocity,kept from the old build
-70959 trait tree,druid,feral,2,807,2,Feral Swiftness,kept from the old build
-70959 trait tree,druid,feral,3,799,3,Feral Instinct,kept from the old build
-70959 trait tree,druid,feral,4,794,3,Thick Hide,kept from the old build
-70959 trait tree,druid,feral,5,805,2,Savage Fury,kept from the old build
-70959 trait tree,druid,feral,6,798,2,Sharpened Claws,kept from the old build
-70959 trait tree,druid,feral,7,104944,1,Feral Charge,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,feral,8,803,3,Predatory Strikes,kept from the old build
-70959 trait tree,druid,feral,9,801,2,Blood Frenzy,re-spent
-70959 trait tree,druid,feral,10,104949,1,Lacerate,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,feral,11,809,1,Leader of the Pack,kept from the old build
-70959 trait tree,druid,feral,12,104950,2,Natural Instinct,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,feral,13,104953,5,Rend and Tear,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,feral,14,104956,1,Primal Bite,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,feral,15,822,5,Furor,re-spent
-70959 trait tree,druid,feral,16,797,2,Brutal Impact,re-spent
-70959 trait tree,druid,feral,17,802,1,Shredding Attacks,re-spent
-70959 trait tree,druid,feral,18,808,5,Heart of the Wild,kept from the old build
-70959 trait tree,druid,feral,19,781,3,Natural Shapeshifter,kept from the old build
-70959 trait tree,druid,feral,20,824,2,Naturalist,re-spent
-70959 trait tree,druid,restoration,1,823,5,Nature's Focus,re-spent
-70959 trait tree,druid,restoration,2,824,5,Naturalist,kept from the old build
-70959 trait tree,druid,restoration,3,829,3,Reflection,kept from the old build
-70959 trait tree,druid,restoration,4,828,5,Gift of Nature,kept from the old build
-70959 trait tree,druid,restoration,5,841,3,Subtlety,re-spent
-70959 trait tree,druid,restoration,6,104918,1,Bloom,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,restoration,7,843,5,Tranquil Spirit,kept from the old build
-70959 trait tree,druid,restoration,8,830,3,Improved Rejuvenation,kept from the old build
-70959 trait tree,druid,restoration,9,844,1,Swiftmend,kept from the old build
-70959 trait tree,druid,restoration,10,831,1,Nature's Swiftness,kept from the old build
-70959 trait tree,druid,restoration,11,104911,3,Living Spirit,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,restoration,12,825,5,Improved Regrowth,kept from the old build
-70959 trait tree,druid,restoration,13,104910,1,Wild Growth,re-spent; Forever talent without a Talent.db2 row (trait node id)
-70959 trait tree,druid,restoration,14,762,5,Improved Wrath,kept from the old build
-70959 trait tree,druid,restoration,15,763,2,Improved Moonfire,kept from the old build
-70959 trait tree,druid,restoration,16,783,3,Moonglow,re-spent
+70959 trait tree,warlock,affliction,1,1003,5,Improved Corruption,aotc 60: 100%
+70959 trait tree,warlock,affliction,2,1005,5,Suppression,aotc 60: 96.8%
+70959 trait tree,warlock,affliction,3,1284,2,Improved Bane of Agony,aotc 60: 93.2%
+70959 trait tree,warlock,affliction,4,105917,3,Pandemic,aotc 60: 98.9%
+70959 trait tree,warlock,affliction,5,1002,2,Nightfall,aotc 60: 88.2%
+70959 trait tree,warlock,affliction,6,110876,5,Malevolence,aotc 60: 97%
+70959 trait tree,warlock,affliction,7,1041,1,Siphon Life,aotc 60: 99.9%
+70959 trait tree,warlock,affliction,8,1004,3,Soul Siphon,aotc 60: 96.5%
+70959 trait tree,warlock,affliction,9,1042,5,Shadow Mastery,aotc 60: 98.7%
+70959 trait tree,warlock,affliction,10,105909,1,Wrack,aotc 60: 93.7%
+70959 trait tree,warlock,affliction,11,1007,2,Improved Life Tap,aotc 60: 81.2%
+70959 trait tree,warlock,affliction,12,1061,1,Amplify Curse,aotc 60: 77%
+70959 trait tree,warlock,affliction,13,1223,5,Demonic Embrace,aotc 60: 79.7%
+70959 trait tree,warlock,affliction,14,1242,3,Fel Vitality,aotc 60: 75.8%
+70959 trait tree,warlock,affliction,15,105902,2,Demonic Aegis,aotc 60: 66.5%
+70959 trait tree,warlock,affliction,16,1281,1,Demonic Sacrifice,aotc 60: 69.8%
+70959 trait tree,warlock,affliction,17,944,5,Improved Shadow Bolt,aotc 60: 52.6%
+70959 trait tree,warlock,demonology,1,1262,5,Unholy Power,aotc 60: 91.6%
+70959 trait tree,warlock,demonology,2,105899,2,Demonic Energies,aotc 60: 99.1%
+70959 trait tree,warlock,demonology,3,1242,3,Fel Vitality,aotc 60: 97.2%
+70959 trait tree,warlock,demonology,4,1227,2,Master Summoner,aotc 60: 88.4%
+70959 trait tree,warlock,demonology,5,1281,1,Demonic Sacrifice,aotc 60: 100%
+70959 trait tree,warlock,demonology,6,1243,3,Improved Sayaad,aotc 60: 53.6%
+70959 trait tree,warlock,demonology,7,105896,3,Demonic Brand,aotc 60: 97.7%
+70959 trait tree,warlock,demonology,8,1226,1,Fel Domination,aotc 60: 59.9%
+70959 trait tree,warlock,demonology,9,1282,1,Soul Link,aotc 60: 100%
+70959 trait tree,warlock,demonology,10,105893,3,Demonic Knowledge,aotc 60: 99.7%
+70959 trait tree,warlock,demonology,11,1223,1,Demonic Embrace,aotc 60: 59.8%
+70959 trait tree,warlock,demonology,12,1244,5,Master Demonologist,aotc 60: 98.4%
+70959 trait tree,warlock,demonology,13,1003,5,Improved Corruption,aotc 60: 82%
+70959 trait tree,warlock,demonology,14,105890,1,Demonic Pact,aotc 60: 96.6%
+70959 trait tree,warlock,demonology,15,1005,5,Suppression,aotc 60: 81.6%
+70959 trait tree,warlock,demonology,16,105897,2,Decimation,aotc 60: 58.9%
+70959 trait tree,warlock,demonology,17,943,5,Bane,aotc 60: 58.5%
+70959 trait tree,warlock,demonology,18,1222,3,Improved Imp,aotc 60: 23.4%
+70959 trait tree,warlock,destruction,1,943,5,Bane,aotc 60: 99.7%
+70959 trait tree,warlock,destruction,2,982,5,Aftermath,aotc 60: 85%
+70959 trait tree,warlock,destruction,3,941,3,Cataclysm,aotc 60: 73.2%
+70959 trait tree,warlock,destruction,4,963,1,Shadowburn,aotc 60: 98.9%
+70959 trait tree,warlock,destruction,5,967,5,Ruin,aotc 60: 99.2%
+70959 trait tree,warlock,destruction,6,105880,1,Conflagrate,aotc 60: 97.8%
+70959 trait tree,warlock,destruction,7,965,3,Agonizing Flames,aotc 60: 97.6%
+70959 trait tree,warlock,destruction,8,105877,3,Fire and Brimstone,aotc 60: 88.6%
+70959 trait tree,warlock,destruction,9,105876,1,Bane of Havoc,aotc 60: 89.9%
+70959 trait tree,warlock,destruction,10,105875,5,Shadow and Flame,aotc 60: 96.6%
+70959 trait tree,warlock,destruction,11,105874,1,Incinerate,aotc 60: 87.4%
+70959 trait tree,warlock,destruction,12,1005,5,Suppression,aotc 60: 82%
+70959 trait tree,warlock,destruction,13,1223,5,Demonic Embrace,aotc 60: 63%
+70959 trait tree,warlock,destruction,14,1007,2,Improved Life Tap,aotc 60: 63.1%
+70959 trait tree,warlock,destruction,15,1242,3,Fel Vitality,aotc 60: 55.3%
+70959 trait tree,warlock,destruction,16,105902,2,Demonic Aegis,aotc 60: 55.1%
+70959 trait tree,warlock,destruction,17,1281,1,Demonic Sacrifice,aotc 60: 54.3%
+70959 trait tree,druid,balance,1,762,5,Improved Wrath,aotc 60: 98%
+70959 trait tree,druid,balance,2,104924,2,Genesis,aotc 60: 71.2%
+70959 trait tree,druid,balance,3,783,3,Moonglow,aotc 60: 97.9%
+70959 trait tree,druid,balance,4,104927,2,Nature's Majesty,aotc 60: 99.9%
+70959 trait tree,druid,balance,5,763,2,Improved Moonfire,aotc 60: 99.9%
+70959 trait tree,druid,balance,6,764,2,Nature's Reach,aotc 60: 99.3%
+70959 trait tree,druid,balance,7,104928,1,Nature's Splendor,aotc 60: 99%
+70959 trait tree,druid,balance,8,827,1,Insect Swarm,aotc 60: 99%
+70959 trait tree,druid,balance,9,792,5,Vengeance,aotc 60: 99%
+70959 trait tree,druid,balance,10,789,1,Nature's Grace,aotc 60: 99%
+70959 trait tree,druid,balance,11,104935,3,Eclipse,aotc 60: 93.2%
+70959 trait tree,druid,balance,12,790,5,Moonfury,aotc 60: 96.9%
+70959 trait tree,druid,balance,13,793,1,Moonkin Form,aotc 60: 93.7%
+70959 trait tree,druid,balance,14,784,5,Improved Starfire,aotc 60: 92.4%
+70959 trait tree,druid,balance,15,823,5,Nature's Focus,aotc 60: 83%
+70959 trait tree,druid,balance,16,829,3,Reflection,aotc 60: 90.2%
+70959 trait tree,druid,balance,17,824,5,Naturalist,aotc 60: 93.9%
+70959 trait tree,druid,feral,1,796,5,Ferocity,aotc 60: 96.3%
+70959 trait tree,druid,feral,2,807,2,Feral Swiftness,aotc 60: 97.8%
+70959 trait tree,druid,feral,3,799,3,Feral Instinct,aotc 60: 60.8%
+70959 trait tree,druid,feral,4,805,2,Savage Fury,aotc 60: 99.7%
+70959 trait tree,druid,feral,5,104944,1,Feral Charge,aotc 60: 94.7%
+70959 trait tree,druid,feral,6,798,2,Sharpened Claws,aotc 60: 99.9%
+70959 trait tree,druid,feral,7,803,3,Predatory Strikes,aotc 60: 99.5%
+70959 trait tree,druid,feral,8,801,2,Blood Frenzy,aotc 60: 93.5%
+70959 trait tree,druid,feral,9,809,1,Leader of the Pack,aotc 60: 99.8%
+70959 trait tree,druid,feral,10,104951,1,Predatory Discipline,aotc 60: 76.8%
+70959 trait tree,druid,feral,11,104950,2,Natural Instinct,aotc 60: 97.4%
+70959 trait tree,druid,feral,12,104949,1,Lacerate,aotc 60: 67%
+70959 trait tree,druid,feral,13,104953,5,Rend and Tear,aotc 60: 91.4%
+70959 trait tree,druid,feral,14,113563,1,Shifting Power,aotc 60: 71.6%
+70959 trait tree,druid,feral,15,808,5,Heart of the Wild,aotc 60: 99.3%
+70959 trait tree,druid,feral,16,104956,1,Primal Bite,aotc 60: 68%
+70959 trait tree,druid,feral,17,104924,5,Genesis,aotc 60: 87.3%
+70959 trait tree,druid,feral,18,824,5,Naturalist,aotc 60: 83.6%
+70959 trait tree,druid,feral,19,764,2,Nature's Reach,aotc 60: 79.3%
+70959 trait tree,druid,feral,20,104927,2,Nature's Majesty,aotc 60: 78.8%
+70959 trait tree,druid,restoration,1,808,5,Heart of the Wild,aotc 60: 91.8%
+70959 trait tree,druid,restoration,2,829,3,Reflection,aotc 60: 99.4%
+70959 trait tree,druid,restoration,3,824,5,Naturalist,aotc 60: 99.8%
+70959 trait tree,druid,restoration,4,104918,1,Bloom,aotc 60: 99.4%
+70959 trait tree,druid,restoration,5,823,5,Nature's Focus,aotc 60: 47.8%
+70959 trait tree,druid,restoration,6,828,5,Gift of Nature,aotc 60: 96.3%
+70959 trait tree,druid,restoration,7,844,1,Swiftmend,aotc 60: 99.8%
+70959 trait tree,druid,restoration,8,830,3,Improved Rejuvenation,aotc 60: 98%
+70959 trait tree,druid,restoration,9,104911,3,Living Spirit,aotc 60: 97.5%
+70959 trait tree,druid,restoration,10,831,1,Nature's Swiftness,aotc 60: 98.5%
+70959 trait tree,druid,restoration,11,104924,5,Genesis,aotc 60: 97.4%
+70959 trait tree,druid,restoration,12,825,5,Improved Regrowth,aotc 60: 95%
+70959 trait tree,druid,restoration,13,104910,1,Wild Growth,aotc 60: 89.2%
+70959 trait tree,druid,restoration,14,104927,2,Nature's Majesty,aotc 60: 96.7%
+70959 trait tree,druid,restoration,15,783,3,Moonglow,aotc 60: 77.7%
+70959 trait tree,druid,restoration,16,104928,1,Nature's Splendor,aotc 60: 90.8%
+70959 trait tree,druid,restoration,17,764,2,Nature's Reach,aotc 60: 64.1%
