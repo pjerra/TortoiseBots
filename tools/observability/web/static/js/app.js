@@ -2512,10 +2512,14 @@
       return [`${classNameById(s.class)} · ${esc(names[s.tab] || `tab ${s.tab}`)}`, line(s.count, whole, s.census_pm),
         'The spec tree the pool rolled for the bot (a forced .tb spec is not reflected) against the live share of that spec among the class\'s level 60 characters.'];
     });
+    const lv = census.levels || {};
+    const poolLevels = Number(lv.known)
+      ? `pool median ${num(lv.median)} · max ${num(lv.max)} · ${num(lv.sixty)} at 60`
+      : 'pool levels unknown';
     const flags = [
       ['Composition', `${flagBadge(census.census_composition)} ${census.census_composition ? 'census shares' : 'balanced vanilla'}`, 'TortoiseBots.Pool.CensusComposition'],
       ['Spec roll', `${flagBadge(census.census_spec)} ${census.census_spec ? 'census shares' : 'balanced roll'}`, 'TortoiseBots.Pool.CensusSpec'],
-      ['Levels (reference)', 'peak 10 · median 24 · 2.9% at 60 <span class="setting-dim">— the pool starts at level 1 and levels by playing</span>', 'forever/data/aotc/census-levels.csv']
+      ['Levels (reference)', `${poolLevels} <span class="setting-dim">— census median 24 · peak 10 · 2.9% at 60; the pool starts at 1 and levels by playing</span>`, 'forever/data/aotc/census-levels.csv']
     ];
     return settingsSection('POOL · CENSUS CLASS', classRows)
       + settingsSection('POOL · CENSUS RACE', raceRows)

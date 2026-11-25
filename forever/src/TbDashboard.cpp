@@ -7,6 +7,7 @@
 #include "host/TbTalentsPure.h"
 #include "host/pool/TbPoolRegistry.h"
 #include "ai/playerbot/policy/world/PoolCompositionPolicy.h"
+#include "CharacterCache.h"
 #include "Config.h"
 #include "Creature.h"
 #include "DB2Stores.h"
@@ -346,6 +347,8 @@ std::string BuildPoolCensus()
     std::uint32_t races[97] = {};
     std::uint32_t genders[2] = {};
     std::uint32_t specs[12][3] = {};
+    std::uint32_t levels[81] = {};
+    std::uint32_t levelKnown = 0;
     bool const censusSpec = talents::PoolCensusSpecEnabled();
     for (pool::Character const& character : characters)
     {
@@ -360,6 +363,14 @@ std::string BuildPoolCensus()
             int const tab = talents::PickSpecTabForBot(character.klass, std::uint32_t(character.guid), -1, 0, 0, 0, censusSpec);
             if (tab >= 0 && tab <= 2)
                 ++specs[character.klass][tab];
+        }
+        // The character cache knows every level (it loads the whole table at startup): a hash lookup, no query.
+        std::uint8_t const level = character.guid
+            ? sCharacterCache->GetCharacterLevelByGuid(ObjectGuid::Create<HighGuid::Player>(character.guid)) : 0;
+        if (level >= 1 && level <= 80)
+        {
+            ++levels[level];
+            ++levelKnown;
         }
     }
 
@@ -403,7 +414,25 @@ std::string BuildPoolCensus()
             first = false;
         }
     }
-    ss << "]}";
+    // The pool's own levels are a reference (it starts at 1): min, median, max and how many reached 60, from the cache.
+    std::uint32_t levelMin = 0, levelMax = 0, levelMedian = 0, levelSixty = levels[60];
+    if (levelKnown)
+    {
+        for (std::uint32_t level = 1; level <= 80; ++level)
+        {
+            if (!levels[level])
+                continue;
+            if (!levelMin)
+                levelMin = level;
+            levelMax = level;
+        }
+        std::uint32_t seen = 0;
+        for (std::uint32_t level = 1; level <= 80 && !levelMedian; ++level)
+            if ((seen += levels[level]) * 2 >= levelKnown)
+                levelMedian = level;
+    }
+    ss << "],\"levels\":{\"known\":" << levelKnown << ",\"min\":" << levelMin << ",\"median\":" << levelMedian
+       << ",\"max\":" << levelMax << ",\"sixty\":" << levelSixty << "}}";
     return ss.str();
 }
 
