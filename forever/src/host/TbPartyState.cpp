@@ -2,6 +2,7 @@
 // (`.tb party <leader> <member>...`). The line grammar is in forever/docs/TB-COMMANDS.md; every reply goes to the sender of the command
 // through the core's ChatHandler (TbH3.h, Say).
 #include "host/TbH3.h"
+#include "host/TbResistGear.h"     // #20: the resist set a bot holds (rgear=)
 #include "host/TbRaidConsumables.h"   // #22: cons= / consmiss= (the raid consumables a bot holds and lacks)
 #include "host/TbPet.h"
 #include "host/TbHostTaxi.h"
@@ -373,6 +374,17 @@ Rec StateRec(Player* bot, Readiness& ready)
         if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
             gear.push_back({std::to_string(slot), std::to_string(item->GetEntry())});
     rec.LP("gear", gear);
+    // #20: the resistances the worn gear gives (holy, fire, nature, frost, shadow, arcane: the client's school order) and
+    // the resist set this module holds on the bot, `<school>:<pieces>` (empty when it holds nothing). Read only.
+    std::vector<int64> resist;
+    for (uint8 school = SPELL_SCHOOL_HOLY; school <= SPELL_SCHOOL_ARCANE; ++school)
+        resist.push_back(bot->GetResistance(static_cast<SpellSchools>(school)));
+    rec.Csv("resist", resist);
+    int const heldSchool = TortoiseBots::resistgear::HeldSchool(bot);
+    if (heldSchool != 0)
+        rec.P("rgear", { TortoiseBots::resistgear::SchoolWord(heldSchool), std::to_string(TortoiseBots::resistgear::HeldCount(bot)) });
+    else
+        rec.P("rgear", {});
     rec.N("mail", tbhost::town::GetUnreadMailCount(bot));
 
     // ---- W1 (world life): the free flag and what the bot has done since login ----
@@ -865,13 +877,13 @@ bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     }
 
     bool const leaderFollows = args.w.size() >= 2 && Lower(args.w[0]) == "party" &&
-                               Lower(args.w[1]) != "upgrade" && Lower(args.w[1]) != "set";
+                               Lower(args.w[1]) != "upgrade" && Lower(args.w[1]) != "set" && Lower(args.w[1]) != "show";
     size_t pos = 0;
     Address who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows, true);
     if (!who.ok())
         return Fail(handler, args, "gear", who.code, who.detail);
     if (pos >= args.w.size())
-        return Fail(handler, args, "gear", "missing-verb", "upgrade|set|audit");
+        return Fail(handler, args, "gear", "missing-verb", "upgrade|set|audit|show");
     std::string const verb = Lower(args.w[pos++]);
 
     if (verb == "set")
@@ -952,6 +964,47 @@ bool HandleGear(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         }
         Rec end("gear");
         end.P("target", LabelParts(who.label)).N("bots", who.bots.size()).N("equipped", totalEquipped).N("failed", totalFailed);
+        reply.End(end);
+        return true;
+    }
+
+    // Form 4: `.tb gear <bot|party [leader]> show [#token]` (#20; the shared equipment metric of #26). READ ONLY and
+    // allowed in combat: the resistance totals of every worn piece, and its stat score for the bot's own spec.
+    if (verb == "show")
+    {
+        if (pos < args.w.size())
+            return Fail(handler, args, "gear", "unexpected-argument", args.w[pos]);
+
+        Reply reply(handler, args, "gear");
+        reply.Begin();
+        for (Player* bot : who.bots)
+        {
+            uint8 const playerClass = bot->GetClass();
+            uint32 specId = sRandomItemMgr.GetPlayerSpecId(bot);
+            if (!specId)
+                specId = sRandomItemMgr.GetFallbackSpecId(playerClass);
+            for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+            {
+                Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+                if (!item)
+                    continue;
+                ItemPrototype const* proto = tbcompat::ItemProto(item->GetEntry());
+                if (!proto)
+                    continue;
+                ItemSpecType itSpec;
+                uint32 const score = sRandomItemMgr.CalculateStatWeight(playerClass, static_cast<uint8>(specId), proto, itSpec);
+                Rec rec("gear");
+                rec.S("bot", bot->GetName())
+                   .N("slot", slot)
+                   .N("item", item->GetEntry())
+                   .N("ilvl", proto->ItemLevel)
+                   .N("score", score);
+                rec.Csv("res", { proto->HolyRes, proto->FireRes, proto->NatureRes, proto->FrostRes, proto->ShadowRes, proto->ArcaneRes });
+                reply.Line(rec);
+            }
+        }
+        Rec end("gear");
+        end.N("bots", who.bots.size()).P("target", LabelParts(who.label));
         reply.End(end);
         return true;
     }

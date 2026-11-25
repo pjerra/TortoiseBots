@@ -80,7 +80,7 @@ The module ships SQL in two folders, both idempotent and both delivered by the c
 | Folder | Contents |
 | :--- | :--- |
 | `forever/sql/world/` | Dungeon plan tables and plan rows, boss rows, spec weight scales, travel-node tables, the zone-level cache. |
-| `forever/sql/characters/` | Module tables: pool registry and reset state, commander bindings, guild orders and guild bot rank, disenchant queue, AI value store, custom strategies, per-character flags (the add-on hint's "told once" row). |
+| `forever/sql/characters/` | Module tables: pool registry and reset state, commander bindings, guild orders and guild bot rank, disenchant queue, AI value store, custom strategies, per-character flags (the add-on hint's "told once" row), resist-gear holds. |
 
 ### Delivering it through the core updater
 

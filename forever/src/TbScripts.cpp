@@ -89,6 +89,7 @@
 #include "TbBotSession.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbSpellDelayPure.h"
+#include "host/TbResistGear.h"
 #include "host/TbAutoTrain.h"
 #include "host/TbSchool.h"
 #include "host/TbAutoSkillSpells.h"
@@ -264,6 +265,7 @@ public:
         TortoiseBots::cmd::LoadFeeds();            // P4: the map layers' keys and ranges (the boss roster is built by the world start, below)
         TortoiseBots::player::LoadConfig();        // R1: the `.bot` keys (TortoiseBots.Player.Commands, MaxBots)
         TortoiseBots::raidcons::LoadConfig();      // #22: the raid-consumable keys (off by default)
+        TortoiseBots::resistgear::LoadConfig();    // #20: the resist-gear swap keys (off by default)
     }
 
     // `reload all` is the operator's "read the database again". The plan tables are the module's own (ai_dungeon_plan and
@@ -348,6 +350,10 @@ public:
         // #22: the raid-consumable table, every row checked against the item and spell mirrors now that they answer.
         TortoiseBots::raidcons::LoadConfig();
         TortoiseBots::raidcons::BuildIndex();
+        // #20: the boss -> school table, every row checked against its evidence spell's school now that the mirror answers.
+        TortoiseBots::resistgear::BuildIndex();
+        // #20: every stored resist-gear hold (a crash or a restart while a set was on), and a restore for a bot already in the world.
+        TortoiseBots::resistgear::LoadAtStartup();
         // The class quests' spells, once, from the loaded quest store; a quest reload rebuilds it.
         tbhost::autotrain::LoadConfig();
         tbhost::autotrain::BuildIndex();
@@ -397,6 +403,7 @@ public:
             TortoiseBots::pool::CreateUpdate(diff);   // W0: at most one pool character per rate tick, and never in a tick with a login
         TortoiseBots::bg::Update(diff);           // BG1: the queue fill, the invitations, the leaves and the spirit healer
         TortoiseBots::Dashboard::Update(diff);
+        TortoiseBots::resistgear::Update(diff);   // #20: recover a stored hold, retry an unfinished restore (1 s sweep, backoff)
         uint32 const us = uint32(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
         uint32 const worldMs = sWorldUpdateTime.GetLastUpdateTime();
         PerfWindow& perf = Perf();
@@ -552,6 +559,8 @@ public:
             // with the pole in hand and would fight with a tool.
             tbhost::fishing::RepairPoleInHand(player);
 #endif
+            // #20: a resist set left on by a crash or a logout that could not put every piece back goes back first.
+            TortoiseBots::resistgear::RecoverLogin(player);
             // A bot's first login after its creation, and every later one, catches up on the class-quest spells its level earns.
             tbhost::autotrain::Sync(player, "login");
             // Abilities the world grants through skill values (Dual Wield, Block,
@@ -620,6 +629,8 @@ public:
         tbhost::ritualfill::NoteLogout(player);   // #14: a bot's ritual-fill hold (and the targets it started) goes with it
         TortoiseBots::addonhint::Forget(player->GetGUID());   // a login is one session: nothing pends across it
 #endif
+        // #20: the pieces the bot's own are due back before the Player is deleted (the hold map is host state: it must not leak).
+        TortoiseBots::resistgear::Restore(player, "logout");
         // Before the Player is deleted: the engine brain (PlayerbotAI) must be gone by then.
         BotMgr::Instance().OnPlayerLogout(player);
     }

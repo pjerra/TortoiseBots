@@ -166,6 +166,17 @@ Rec& Rec::Coord(std::string_view key, double x, double y, double z)
     return Put(key, buffer);
 }
 
+// A comma-separated tuple of plain numbers: the same structure the coordinate form uses (`,` between the parts), for a
+// list that is not a position: the six resistances of a piece (`res=`) and of a bot (`resist=`). Every part is a
+// decimal number, so no part needs encoding.
+Rec& Rec::Csv(std::string_view key, std::vector<int64> const& values)
+{
+    std::string joined;
+    for (int64 value : values)
+        joined += (joined.empty() ? "" : ",") + std::to_string(value);
+    return Put(key, std::move(joined));
+}
+
 namespace
 {
 uint32 g_lineTooLong = 0;

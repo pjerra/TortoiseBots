@@ -164,6 +164,39 @@ TortoiseBots.Commander.PosMs = 100
 TortoiseBots.Orders.Tactical = 1
 
 #
+#    TortoiseBots.RaidResistGear.Enable
+#        Description: The resistance-gear swap around a raid pull (issue #20): a bot grouped with a real player on a raid map
+#                     may have the bag pieces carrying the boss's resistance school put on (the boss table is
+#                     forever/data/raid/boss-resist.csv), and its own pieces put back when a release is asked for. Nothing is
+#                     bought, created, sold or destroyed: the swap is in place (Player::SwapItem). The armour slots (head,
+#                     shoulders, chest, legs, feet, hands) are the non-tank's only; weapons, trinkets, ranged, shirt and tabard
+#                     are never swapped. A bot that cannot put every piece back (dead, in combat, a full bag, its own piece in
+#                     the bank) keeps the rest waiting and tries again: every 5 s at first, then once a minute for as long as the
+#                     bot lives, so a bag slot that frees up later still gets the set off. The held set is stored in the
+#                     characters database (tortoise_bots_resist_hold), with its state (the set is on, or a release is in
+#                     flight), so a crash or a restart restores the normal set on the next login; the swap itself is refused
+#                     when that record cannot be written. Turning this off while a set is held puts it back at once and keeps a
+#                     hold it could not finish until the pieces are really back. Nothing arms the swap automatically in this
+#                     build. Off by default: with it at 0 no bot ever swaps.
+#        Default:     0
+#
+
+TortoiseBots.RaidResistGear.Enable = 0
+
+#
+#    TortoiseBots.RaidResistGear.Range
+#    TortoiseBots.RaidResistGear.ReleaseSeconds
+#        Description: Range (yd, 5-200): the arming distance of the automatic boss-range step, and ReleaseSeconds (s, 0-600):
+#                     how long after the last listed boss left the range the bot's own pieces go back on. Both are read at load;
+#                     nothing arms the swap automatically in this build, so neither changes what you see yet. A logout restores
+#                     at once.
+#        Default:     60 / 15
+#
+
+TortoiseBots.RaidResistGear.Range = 60
+TortoiseBots.RaidResistGear.ReleaseSeconds = 15
+
+#
 #    TortoiseBots.Dashboard.Enable
 #        Description: Send the bot roster to the TortoiseBots dashboard (tools/observability) over UDP. Only while TortoiseBots.Enable = 1.
 #        Default:     1

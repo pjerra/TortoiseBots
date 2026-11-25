@@ -129,6 +129,7 @@ public:
     Rec& P(std::string_view key, std::vector<std::string> const& parts);                 // one item of parts: `a:b:c`, each part encoded
     Rec& LP(std::string_view key, std::vector<std::vector<std::string>> const& items);   // `a:b;c:d`
     Rec& Coord(std::string_view key, double x, double y, double z);                      // `x,y,z` with one decimal
+    Rec& Csv(std::string_view key, std::vector<int64> const& values);                    // `a,b,c`: the tuple form for plain numbers (`resist=`, `res=`)
     std::string const& Kind() const { return _kind; }
     std::vector<std::pair<std::string, std::string>> const& Pairs() const { return _kv; }
 private:

@@ -1,0 +1,14 @@
+entry,name,school,evidence_spell,note
+10184,Onyxia,fire,18435,Onyxias Lair: classic_boss_onyxia.cpp SPELL_ONY_FLAMEBREATH
+11502,Ragnaros,fire,20565,Molten Core: classic_boss_ragnaros.cpp SPELL_RAG_MAGMA_BLAST
+11583,Nefarian,shadow,22539,Blackwing Lair: classic_boss_nefarian.cpp CLASSIC_BWL_SPELL_NEF_SHADOWFLAME
+11982,Magmadar,fire,19272,Molten Core: EventAI at the pin (no C++ script) Lava Breath
+11988,Golemagg the Incinerator,fire,20228,Molten Core: classic_boss_golemagg.cpp SPELL_GOLEMAGG_PYROBLAST
+12056,Baron Geddon,fire,20475,Molten Core: classic_boss_baron_geddon.cpp SPELL_GEDDON_LIVINGBOMB
+12118,Lucifron,shadow,19702,Molten Core: classic_boss_lucifron.cpp SPELL_LUCIFRON_IMPENDING_DOOM
+12259,Gehennas,shadow,19729,Molten Core: classic_boss_gehennas.cpp SPELL_GEHENNAS_SHADOW_BOLT_TARGET
+12435,Razorgore the Untamed,fire,22425,Blackwing Lair: classic_boss_razorgore.cpp CLASSIC_BWL_SPELL_RAZ_FIREBALL_VOLLEY
+13020,Vaelastrasz the Corrupt,fire,23461,Blackwing Lair: classic_boss_vaelastrasz.cpp CLASSIC_BWL_SPELL_VAEL_FLAME_BREATH
+15299,Viscidus,nature,25991,Temple of Ahn'Qiraj: classic_boss_viscidus.cpp SPELL_VISCIDUS_POISONBOLT_VOLLEY
+15509,Princess Huhuran,nature,26053,Temple of Ahn'Qiraj: classic_boss_huhuran.cpp SPELL_HUHURAN_NOXIOUSPOISON
+15989,Sapphiron,frost,28524,Naxxramas: classic_boss_sapphiron.cpp SPELL_SAPPH_FROST_BREATH

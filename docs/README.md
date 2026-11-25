@@ -67,6 +67,7 @@ Welcome to the TortoiseBots documentation catalog for **ForeverCore**. This know
 | [Dungeon reference](play/dungeon-reference.md) | Creature IDs and events of Turtle WoW 5-mans; layouts only for Forever. |
 | [Run leader](play/dungeon-run-leader.md) | `.tb run` and the plan tables, for server admins. |
 | [Boss tactics](play/boss-tactics.md) | The Turtle-era per-boss table; not applied on Forever. |
+| [Resist gear](play/resist-gear.md) | The raid-boss resistance swap, its settings, read-outs and crash-safe store. |
 | [Known limitations](play/known-limitations.md) | Missing features, the unported list, timers and workarounds. |
 | [Glossary](play/glossary.md) | Abbreviations and TortoiseBots terms. |
 | [Classes overview](classes/overview.md) | Shared class AI, spec detection, roles and interrupts. |

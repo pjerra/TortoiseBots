@@ -3,6 +3,7 @@
 #pragma once
 
 #include "TbCompat_S5.h"
+#include "TbCompat_Resist.h"   // #20: ResistGearHoldingCompat (the host's hold, host/TbResistGear.h)
 
 // weights
 #define SPELL_AURA_MOD_CRIT_PERCENT SPELL_AURA_MOD_CRIT_PCT
@@ -85,6 +86,8 @@ namespace tbs_w6
 {
 bool CommandedBotSelfEquipEnabled();
 }
+// #20: a bot wearing a resist set the resist-gear host put on must not be "upgraded" back out of it mid-hold (the
+// swap is not a gear choice the bot made; the set comes off through `Restore`, which owns the hold).
 inline bool MayAutoEquipUpgradesCompat(Player* bot)
 {
     if (!bot)
@@ -92,5 +95,5 @@ inline bool MayAutoEquipUpgradesCompat(Player* bot)
     return TortoiseBots::commandedequip::MayCommandedBotAutoEquip(
         TortoiseBots::BotCommands::IsInCommandedGroup(bot),
         tbs_w6::CommandedBotSelfEquipEnabled(),
-        tbs_w6::ExplicitEquipOrderFlag());
+        tbs_w6::ExplicitEquipOrderFlag()) && !ResistGearHoldingCompat(bot);
 }

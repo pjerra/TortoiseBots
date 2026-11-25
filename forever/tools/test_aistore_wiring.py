@@ -73,8 +73,9 @@ class Registration(unittest.TestCase):
         generated = CTX.read_text()
         self.assertIn('creators["manual saved string"] = [](PlayerbotAI* ai) { return new StringManualSetSavedValue(ai); };', generated)
         # The "following party" value (quest travel gates answer for a free bot's own party, merged in #256)
-        # raised the registered value count from 269 to 270; BG2's "enemy flag carrier" and "team flag carrier" (row 4) took it to 272;
-        # the pool gear top-up and the emote and mount animation rows took it to 274.
+        # raised the registered value count from 269 to 270; BG2's "enemy flag carrier" and "team flag carrier" (row 4) took
+        # it to 272; the pool gear top-up, the emote and mount animation rows, #48's spell school and #14's ritual fill took
+        # it to 274.
         counts = re.findall(r"ValueContext \((\d+) of its keys\)", generated)
         self.assertEqual(len(counts), 1, "the generated value-context comment is missing")
         k_values = re.search(r"kValues = (\d+)", generated)

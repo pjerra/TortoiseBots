@@ -136,6 +136,10 @@ nodes:
     path: play/boss-tactics.md
     category: play
     summary: Boss tactics are not on ForeverCore yet; bots fight with their ordinary class and raid AI.
+  - id: play-resist-gear
+    path: play/resist-gear.md
+    category: play
+    summary: What the raid-boss resistance-gear swap does, its three settings and read-out keys, and the characters-database store that puts a bot's own pieces back after a crash.
   - id: play-refusal-rows
     path: play/refusal-rows.md
     category: play
