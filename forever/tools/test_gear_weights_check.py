@@ -21,22 +21,24 @@ class WeightsSql(unittest.TestCase):
     def test_shipped_scales_parse(self):
         scales = check.parse_weights()
         self.assertEqual(len(scales), 29)
-        self.assertEqual(sum(len(s["stats"]) for s in scales.values()), 240)
+        self.assertEqual(sum(len(s["stats"]) for s in scales.values()), 238)
         self.assertEqual((scales[2]["name"], scales[2]["class"]), ("fury", 1))
         self.assertEqual((scales[32]["name"], scales[32]["class"]), ("feraldps", 11))
 
     def test_forever_stat_mix(self):
-        stats = check.parse_weights()[4]["stats"]
-        self.assertEqual(stats["splpwr"], 5)      # holy paladin now scores spell power
+        scales = check.parse_weights()
+        stats = scales[4]["stats"]
+        self.assertNotIn("splpwr", stats)         # healers score stat 45 at splheal
         self.assertEqual(stats["spi"], 3)
         self.assertEqual(stats["manargn"], 5)
         self.assertEqual(stats["splheal"], 10)    # +healing ~ twice intellect
-        self.assertEqual(check.parse_weights()[14]["stats"]["splpwr"], 29)
-        self.assertEqual(check.parse_weights()[22]["stats"]["spi"], 13)
-        self.assertEqual(check.parse_weights()[31]["stats"]["splheal"], 21)
-        self.assertEqual(check.parse_weights()[6]["stats"]["splpwr"], 2)
-        self.assertEqual(check.parse_weights()[21]["stats"]["int"], 2)
-        self.assertEqual(check.parse_weights()[7]["stats"]["int"], 1)
+        self.assertNotIn("splpwr", scales[14]["stats"])
+        self.assertEqual(scales[22]["stats"]["spi"], 13)
+        self.assertEqual(scales[31]["stats"]["splheal"], 21)
+        self.assertEqual(scales[6]["stats"]["splpwr"], 1)
+        self.assertEqual(scales[21]["stats"]["splpwr"], 1)
+        self.assertEqual(scales[21]["stats"]["int"], 2)
+        self.assertEqual(scales[7]["stats"]["int"], 1)
 
     def test_healers_value_healing_above_intellect(self):
         scales = check.parse_weights()
@@ -84,6 +86,14 @@ class StatFamilies(unittest.TestCase):
         for sid, family in want.items():
             self.assertEqual(check.spec_family(scales[sid]["stats"]), family, "scale %d" % sid)
 
+    def test_hybrids_keep_strength_with_margin(self):
+        """A +1 to any spell stat must not flip retribution or enhancement to Spell."""
+        scales = check.parse_weights()
+        for sid in (6, 21):
+            stats = scales[sid]["stats"]
+            spell = sum(v for k, v in stats.items() if k in check.SPELL_STATS)
+            self.assertLess(spell, stats["str"], "scale %d" % sid)
+
 
 class Coverage(unittest.TestCase):
     def test_spec_map_matches_priority(self):
@@ -97,8 +107,13 @@ class Coverage(unittest.TestCase):
     def test_stat_names(self):
         self.assertEqual(check.weight_stat_name("mage", "fire", "Crit"), "spellcritstrkrtng")
         self.assertEqual(check.weight_stat_name("warrior", "fury", "Crit"), "critstrkrtng")
+        self.assertEqual(check.weight_stat_name("paladin", "holy", "Crit"), "spellcritstrkrtng")
+        self.assertEqual(check.weight_stat_name("druid", "feral", "Crit"), "critstrkrtng")
         self.assertEqual(check.weight_stat_name("shaman", "elemental", "Hit"), "spellhitrtng")
+        self.assertEqual(check.weight_stat_name("shaman", "restoration", "Hit"), "spellhitrtng")
         self.assertEqual(check.weight_stat_name("hunter", "survival", "Hit"), "hitrtng")
+        self.assertEqual(check.weight_stat_name("mage", "fire", "Hit"), "spellhitrtng")
+        self.assertEqual(check.weight_stat_name("warlock", "affliction", "Hit"), "spellhitrtng")
         self.assertEqual(check.weight_stat_name("priest", "holy", "Spell Power"), "splpwr")
         self.assertEqual(check.weight_stat_name("druid", "restoration", "Mana per 5"), "manargn")
 
@@ -121,8 +136,35 @@ class Scoring(unittest.TestCase):
     def test_raw_stats_unchanged(self):
         self.assertEqual(self.score(2, {38: 50}), 50 * 2)          # attack power
         self.assertEqual(self.score(2, {7: 10}), 10 * 1)            # stamina
-        self.assertEqual(self.score(4, {45: 10}), 10 * 5)           # holy paladin spell power
-        self.assertEqual(self.score(6, {45: 10}), 10 * 2)           # retribution spell power
+        self.assertEqual(self.score(14, {41: 10}), 10 * 61)         # holy priest healing
+        self.assertEqual(self.score(6, {45: 10}), 10 * 1)           # retribution spell power
+
+    def test_spell_power_scores_the_better_weight(self):
+        # Stat 45 (spell power) grants damage and healing; stat 42 (spell damage
+        # done) grants damage only, so a pure healer values 45 and rejects 42.
+        self.assertEqual(self.score(14, {45: 10}), 10 * 61)         # holy priest: splheal 61
+        self.assertEqual(self.score(14, {42: 10}), 0)
+        self.assertEqual(self.score(4, {45: 10}), 10 * 10)          # holy paladin: splheal 10
+        self.assertEqual(self.score(4, {42: 10}), 0)
+        # Damage casters and the specs that price both weights keep the better one.
+        self.assertEqual(self.score(24, {45: 10}), 10 * 7)          # mage fire: splpwr 7 only
+        self.assertEqual(self.score(31, {45: 10}), 10 * 21)         # resto druid: 21 over 10
+        self.assertEqual(self.score(31, {42: 10}), 10 * 10)
+
+    def test_rating_stats_round_to_nearest_and_keep_one_point(self):
+        # hunter crit weight 29 per percent: 7 crit rating is 0.5% = 14.5 -> 15
+        self.assertEqual(self.score(7, {32: 7}), 15)
+        # prot paladin prices hit at 1 per percent: 4 hit rating is still worth 1
+        self.assertEqual(self.score(5, {31: 4}), 1)
+        self.assertEqual(self.score(5, {31: 0}), 0)                 # no stat, no point
+        self.assertEqual(self.score(5, {37: 4}), 1)                 # expertise, same rule
+
+    def test_hybrid_caster_jewelry_does_not_beat_strength(self):
+        caster_ring = {5: 10, 45: 30}   # +10 intellect, +30 spell power
+        melee_ring = {4: 15, 7: 15}     # +15 strength, +15 stamina
+        for sid in (6, 21):
+            self.assertLess(self.score(sid, caster_ring), self.score(sid, melee_ring),
+                            "scale %d" % sid)
 
     def test_unknown_or_unweighted_stats_score_zero(self):
         self.assertEqual(self.score(2, {82: 100}), 0)               # unweighted ItemModType
@@ -184,7 +226,7 @@ class EndToEnd(unittest.TestCase):
             rc = check.main([])
         self.assertEqual(rc, 0)
         text = buf.getvalue()
-        self.assertIn("scales: 29, weights: 240", text)
+        self.assertIn("scales: 29, weights: 238", text)
         self.assertIn("No --items dump", text)
 
 

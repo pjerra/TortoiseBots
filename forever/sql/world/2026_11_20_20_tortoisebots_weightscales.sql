@@ -3,20 +3,23 @@
 --
 -- Units: one point of a stat, one percent of crit/hit/dodge/parry/block, and one
 -- weapon DPS. A ForeverCore item stat carries rating points, so RandomItemWeights
--- divides the raw value by the level-60 CombatRatings ratio
--- (ai/playerbot/policy/item/ClassicItemStatPolicy.h) before applying the weight;
+-- divides the raw value by the CombatRatings ratio (constant across levels,
+-- ai/playerbot/policy/item/ClassicItemStatPolicy.h) before applying the weight;
 -- item equip spells already pass percent.
 --
 -- The mix per spec follows the level-60 gear Forever players wear
 -- (forever/data/aotc/stat-priority-60.csv): +healing is worth about twice a
--- healer's intellect, discipline and holy priests score spell power like
--- intellect, retribution and enhancement score their spell half, every caster
--- and hunter carries a spirit or intellect weight instead of none, and a point
--- of mana per 5 is priced like one intellect point (the Turtle tables priced it
--- at 3-5, which put a rare mana-regen item above the healing it competes with).
--- Physical damage specs keep stamina at 1 as a tie-break: the ranking data puts
--- stamina first for warriors, which is the PvP and survival gear those players
--- wear, not the dungeon damage gear these scales choose.
+-- healer's intellect, retribution and enhancement score their spell half, every
+-- caster and hunter carries a spirit or intellect weight instead of none, and a
+-- point of mana per 5 is priced like one intellect point (the Turtle tables
+-- priced it at 3-5, which put a rare mana-regen item above the healing it
+-- competes with). Spell power (item stat 45) grants damage and healing, so it
+-- scores under the better of splpwr and splheal: a healer gets a stat-45 item's
+-- full healing value without a splpwr row, and a pure spell-damage (42) item
+-- stays worthless for a healer that has none. Physical damage specs keep
+-- stamina at 1 as a tie-break: the ranking data puts stamina first for warriors,
+-- which is the PvP and survival gear those players wear, not the dungeon damage
+-- gear these scales choose.
 
 CREATE TABLE IF NOT EXISTS `ai_playerbot_weightscales` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
@@ -100,7 +103,6 @@ INSERT INTO `ai_playerbot_weightscale_data` (`id`, `field`, `val`) VALUES
   (4, 'spellcritstrkrtng', 100),
   (4, 'spi', 3),
   (4, 'splheal', 10),
-  (4, 'splpwr', 5),
   (4, 'sta', 5),
   (5, 'agi', 5),
   (5, 'armor', 1),
@@ -124,7 +126,7 @@ INSERT INTO `ai_playerbot_weightscale_data` (`id`, `field`, `val`) VALUES
   (6, 'hitrtng', 40),
   (6, 'int', 2),
   (6, 'mledps', 28),
-  (6, 'splpwr', 2),
+  (6, 'splpwr', 1),
   (6, 'sta', 1),
   (6, 'str', 4),
   (7, 'agi', 4),
@@ -180,7 +182,6 @@ INSERT INTO `ai_playerbot_weightscale_data` (`id`, `field`, `val`) VALUES
   (14, 'manargn', 33),
   (14, 'spi', 34),
   (14, 'splheal', 61),
-  (14, 'splpwr', 29),
   (14, 'sta', 12),
   (15, 'int', 2),
   (15, 'manargn', 1),
@@ -217,7 +218,7 @@ INSERT INTO `ai_playerbot_weightscale_data` (`id`, `field`, `val`) VALUES
   (21, 'hitrtng', 48),
   (21, 'int', 2),
   (21, 'mledps', 28),
-  (21, 'splpwr', 2),
+  (21, 'splpwr', 1),
   (21, 'sta', 1),
   (21, 'str', 4),
   (22, 'int', 20),

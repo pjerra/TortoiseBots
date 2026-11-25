@@ -9,8 +9,9 @@ with --items, an item stat dump, and answers two questions:
      Stats are shown in one unit: the value of one point of an item stat. The scales
      price crit/hit/dodge/parry/block per percent, so those weights are divided by the
      level-60 CombatRatings ratio (parsed from ai/playerbot/policy/item/ClassicItemStatPolicy.h)
-     before comparing; the equip-spell path already passes percent. The aotc weights are
-     the site's own numbers, compared in the order and the ratio they state.
+     before comparing; the ratio is constant across levels. The equip-spell path
+     already passes percent. The aotc weights are the site's own numbers, compared
+     in the order and the ratio they state.
   2. with --items, score the items Forever players wear most (gear-60.csv) per slot with
      the same stat rules as RandomItemMgr::CalculateStatWeight and list the items the
      scoring places below the top of their slot. The gates that drop a whole item
@@ -85,6 +86,21 @@ AOTC_STAT = {
     "Spirit": "spi", "Attack Power": "atkpwr", "Spell Power": "splpwr",
     "Healing": "splheal", "Mana per 5": "manargn", "Defense": "defrtng",
 }
+
+# Specs whose Hit/Crit stat is the spell one. Everyone else scores melee/ranged
+# hit and crit, including protection paladins, enhancement shamans and feral.
+CASTER_SPECS = {
+    ("mage", "arcane"), ("mage", "fire"), ("mage", "frost"),
+    ("warlock", "affliction"), ("warlock", "demonology"), ("warlock", "destruction"),
+    ("priest", "discipline"), ("priest", "holy"), ("priest", "shadow"),
+    ("paladin", "holy"),
+    ("shaman", "elemental"), ("shaman", "restoration"),
+    ("druid", "balance"), ("druid", "restoration"),
+}
+
+# ItemModType of ForeverCore spell power: grants damage and healing, unlike the
+# damage-only spell-damage stat (42), so it scores under the better weight.
+FOREVER_SPELL_POWER = 45
 
 # The scale stat family rule of ai/playerbot/RandomItemWeights.cpp GetSpecStatFamily.
 SPELL_STATS = {
@@ -192,12 +208,22 @@ def parse_priority(path=PRIORITY_CSV):
 def weight_stat_name(cls, spec, stat):
     """Map one aotc stat to the scale name it scores under."""
     if stat == "Crit":
-        return "critstrkrtng" if cls in ("warrior", "paladin", "hunter", "rogue", "shaman") else "spellcritstrkrtng"
+        return "spellcritstrkrtng" if (cls, spec) in CASTER_SPECS else "critstrkrtng"
     if stat == "Hit":
-        if spec in ("elemental", "balance", "shadow"):
-            return "spellhitrtng"
-        return "hitrtng"
+        return "spellhitrtng" if (cls, spec) in CASTER_SPECS else "hitrtng"
     return AOTC_STAT.get(stat, stat.lower())
+
+
+def effective_weight(stats, name):
+    """The per-point weight a name scores with.
+
+    The Spell Power row is ForeverCore stat 45, which grants damage and healing,
+    so RandomItemWeights.cpp scores it under the better of splpwr and splheal.
+    """
+    weight = stats.get(name, 0)
+    if name == "splpwr":
+        weight = max(weight, stats.get("splheal", 0))
+    return weight
 
 
 def per_point_weight(name, weight, divisors, names):
@@ -236,13 +262,19 @@ def score_item(scale, item, names, divisors):
         if value == 0:
             continue
         name = BASE_STAT.get(stat_type) or names.get(stat_type)
-        if not name or name not in stats:
+        if not name:
+            continue
+        if stat_type == FOREVER_SPELL_POWER:
+            name = "splheal" if stats.get("splheal", 0) > stats.get("splpwr", 0) else "splpwr"
+        if name not in stats:
             continue
         weighted = stats[name] * value
         if weighted <= 0:
             continue
         div = divisors.get(stat_type, 1)
-        score += int(weighted / div) if div > 1 else weighted
+        if div > 1:
+            weighted = max(1, (weighted + div // 2) // div)
+        score += weighted
     score += stats.get("armor", 0) * int(item.get("armor", 0))
     if item.get("dmgMax", 0) and item.get("delay", 0):
         dps = int(((item["dmgMin"] + item["dmgMax"]) / (item["delay"] / 1000.0)) / 2)
@@ -356,11 +388,11 @@ def compare(out, scales, priority, names, divisors, min_share=0.05, factor=2.0):
             name = weight_stat_name(cls, spec, stat)
             entries.append((order, stat, weight, tied, name))
             aotc_total += weight
-        ours_points = {name: per_point_weight(name, stats.get(name, 0), divisors, names)
+        ours_points = {name: per_point_weight(name, effective_weight(stats, name), divisors, names)
                        for _o, _s, _w, _t, name in entries}
         ours_total = sum(ours_points.values())
         for order, stat, weight, tied, name in entries:
-            ours = stats.get(name, 0)
+            ours = effective_weight(stats, name)
             a_share = weight / aotc_total if aotc_total else 0
             o_share = ours_points[name] / ours_total if ours_total else 0
             mark = ""
@@ -373,7 +405,7 @@ def compare(out, scales, priority, names, divisors, min_share=0.05, factor=2.0):
             out.write("  %-9s %-12s aotc %4d (%.2f)  ours %3d (%.2f)  %s\n" % (
                 "%d%s" % (order, "~" if tied else ""), stat, weight, a_share,
                 ours, o_share, mark))
-        missing = [n for n in {e[4] for e in entries} if n not in stats]
+        missing = [n for n in {e[4] for e in entries} if effective_weight(stats, n) <= 0]
         if missing:
             out.write("  no weight at all: %s\n" % ", ".join(sorted(missing)))
     return flagged

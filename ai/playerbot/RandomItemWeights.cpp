@@ -650,8 +650,16 @@ uint32 RandomItemMgr::CalculateStatWeight(uint8 playerclass, uint8 spec, ItemPro
             continue;
 
         uint32 singleStat = CalculateSingleStatWeight(playerclass, spec, weightName, val);
+        if (statType == 45)  // ITEM_MOD_SPELL_POWER: heals as well as damages
+        {
+            uint32 const healStat = CalculateSingleStatWeight(playerclass, spec, "splheal", val);
+            weightName = ai::ClassicItemStatSpellPowerWeightName(statType, singleStat, healStat);
+            if (healStat > singleStat)
+                singleStat = healStat;
+            isCasterItem = true;
+        }
         if (statDivisor > 1)
-            singleStat /= statDivisor;
+            singleStat = ai::ClassicItemStatRounded(singleStat, statDivisor);
         if (weightName == "splpwr" || weightName == "firsplpwr" || weightName == "natsplpwr" ||
             weightName == "frosplpwr" || weightName == "shasplpwr" || weightName == "arcsplpwr")
         {
