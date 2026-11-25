@@ -71,9 +71,10 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 
 ## Custom abilities
 
-- **Aspect of the Viper:** a hunter aspect that trades damage for mana regeneration; the bot switches to it when mana is low and back to *Aspect of the Hawk* once mana recovers.
+- **Aspect of the Beast:** manual only (`.bot choice aspect beast`); on ForeverCore the class-line autotrain teaches it (13161).
+- **Aspect of the Viper:** a hunter aspect that trades damage for mana regeneration; the bot switches to it when mana is low and back to *Aspect of the Hawk* once mana recovers. On ForeverCore the client's Viper (415423) is on the Beast Mastery line but no trainer row, preset or class-line pass grants it, so the switch stays idle there.
 - **Aspect of the Wolf:** Not on ForeverCore yet.
-- **Lacerate:** Not on ForeverCore yet.
+- **Lacerate:** the client's Lacerate on ForeverCore is a pet ability (Survival-line ranks); the hunter's own `lacerate` action has no trigger, so the bot never casts it itself.
 
 ---
 
