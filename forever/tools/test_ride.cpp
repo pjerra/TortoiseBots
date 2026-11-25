@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -112,6 +113,47 @@ int main()
             "finding8_ok_on_arrival");
         Check(ai::RideOrderResult(false, false, false, false, "not-found") == "fail:not-found",
             "finding8_fail_code");
+    }
+
+    // 4. #215 boarding point: the deck sample nearest the bot at its height band; none qualifies -> false.
+    {
+        std::vector<ai::DeckPoint> samples = {
+            { 10.0f, 0.0f, 53.5f },   // deck, near the bot
+            { 30.0f, 0.0f, 53.8f },   // deck, far end
+            { 4.0f, 0.0f, 40.0f },    // hull bottom: nearest in 2D, 14 yd too low
+            { 5.0f, 0.0f, 70.0f } };  // balloon
+        ai::DeckPoint p;
+        Check(ai::PickBoardingPoint(samples, 0.0f, 0.0f, 53.9f, 2.5f, p) && p.x == 10.0f,
+            "i215_boarding_point_nearest_deck_sample");
+        Check(!ai::PickBoardingPoint({ { 4.0f, 0.0f, 40.0f } }, 0.0f, 0.0f, 53.9f, 2.5f, p),
+            "i215_no_deck_at_bot_height");
+        Check(!ai::PickBoardingPoint({}, 0.0f, 0.0f, 53.9f, 2.5f, p),
+            "i215_no_samples");
+    }
+
+    // 5. #215 approach: far = navmesh to the dock edge, near = one straight step onto the deck.
+    {
+        Check(ai::ChooseDeckApproach(25.0f, 10.0f) == ai::DeckApproachMode::Navmesh, "i215_far_walks_navmesh");
+        Check(ai::ChooseDeckApproach(10.0f, 10.0f) == ai::DeckApproachMode::Direct, "i215_near_steps_direct");
+        Check(ai::ChooseDeckApproach(3.0f, 10.0f) == ai::DeckApproachMode::Direct, "i215_close_steps_direct");
+    }
+
+    // 6. #215 stale state: a boarded bot that is no longer a passenger fails after the grace; aboard or arrived never does.
+    {
+        Check(!ai::HasLostTransport(true, false, false, 4999, 5000), "i215_lost_inside_grace_waits");
+        Check(ai::HasLostTransport(true, false, false, 5000, 5000), "i215_lost_after_grace_fails");
+        Check(!ai::HasLostTransport(true, false, true, 9000, 5000), "i215_aboard_is_not_lost");
+        Check(!ai::HasLostTransport(true, true, false, 9000, 5000), "i215_arrived_is_not_lost");
+        Check(!ai::HasLostTransport(false, false, false, 9000, 5000), "i215_never_boarded_is_not_lost");
+        Check(ai::RideOrderResult(false, false, false, false, "lost-transport") == "fail:lost-transport",
+            "i215_lost_transport_fail_code");
+    }
+
+    // 7. #215 follow vs ride: a running ride holds the bot's movement until it arrived or ended.
+    {
+        Check(ai::RideHoldsMovement(true, false), "i215_waiting_or_aboard_holds");
+        Check(!ai::RideHoldsMovement(false, true), "i215_arrived_releases");
+        Check(!ai::RideHoldsMovement(false, false), "i215_ended_releases");
     }
 
     if (g_failed > 0)

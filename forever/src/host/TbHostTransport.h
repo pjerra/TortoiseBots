@@ -24,6 +24,10 @@ void CancelOrderErrand(Player const* bot);
 // idles while FindMap() is null (far teleport), and leaves at destination dock.
 void TickRide(Player* bot, uint32_t diffMs);
 
+// #215: true while a ride errand waits at the dock, walks onto the deck or rides: the ride alone moves the bot then (the
+// engine's tick and the host's catch-up teleport stay off it).
+bool HoldsMovement(Player const* bot);
+
 // Returns true if the bot is currently aboard a transport.
 bool IsOnBoard(Player const* bot);
 

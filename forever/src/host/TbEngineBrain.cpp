@@ -489,7 +489,10 @@ void Tick(Brain* brain, uint32 diff)
         tbhost::taxi::TickLandingWatch(brain->bot);
         tbhost::ride::TickRide(brain->bot, diff);
         onyxia::Tick(brain->bot, brain->ai, diff);
-        brain->ai->UpdateAI(diff);
+        // #215: during a ride (waiting at the dock, stepping onto the deck, aboard) the ride alone moves the bot: the
+        // engine's follow walked it off the dock and out of the deck in world space. A fight still gets the engine.
+        if (!tbhost::ride::HoldsMovement(brain->bot) || brain->bot->IsInCombat())
+            brain->ai->UpdateAI(diff);
         NoteCastStart(brain);
     }
     catch (ByteBufferException const&)

@@ -6,6 +6,7 @@
 #include "host/TbHostAhMarket.h"
 #include "host/TbHostGuildMail.h"
 #include "host/TbHostGuildJoin.h"
+#include "host/TbHostTransport.h"
 #include "host/TbHostGuildOrders.h"
 #include "host/TbHostGuildOrderDisenchant.h"
 #include "host/TbHostGuildOrderQueues.h"
@@ -2105,6 +2106,8 @@ void BotMgr::Think(Bot& bot, Player* me)
             reason = "dead";
         else if (me->IsBeingTeleported() || master->IsBeingTeleported() || !master->IsInWorld())
             reason = "teleporting";
+        else if (tbhost::ride::HoldsMovement(me))
+            reason = "riding";             // #215: a catch-up would pull it off the dock or the deck
         else if (sameMap && inInstance)
         {
             // D4 (slice 4): inside an instance the 100-yd distance catch-up is off. A bot that fell behind WALKS (the engine's own follow); nothing is put in `stuck`.
