@@ -165,6 +165,18 @@ static void TestTrailBackOff()
     CHECK(ai::FollowTrailBackOffIndex(empty, 0.0f, 0.0f, 10.0f) == -1);
 }
 
+// A flee's back-off point stays within the leash of the group's tank; with no
+// tank known every point goes, as before.
+static void TestFleeTrailLeash()
+{
+    CHECK(ai::FleeTrailPointLeashed(10.0f, 0.0f, true, 0.0f, 0.0f));
+    CHECK(ai::FleeTrailPointLeashed(ai::kFleeTrailLeashYd, 0.0f, true, 0.0f, 0.0f));
+    CHECK(!ai::FleeTrailPointLeashed(ai::kFleeTrailLeashYd + 1.0f, 0.0f, true, 0.0f, 0.0f));
+    // The Wailing Caverns case: the mage fled to -89 236 while the tank stood at 30 269.
+    CHECK(!ai::FleeTrailPointLeashed(-89.0f, 236.0f, true, 30.0f, 269.0f));
+    CHECK(ai::FleeTrailPointLeashed(500.0f, 500.0f, false, 0.0f, 0.0f));
+}
+
 // Entrance camp: the leader stands still, so only the bot's own walk in
 // extends the trail, and the back-off then runs back along those steps.
 static void TestTrailBackOffOnOwnSteps()
@@ -185,6 +197,7 @@ static void TestTrailBackOffOnOwnSteps()
 int main()
 {
     TestTrailBackOff();
+    TestFleeTrailLeash();
     TestTrailBackOffOnOwnSteps();
     TestWedgeNeverInFront();
     TestWedgeRings();

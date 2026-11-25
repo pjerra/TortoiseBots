@@ -4093,10 +4093,30 @@ bool MovementAction::FleeAlongLeadTrail(Unit* target, float distance, IdleMobVet
     LastMovement& lm = AI_VALUE(LastMovement&, "last movement");
     WorldPosition const botPos(bot);
     float const startDistance = sServerFacade.getDistance2d(bot, target);
+    // The leash (FleeTrailPointLeashed): the nearest living tank of the group on this map, not the bot itself.
+    bool tankKnown = false;
+    float tankX = 0.0f, tankY = 0.0f, tankYd = 0.0f;
+    if (Group* group = bot->GetGroup())
+        for (Player* member : LiveGroupMembers(group))
+        {
+            if (!member || member == bot || !sServerFacade.IsAlive(member) || member->GetMapId() != bot->GetMapId() ||
+                !ai->IsTank(member))
+                continue;
+            float const yd = sServerFacade.getDistance2d(bot, member);
+            if (!tankKnown || yd < tankYd)
+            {
+                tankKnown = true;
+                tankX = member->GetPositionX();
+                tankY = member->GetPositionY();
+                tankYd = yd;
+            }
+        }
     for (int i = first; i < nearest; ++i)
     {
         FollowTrailPoint const& point = trail[static_cast<std::size_t>(i)];
         if (sServerFacade.getDistance2d(target, point.x, point.y) < startDistance + sPlayerbotAIConfig.followDistance)
+            continue;
+        if (!FleeTrailPointLeashed(point.x, point.y, tankKnown, tankX, tankY))
             continue;
         float const heading = botPos.GetAngleTo(WorldPosition(bot->GetMapId(), point.x, point.y, point.z));
         if (!lm.fleeFailures.IsHeadingFree(heading, nowMs))
