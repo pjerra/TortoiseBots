@@ -605,6 +605,14 @@ class Scheduler(unittest.TestCase):
         self.assertIn("sPlayerbotAIConfig.levelLadderLogMinutes", ladder_cfg)
         self.assertIn("ApplyLadderConfig(s);", func(SCHED, "void LoadConfig()"))
         self.assertIn("ApplyLadderConfig(s);", func(SCHED, "bool Update("))
+        # The engine reads aiplayerbot.conf lazily, on its first brain; the pool may run with none. It loads it once per
+        # config load, after the world is up, before the pass reads the four keys (a failed read is not retried every pass).
+        update = func(SCHED, "bool Update(")
+        self.assertIn("s.ladderConfigTried = false;", func(SCHED, "void LoadConfig()"))
+        self.assertIn("if (!s.ladderConfigTried)", update)
+        self.assertIn("engine::ConfigReady()", update)
+        self.assertIn("engine::EnsureConfig()", update)
+        self.assertLess(update.index("engine::EnsureConfig()"), update.index("ApplyLadderConfig(s);"))
         self.assertIn("getIntConfig(CONFIG_MAX_PLAYER_LEVEL)", func(SCHED, "void LoadConfig()"))
         for line in ("levelLadder = config.GetBoolDefault(\"AiPlayerbot.LevelLadder\", true)",
                      "levelLadderBandSize = config.GetIntDefault(\"AiPlayerbot.LevelLadderBandSize\", 5)",
@@ -622,6 +630,9 @@ class Scheduler(unittest.TestCase):
         for text in ("the level ladder's band math", "the ladder's pick order", "the cap's band is a hard cap",
                      "the ladder off is the round's old order", "MaxLevelShare is a hard cap"):
             self.assertIn(text, SCHED_TEST)
+        # The pass cost is measured with the ladder running too: mixed levels, under the target (allowed 1).
+        self.assertIn("pass cost over 2500 bots with the ladder", SCHED_TEST)
+        self.assertIn("pass.logins.size() == 1", SCHED_TEST)
 
     def test_the_rounds_five_cases_are_in_the_policy_test(self):
         # The spec's five sentences, the fix round's cases, and the count of the pass over 2000 bots (under 0.5 ms).

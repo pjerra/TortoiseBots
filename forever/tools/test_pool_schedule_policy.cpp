@@ -11,7 +11,7 @@
 // on an account share it), the dead wait and a fight's wait, the shutdown's no-login, the rolled session and offline lengths,
 // the track a vanished row must not lose, the level ladder (its band math, rounding and edge cases, the online target split
 // over the bands, the level cap's hard share at 0/10/100 percent, the pick order and its off switch), and the pass cost
-// (under 0.5 ms over 2000 bots).
+// (under 0.5 ms over 2000 bots, and over 2500 mixed-level bots with the ladder running).
 //
 // The simulator applies a pass the way the host scheduler does: a login becomes Loading (it holds a slot) and its session ends
 // after a rolled length; a logout becomes Leaving (no second logout). It is the smallest model in which "logs out once" has a
@@ -957,6 +957,48 @@ int main()
         }
         double const average = total / passes;
         std::printf("pass cost over 2000 bots: average %.1f us, worst %.1f us\n", average, worst);
+        CHECK(average < 500.0);
+    }
+
+    // (10) the same pass over a larger, mixed-level pool with the ladder actually running: the online count is under the
+    // target and the login window is empty, so every pass builds the band view and picks a login. (9) never did: at its
+    // target the policy returns before the ladder.
+    {
+        Sim sim;
+        sim.settings.targetOnline = 1500;
+        sim.settings.loginsPerMinute = 20;
+        sim.now = 2000 * kMinute;
+        for (std::uint64_t i = 0; i < 2500; ++i)
+        {
+            w::PoolBotState bot = i % 2
+                ? OnlineBot(i + 1, std::uint8_t(1 + i % 8), sim.now - std::int64_t(i) * kSecond, sim.now + std::int64_t(i % 600) * kSecond)
+                : OfflineBot(i + 1, std::uint8_t(1 + i % 8), sim.now - 10 * kMinute - std::int64_t(i) * kSecond);
+            bot.level = std::uint8_t(1 + i % 60);       // every band, both ends of the cap included
+            sim.bots.push_back(bot);
+        }
+        w::PoolLadderView const view = w::PoolLadderViewOf(sim.bots, sim.settings);
+        CHECK(w::PoolLadderBandCount(view.maxLevel, view.bandSize) > 1);
+        double worst = 0.0;
+        double total = 0.0;
+        int const passes = 200;
+        for (int i = 0; i < passes; ++i)
+        {
+            auto const started = std::chrono::steady_clock::now();
+            w::PoolPass pass = sim.Pass();
+            double const us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - started).count();
+            total += us;
+            worst = us > worst ? us : worst;
+            CHECK(pass.counted == 1250);
+            CHECK(pass.logins.size() == 1);            // allowed == 1: the ladder's view and pick ran
+            if (!pass.logins.empty())
+            {
+                w::PoolBotState const* pick = sim.Find(pass.logins[0]);
+                CHECK(pick != nullptr && w::PoolLadderEligible(*pick, view));
+            }
+            sim.now += kSecond;                        // the login is not applied: the same shape every pass
+        }
+        double const average = total / passes;
+        std::printf("pass cost over 2500 bots with the ladder: average %.1f us, worst %.1f us\n", average, worst);
         CHECK(average < 500.0);
     }
 

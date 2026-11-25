@@ -74,6 +74,7 @@ struct State
     bool warnedOff = false;
     bool warnedReset = false;
     std::uint32_t accMs = 0;
+    bool ladderConfigTried = false;
     world::PoolScheduleSettings settings;
     std::uint32_t levelLadderLogMinutes = 5;   // host-only: the cadence of the per-band log line
     std::int64_t nextLadderBandLogMs = 0;
@@ -417,6 +418,7 @@ void LoadConfig()
     // The ladder's band math is built on the server's own level cap, never a hard-coded 60: a server with another cap splits
     // its levels the same way. Its four knobs are the engine's own (AiPlayerbot.LevelLadder*), already read on this build.
     s.settings.maxLevel = std::uint32_t(std::clamp<int32>(sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL), 2, 255));
+    s.ladderConfigTried = false;
     ApplyLadderConfig(s);
     s.nextLadderBandLogMs = 0;
     s.nextLadderPassLogMs = 0;
@@ -463,6 +465,15 @@ bool Update(std::uint32_t diff)
     if (s.accMs < 1000)
         return false;
     s.accMs = 0;                          // one pass a second, whatever the tick's diff was
+    // The engine reads aiplayerbot.conf lazily, on its first brain, and a pool with no brain in the world (EngineByDefault = 0)
+    // may never build one: load it here, now that the world's stores are up, or the four ladder keys stay at the C++ defaults.
+    // Once per config load only: a failed Initialize reads the whole file and the DB, so it must not run once a second.
+    if (!s.ladderConfigTried)
+    {
+        s.ladderConfigTried = true;
+        if (!engine::ConfigReady())
+            (void)engine::EnsureConfig();
+    }
     ApplyLadderConfig(s);
     return Pass(s);
 }
