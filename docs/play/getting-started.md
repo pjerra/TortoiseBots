@@ -20,7 +20,7 @@ TortoiseBots fills a **ForeverCore** realm with bots and lets you take some of t
 
 - A character to play, and one to four more characters on your own account that you want as bots.
 - A server that runs TortoiseBots **with the bot engine** and has the module switched on (`TortoiseBots.Enable = 1`, off by default).
-- The [TortoiseBotsForeverManager](commands/addon.md) addon (`/tbfm`, also `/tb`, `/tbot` and `/tortoise`) in your client's `Interface/AddOns/` folder. Optional, but easier than typing commands.
+- The [TortoiseBotsForeverManager](commands/addon.md) addon (`/tbfm`, also `/tb`, `/tbot` and `/tortoise`) in your client's `Interface/AddOns/` folder. Optional, but easier than typing commands. A server that enables the add-on hint sends one system line with the download link about 45 seconds after you log in without it; you are told once per character.
 
 The `.bot` command is for players only while `TortoiseBots.Player.Commands = 1` (the default). A server admin can turn it off; then only GameMasters may use `.bot`.
 

@@ -83,7 +83,7 @@ The module registers no core patch. `AddSC_tortoisebots` creates the scripts bel
 | `tortoisebots_server` | `OnPacketReceive` | Reads the minimap-ping packet for a pending commander placement; the core's handler still runs. |
 | `tortoisebots_commands` | `CommandScript` table | The `.tb` GM/console commands. |
 | Player command script | `PlayerScript::OnCommand` | Claims `.bot` before the core's lookup; without the engine or with the module off it declines and the core answers. |
-| Addon script | `PlayerScript::OnAddonMessageSent` | TBM addon channel; queues requester key + text for a separate world `OnUpdate` drain. |
+| Addon script | `PlayerScript::OnAddonMessageSent` | TBM addon channel; queues requester key + text for a separate world `OnUpdate` drain, and records that the character's client has the add-on (which stops the one-time add-on hint). |
 | Chat-in script | `PlayerScript::OnChat` | Copies whispers/party lines into bot inboxes. |
 | Other host scripts | `PlayerScript::OnCommand` for `.autogear`, `ServerScript`/`PlayerScript` fight-monitor and battleground/LFG hooks | Registered by their host services in the slice build. |
 

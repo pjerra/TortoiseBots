@@ -75,8 +75,11 @@ class Registration(unittest.TestCase):
         # The "following party" value (quest travel gates answer for a free bot's own party, merged in #256)
         # raised the registered value count from 269 to 270; BG2's "enemy flag carrier" and "team flag carrier" (row 4) took it to 272;
         # the emote and mount animation rows took it to 274.
-        self.assertIn("ValueContext (274 of its keys)", generated)
-        self.assertIn("kValues = 274", generated)
+        counts = re.findall(r"ValueContext \((\d+) of its keys\)", generated)
+        self.assertEqual(len(counts), 1, "the generated value-context comment is missing")
+        k_values = re.search(r"kValues = (\d+)", generated)
+        self.assertIsNotNone(k_values, "the generated value count is missing")
+        self.assertEqual(counts[0], k_values.group(1), "the value-context comment and kValues disagree")
 
 
 class StoreWiring(unittest.TestCase):

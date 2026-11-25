@@ -15,7 +15,7 @@ relates_to:
 
 Every command on this page is a **GameMaster or server-console** command. Players use `.bot` (see [What bots can do](../play/features.md)); admins use `.tb`.
 
-All `.tb` commands are registered by the module and are available while it is enabled. Commands that need the bot engine answer `error code=engine-not-built` when the module was built with `TORTOISEBOTS_SLICE1=OFF`.
+All `.tb` commands are registered by the module and are available while it is enabled. Commands that need the bot engine refuse when the module was built with `TORTOISEBOTS_SLICE1=OFF`, naming the missing engine: the command-channel commands answer `error code=engine-not-built`, and a human-facing one says so in its own words (`.tb addonhint` answers `TortoiseBots: addonhint: the engine is not built in (this build has no add-on channel).`).
 
 ## Permissions
 
@@ -120,6 +120,7 @@ Decision capture is not a command: it starts with a run when `AiPlayerbot.Decisi
 | Command | What it does |
 | :--- | :--- |
 | `.tb status` | Module enabled state and the number of bot sessions. |
+| `.tb addonhint status <character>` / `.tb addonhint reset <character>` | Whether the character was already told where to get the add-on (`told`, `not-told pending` while the login waits out the delay, or `not-told -`), or clear that flag so the line can be shown again. Refuses while `TortoiseBots.Player.AddonHint = 0`. |
 | `.tb unported` | Every `not ported yet` feature and how many times the engine reached it. |
 | `.tb perf` | Reset and print the module's per-tick timings. |
 | `.tb spells <bot>`, `.tb spell <id>`, `.tb spellscan`, `.tb castlog <bot>`, `.tb castfail <bot>` | Spell book, spell data, cast log and cast failures. |

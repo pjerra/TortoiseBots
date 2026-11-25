@@ -1077,6 +1077,42 @@ Server-side diagnostics:
   `AiPlayerbot.AllowedLogFiles`, every module-side cast cancel writes one row (site, slot, spell, cast
   percent, target, distance moved).
 
+## Add-on hint (#46)
+
+A real player whose client never speaks the `TBM` addon prefix is told once where to get
+`TortoiseBotsForeverManager`:
+
+```
+TortoiseBots: this server's bots have a control panel, the TortoiseBotsForeverManager add-on.
+Get it at <TortoiseBots.Player.AddonHintUrl> (shown once).
+```
+
+* "Has the add-on" is one TBM message from that character in the session (`OnAddonMessageSent`,
+  self-whisper or group; the bot sessions are never candidates). `WorldSession::IsAddonRegistered`
+  cannot answer this: it is true for a session that registered no prefix at all.
+* The line goes out `TortoiseBots.Player.AddonHintDelay` seconds after login (default 45, clamped
+  10..300), at most 20 per world tick, as a system message. Bots and the console never see it;
+  GameMasters and every higher security level are skipped.
+* "Once" is per character and lives in the characters database: the table
+  `tortoise_bots_player_flag` (`characters/2026_11_24_10_tb_player_flag.sql`), row `flag='addon-hint'`.
+  The row is written when the hint is sent AND on the first TBM message of a character without it
+  (a player who later removes the add-on is not told again). All rows due in one world tick are
+  written in one statement. A missing table logs one warning and degrades to once per server run.
+* Config (`tortoisebots.conf.dist`, Player section): `TortoiseBots.Player.AddonHint` (0 = off, the
+  default; set 1 to enable), `TortoiseBots.Player.AddonHintDelay` (45),
+  `TortoiseBots.Player.AddonHintUrl` (the TortoiseBotsForeverManager releases page by default; empty
+  drops the "Get it at ..." clause). Only the engine build (`TORTOISEBOTS_SLICE1`) has it.
+
+`.tb addonhint status|reset <character>` (GM, console yes):
+
+| Command | Answer |
+|---|---|
+| `.tb addonhint status <character>` | `TortoiseBots: addonhint <Name>: told` (the row exists), `...: not-told pending` (a login is waiting for the delay) or `...: not-told -` |
+| `.tb addonhint reset <character>` | deletes the row and the in-memory entries, then `TortoiseBots: addonhint <Name>: reset`; the character can be told again |
+
+Refusals: `TortoiseBots: addonhint: usage: .tb addonhint status|reset <character>.` and
+`TortoiseBots: addonhint: not-found <name>.`
+
 ## 4. Addon order window (`TBM` `order` verb)
 
 `TBFM` (TortoiseBotsForeverManager) speaks the guild-order window over the addon channel. The module

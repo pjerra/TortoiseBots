@@ -80,7 +80,7 @@ The module ships SQL in two folders, both idempotent and both delivered by the c
 | Folder | Contents |
 | :--- | :--- |
 | `forever/sql/world/` | Dungeon plan tables and plan rows, boss rows, spec weight scales, travel-node tables, the zone-level cache. |
-| `forever/sql/characters/` | Module tables: pool registry and reset state, commander bindings, guild orders and guild bot rank, disenchant queue, AI value store, custom strategies. |
+| `forever/sql/characters/` | Module tables: pool registry and reset state, commander bindings, guild orders and guild bot rank, disenchant queue, AI value store, custom strategies, per-character flags (the add-on hint's "told once" row). |
 
 ### Delivering it through the core updater
 
@@ -104,7 +104,7 @@ mysql -u USER -p characters < forever/sql/characters/2026_11_20_01_tb_pool.sql
 
 Most SQL files do not name their database in their statements, so always pipe each file into the right database (`world` or `characters`). Only the travel-node and zone-level files name `world` themselves.
 
-**Self-created tables.** Several character tables are also created by the module itself the first time the feature is enabled, when the database user may create tables: the pool tables, the commander binding, the guild bot rank, the disenchant queue and the AI store. That path is for a server whose user may not. A missing table disables that feature with one logged line; it never aborts the server.
+**Self-created tables.** Several character tables are also created by the module itself the first time the feature is enabled, when the database user may create tables: the pool tables, the commander binding, the guild bot rank, the disenchant queue, the AI store and the add-on hint flags. That path is for a server whose user may not. A missing table disables that feature with one logged line (the add-on hint keeps working, once per server run); it never aborts the server.
 
 ## Checking the build
 

@@ -111,7 +111,7 @@ nodes:
   - id: play-commands-addon
     path: play/commands/addon.md
     category: play
-    summary: Installing the TortoiseBotsForeverManager addon, what its tabs do, and the TBM messages the server answers.
+    summary: Installing the TortoiseBotsForeverManager addon, what its tabs do, the TBM messages the server answers, and the one line a client without it is told.
   - id: play-commands-los-query
     path: play/commands/los-query.md
     category: play

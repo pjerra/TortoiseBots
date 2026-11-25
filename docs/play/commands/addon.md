@@ -24,6 +24,8 @@ relates_to:
    (not inside a second folder of the same name).
 3. Log in and type `/tbfm` in chat to open or close it. `/tb`, `/tbot` and `/tortoise` work too.
 
+Playing without it works too. When the server enables the hint (`TortoiseBots.Player.AddonHint = 1`; it is off by default), a client that has sent no add-on message by about 45 seconds after entering the world gets one system line saying that the bots have a control panel and where to get it. The line is shown once per character and does not come back on a later login; a GameMaster can clear that with `.tb addonhint reset <character>`. GameMasters and higher security levels never get the line themselves. The delay is `TortoiseBots.Player.AddonHintDelay` (45 seconds by default, kept between 10 and 300).
+
 It is a different addon from the Turtle build's TortoiseBotsManager. The two share a protocol dialect, not a UI.
 
 ## Tabs

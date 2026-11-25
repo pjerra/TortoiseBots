@@ -44,6 +44,7 @@ Feature const kFeatures[] = {
     { "bg", "TortoiseBots.Bg.Enable", true, 0, "Battlegrounds" },
     { "tactical-orders", "TortoiseBots.Orders.Tactical", true, 1, "Tactical orders" },
     { "player-commands", "TortoiseBots.Player.Commands", true, 1, "Player .bot commands" },
+    { "addon-hint", "TortoiseBots.Player.AddonHint", true, 0, "Add-on hint for new players" },
     { "max-bots", "TortoiseBots.Player.MaxBots", false, 4, "Bots per player" },
     { "ritual-fill", "TortoiseBots.RitualFill.Enable", true, 1, "Bots fill multi-user objects" },
     { "ritual-fill-range", "TortoiseBots.RitualFill.Range", false, 30, "Fill range (yd)" },

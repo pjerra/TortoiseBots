@@ -58,7 +58,7 @@ Aliases: `.bot v`, `.bot about`, `.bot credits`. Prints the build line, the `TBM
 .bot features
 ```
 
-Prints one `TortoiseBots: feature <key>=<value> (<label>)` line per server switch the addon's Info window reads: engine by default, pool, battlegrounds, tactical orders, player commands, bots per player, ritual fill (and its range and hold) and object use, follow distance, master grace, auto-learn, auto-talents, auto-professions, auto-tools, hunter pet, auto food, class quest spells, the free-bot world switches (gathering, fishing, disenchanting, gear enchanting, auction house), group quests, capital errands, guild mail, guild invites by whisper, lockbox by guild mail, rogue pickpocket and lockboxes, and the rest thresholds.
+Prints one `TortoiseBots: feature <key>=<value> (<label>)` line per server switch the addon's Info window reads: engine by default, pool, battlegrounds, tactical orders, player commands, the add-on hint, bots per player, ritual fill (and its range and hold) and object use, follow distance, master grace, auto-learn, auto-talents, auto-professions, auto-tools, hunter pet, auto food, class quest spells, the free-bot world switches (gathering, fishing, disenchanting, gear enchanting, auction house), group quests, capital errands, guild mail, guild invites by whisper, lockbox by guild mail, rogue pickpocket and lockboxes, and the rest thresholds.
 
 The addon's `features` request adds `features all <text>`, a search of the `TortoiseBots.*` and `AiPlayerbot.*` keys with values masked for secrets.
 

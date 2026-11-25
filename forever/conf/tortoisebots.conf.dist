@@ -730,6 +730,36 @@ TortoiseBots.RitualFill.HoldSeconds = 120
 #
 
 TortoiseBots.ObjectUse.Commands = 1
+#
+#    TortoiseBots.Player.AddonHint
+#        Description: Tell a real player once, about 45 s after entering the world, where to get the
+#                     TortoiseBotsForeverManager add-on, when no TBM addon message arrived from that
+#                     client this session. The "once" lives in the characters database
+#                     (tortoise_bots_player_flag); `.tb addonhint reset <character>` clears it so the
+#                     line can be seen again. GameMasters and higher security levels never get it.
+#                     0 = off. Only the engine build has it.
+#                     Off by default: a server turns this on by setting it to 1.
+#        Default:     0
+#
+
+TortoiseBots.Player.AddonHint = 0
+
+#
+#    TortoiseBots.Player.AddonHintDelay
+#        Description: Seconds between entering the world and the add-on hint. Clamped into 10..300.
+#        Default:     45
+#
+
+TortoiseBots.Player.AddonHintDelay = 45
+
+#
+#    TortoiseBots.Player.AddonHintUrl
+#        Description: The download page the hint names. An empty value drops the "Get it at ..." clause and
+#                     keeps the rest of the line.
+#        Default:     "https://github.com/TortoiseBots/TortoiseBotsForeverManager/releases"
+#
+
+TortoiseBots.Player.AddonHintUrl = "https://github.com/TortoiseBots/TortoiseBotsForeverManager/releases"
 
 #    --- Auto-learn ---
 #

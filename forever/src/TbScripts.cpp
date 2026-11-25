@@ -25,6 +25,7 @@
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
 #include "host/TbHostGuildOrders.h"
+#include "host/TbHostAddonHint.h"
 #include "host/TbHostGuildOrderAccess.h"
 #include "host/TbHostGuildOrderDisenchant.h"
 #include "host/TbHostFishing.h"
@@ -371,6 +372,11 @@ public:
             }
         }
 #endif
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        // The add-on hint: the three keys once, then the characters already told (a guarded SELECT).
+        TortoiseBots::addonhint::LoadConfig();
+        TortoiseBots::addonhint::LoadAtStartup();
+#endif
     }
 
     void OnBeforeMapsUpdate(uint32 diff) override
@@ -556,6 +562,9 @@ public:
             TortoiseBots::autofood::Sync(player, "login");
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        TortoiseBots::addonhint::NoteLogin(player);   // a real player whose client has not spoken TBM yet
+#endif
     }
 
     // A level gained any way (XP, `.character level`, `.tb level`) teaches the class-quest spells the new level earns.
@@ -604,6 +613,7 @@ public:
         TortoiseBots::place::NoteLogout(player);  // #15: a commander's rallies, holds and pending cursor request go with it
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
         tbhost::ritualfill::NoteLogout(player);   // #14: a bot's ritual-fill hold (and the targets it started) goes with it
+        TortoiseBots::addonhint::Forget(player->GetGUID());   // a login is one session: nothing pends across it
 #endif
         // Before the Player is deleted: the engine brain (PlayerbotAI) must be gone by then.
         BotMgr::Instance().OnPlayerLogout(player);
@@ -706,6 +716,7 @@ public:
             { "strategy", TortoiseBots::h8::HandleStrategy, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H8: `.tb strategy <bot|role:...> co|nc +name,-name,~name | <bot> reset` (SETUP)
             { "pet",      TortoiseBots::p11::HandlePet,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P11: `.tb pet <bot> give|call|dismiss|show|order ...` (host/TbPet.cpp)
             { "commander", TortoiseBots::cmd::HandleCommander, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // P1: `.tb commander status [<commander>]`
+            { "addonhint", HandleAddonHint, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // `.tb addonhint status|reset <character>`
             { "pool",   poolTable },   // W0: `.tb pool create <n>`, `.tb pool prune [confirm]`
             { "bg",     HandleBg,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // BG1: `.tb bg status|events` (host/bg/TbBgQueue.h)
             { "gear",   TortoiseBots::h3::HandleGear,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -756,6 +767,18 @@ public:
         if (!TortoiseBots::h3::CheckBotAccess(handler, botGuid, code, detail))
             return Fail(handler, detail + " (" + code + ").");
         return true;
+    }
+
+    // .tb addonhint status|reset <character>: the add-on hint's stored row (host/TbHostAddonHint.cpp).
+    static bool HandleAddonHint(ChatHandler* handler, Trinity::ChatCommands::Tail args)
+    {
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        return TortoiseBots::addonhint::HandleCommand(handler, args);
+#else
+        handler->SendSysMessage("TortoiseBots: addonhint: the engine is not built in (this build has no add-on channel).");
+        handler->SetSentErrorMessage(true);
+        return false;
+#endif
     }
 
     // .tb create <account> <name> <race id> <class id> [gender 0|1]: a new level 1 character for a bot.

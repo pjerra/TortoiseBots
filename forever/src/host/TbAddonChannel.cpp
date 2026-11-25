@@ -4,6 +4,12 @@
 #include "host/TbAddonChannel.h"
 #include "host/TbAddonPure.h"
 
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+#include "host/TbHostAddonHint.h"
+
+#include "Timer.h"
+#endif
+
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 
@@ -64,6 +70,14 @@ void OnAddonText(Player* player, std::string const& prefix, std::string const& t
 {
     if (prefix != pure::kPrefix)
         return;
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+    // The prefix is the add-on talking: this character has it for this run.
+    if (player)
+    {
+        ObjectGuid const guid = player->GetGUID();
+        TortoiseBots::addonhint::NoteAddonSeen(guid.GetRawValue(0), guid.GetRawValue(1));
+    }
+#endif
     Enqueue(player, text);
 }
 
@@ -134,6 +148,9 @@ public:
     void OnUpdate(uint32 /*diff*/) override
     {
         Drain();
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+        TortoiseBots::addonhint::Tick(getMSTime());
+#endif
     }
 };
 } // namespace

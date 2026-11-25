@@ -42,6 +42,7 @@ New here? Read [Getting Started](getting-started.md) first.
 | `.bot maintenance <bot>` refills the kit and repairs | No | `AiPlayerbot.OwnedBotMaintenanceEnabled = 0` | [Maintenance](commands/roster-and-hiring.md#maintenance) |
 | `.bot autogear <bot>` dresses an owned bot in fitting gear | No | `AiPlayerbot.OwnedBotAutogearEnabled = 0` | [Autogear](commands/roster-and-hiring.md#gearing) |
 | `.autogear` for your own player character | GM only | `AiPlayerbot.PlayerAutogearForAll = 0` | [Autogear](commands/roster-and-hiring.md#autogear) |
+| A player whose client never sent an add-on message is told once where to get the add-on | No | `TortoiseBots.Player.AddonHint = 0` | [Addon](commands/addon.md#installation) |
 
 The bot answers `TortoiseBots: <verb>: ...` on the channel you typed on. A refused order names a short code (`refused too-many: ...`), never an account.
 
