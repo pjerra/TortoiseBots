@@ -72,10 +72,16 @@ custom content. See [Known limitations](docs/play/known-limitations.md).
 
 ## 🛠️ Quick Build
 
-The module builds inside a ForeverCore checkout at the commit pinned in [`forever/PINNED_CORE`](forever/PINNED_CORE).
+The module is its own repository and does not depend on a core branch: clone it into `src/modules/TortoiseBots` of any
+ForeverCore checkout that has the module system (`src/modules`), such as branch `forever`, and build.
+
+The tested core is the commit in [`forever/PINNED_CORE`](forever/PINNED_CORE). At the core author's request it is a
+commit of branch `forever-bots`: the same core as `forever` plus his own bot module (PlayerbotV2), because the plan is
+to bring his bots together with these ones. Until then PlayerbotV2 stays off (`BUILD_PLAYERBOT_V2=0`, the default), and
+the build stops with an error if both bot modules are switched on.
 
 ```bash
-# inside your Karrz1/TrinityCore checkout (branch forever, at the pinned commit)
+# inside your Karrz1/TrinityCore checkout (branch forever-bots at the pinned commit, or branch forever)
 git clone git@github.com:TortoiseBots/TortoiseBotsForever.git src/modules/TortoiseBots
 
 cmake -S . -B build -DBUILD_TORTOISEBOTS=1 -DTORTOISEBOTS_SLICE1=ON
@@ -99,7 +105,8 @@ See [Install](docs/server/install.md) and [Configuration & Tuning](docs/server/c
 
 - [`forever/docs/PORT-PLAN.md`](forever/docs/PORT-PLAN.md): how the port works (one repository, two cores, vertical
   slices) and its rules.
-- [`forever/docs/CENSUS.md`](forever/docs/CENSUS.md): how much of the bot brain compiles on ForeverCore.
+- [`forever/docs/CENSUS.md`](forever/docs/CENSUS.md): the compile check of the bot brain on ForeverCore (the state
+  today on top, then the history of the port).
 - [`forever/docs/UNPORTED.md`](forever/docs/UNPORTED.md): engine parts that still answer "not ported yet".
 - The Tortoise WoW 1.18.1 build (`TortoiseBots.cmake`) must stay green: a change that breaks it is not finished.
 

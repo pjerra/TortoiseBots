@@ -114,34 +114,33 @@ For the third kind, the differences between the cores are closed in this order, 
 | Turtle build still compiles | `vm-build <worktree> --wait` | as today |
 | Live boot | `rsync -aL --delete --exclude .git --exclude 'src/modules/TortoiseBots/.git' ~/ForeverCore/ <build VM>:forever-build/src/`, `forever-build/build.sh 12 worldserver`, `forever-run/setup.sh && world.sh start`, then poll `logs/world.out` (15 s, 3 min) for `ready...`, no `ASSERTION FAILED` and the item mirrors line, and drive `world.sh cmd "tb item <entry>"`; stop with `world.sh stop`. A build gate does not prove the module starts. | ~5 min |
 | Live boot with the engine | the same boot, with the worldserver built as `FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=ON` (`SLICE1-R8-NOTES.md`, section 13). Console: `world.sh cmd "tb login <bot> <master>"`, `"tb engine <bot> on"`, `"tb where <bot>"`, `"tb unported"`; then `world.sh stop` | not recorded |
-| Slice census | `FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 14` (slice 1: 133 files, 133 compile clean, 0 error places, `SLICE1-R11-NOTES.md`) | not recorded |
-| What is left | `forever/tools/port_census.py` | ~1 h |
+| Slice census | `FOREVER_CENSUS_LIST=forever/SLICE-W4.txt` with `forever/tools/port_census.py` (on the build VM: `forever/tools/vm-census.sh`); see `CENSUS.md` for the local command | ~3.5 min on a 12-thread PC |
+| What is left | `forever/tools/port_census.py` over the whole tree | see `CENSUS.md` |
 
 The console commands are listed in `SPIKE.md`, Status.
 
-A ported file is added to `forever/PORTED.txt`; the root `CMakeLists.txt` compiles the files in that list. The census
-number going down and the list going up is the progress measure.
+A ported file is added to the newest slice list, `forever/SLICE-W4.txt` (it holds every earlier list); the root
+`CMakeLists.txt` compiles the files in that list when `TORTOISEBOTS_SLICE1` is on. The list going up is the progress
+measure; the census checks that every file in it compiles.
 
 ## Order
 
-1. Spike live run: **done** 2026-11-17, one bot pair (login, follow, assist, cast, logout; `SPIKE.md`). Five bots in a
-   party: open.
-2. Host API for ForeverCore (session, movement, cast, auras, loot, group): **started**. The host side is services under
-   `forever/src/host` (`TbEngineBrain`, `TbHostBotManager`, `TbHostOwnership`, `TbHostTracing`); the spike's `BotMgr`
-   and session stay in `forever/src`.
-3. The engine: **runs for slice 1** (`PlayerbotAI`, `Engine`, `AiObjectContext`, and the values and triggers the warrior
-   needs). Slice 1: 133 files in `forever/SLICE1.txt`, census 133 clean, 0 error places (`SLICE1-R11-NOTES.md`).
-   Live test (`SLICE1-R8-NOTES.md`, 12 boots, bot master with no game client): a warrior on the engine follows
-   at 2.4 to 4.9 yd, assists and melee-fights a Timber Wolf, returns to non-combat, and logs out with its master;
-   22 minutes idle with no crash. A crash on a master's map change was fixed in R11 (`SLICE1-R11-NOTES.md`).
-4. Combat and the nine class strategies, with a spell data pass against ForeverCore's DB2.
-5. Follow, hire, party. First usable companion bot.
-6. Loot, vendor, repair. 7. Quests. 8. Travel and the world pool. 9. Guild, orders, auction house.
-10. Dungeons and raids. 11. Battlegrounds.
-12. The TBM addon for the modern Classic client API (its own port).
+State on 2026-11-24 (the player-facing list is `docs/play/features.md`, what is missing is `docs/play/known-limitations.md`):
+
+1. Spike live run: **done** 2026-11-17 (`SPIKE.md`).
+2. Host API for ForeverCore (session, movement, cast, auras, loot, group): **done** for everything below; services under
+   `forever/src/host`.
+3. The engine: **done** (`PlayerbotAI`, `Engine`, `AiObjectContext`), first live test in `SLICE1-R8-NOTES.md`.
+4. Combat and the nine class strategies: **done**.
+5. Follow, party, own characters as bots, `.bot` for players: **done**. Hired companions: **not ported**.
+6. Loot, vendor, repair: **done**. 7. Quests: **done**. 8. Travel and the world pool: **done**.
+9. Guild, guild orders, the bots' auction market: **done**.
+10. Dungeons: **done** (run leader, dungeon plans, dungeon fill). Boss and raid tactics: **not ported**.
+11. Battlegrounds: Warsong Gulch and Arathi Basin fill **done**; Alterac Valley and arenas **not ported**.
+12. The in-game addon: its own repository, TortoiseBotsForeverManager (work in progress).
 
 Switched off on ForeverCore: Turtle LFT, Turtle-only items, spells, zones and races, Lua (Eluna) glue.
 
 ## Census
 
-See `CENSUS.md` (numbers from `port_census.py` at the pinned commit).
+See `CENSUS.md`: the state today on top, then the measurements taken during the port.
