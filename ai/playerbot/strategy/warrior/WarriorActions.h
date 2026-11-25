@@ -162,6 +162,10 @@ namespace ai
         }
         bool isUseful() override
         {
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+            if (!ThunderClapStanceAvailable(ai->HasAura("battle stance", bot), ai->HasAura("defensive stance", bot)))
+                return false;
+#endif
             Group* group = bot->GetGroup();
             if (ShouldSkipThunderClapForArms(ai->IsTank(bot),
                 ai->HasStrategy("arms", BotState::BOT_STATE_COMBAT),
@@ -177,6 +181,10 @@ namespace ai
         CastThunderClapSnareAction(PlayerbotAI* ai) : CastSnareSpellAction(ai, "thunder clap") {}
         bool isUseful() override
         {
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+            if (!ThunderClapStanceAvailable(ai->HasAura("battle stance", bot), ai->HasAura("defensive stance", bot)))
+                return false;
+#endif
             Group* group = bot->GetGroup();
             if (ShouldSkipThunderClapForArms(ai->IsTank(bot),
                 ai->HasStrategy("arms", BotState::BOT_STATE_COMBAT),
@@ -188,6 +196,9 @@ namespace ai
     };
     SNARE_ACTION(CastHamstringAction, "hamstring");
     MELEE_ACTION(CastOverpowerAction, "overpower");
+    // Forever's Arms strike (talent node, 20 s cooldown, 15 rage): a plain
+    // weapon-damage hit that the core refuses outside Battle Stance.
+    MELEE_ACTION(CastSpearingStrikeAction, "spearing strike");
     // The second taunt: never at a subject the taunt gate refuses (a Shade of Jin'do, a taunt-immune boss). Stands down at cast time when the mob is already on another tank (TauntHeldTargetPolicy.h).
     class CastMockingBlowAction : public CastMeleeSpellAction
     {

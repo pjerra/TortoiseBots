@@ -68,6 +68,20 @@ class WwStanceWiringTest(unittest.TestCase):
         fury = (WARRIOR / "FuryWarriorStrategy.cpp").read_text()
         self.assertIn('ACTION_NODE_A(pummel, "pummel", "berserker stance for pummel");', fury)
 
+    def test_thunder_clap_rows_stand_down_outside_its_stances(self):
+        # Forever's clap is Battle/Defensive only. The gate sits before the
+        # Arms group skip in both clap actions, so a Berserker kit stops
+        # asking for a cast the stance will always refuse.
+        for name in ("class CastThunderClapAction", "class CastThunderClapSnareAction"):
+            action = body(WARRIOR / "WarriorActions.h", name)
+            self.assertIn("ThunderClapStanceAvailable", action)
+            self.assertIn('HasAura("battle stance"', action)
+            self.assertIn('HasAura("defensive stance"', action)
+            self.assertLess(action.index("ThunderClapStanceAvailable"), action.index("ShouldSkipThunderClapForArms"),
+                            "the stance gate comes first: no other work for a cast the stance refuses")
+        policy = POLICY.read_text()
+        self.assertIn("ThunderClapStanceAvailable", policy)
+
 
 if __name__ == "__main__":
     unittest.main()

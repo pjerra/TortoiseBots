@@ -6,11 +6,12 @@
 // for tools/test_warrior_ww_stance_policy.cpp (compiled from the root).
 #include "WarriorRageGatePolicy.h"
 
-// Stance-dance gates for Whirlwind and Pummel. The engine runs the stance
-// prerequisite before isPossible, so a plain "berserker stance" prerequisite
-// swaps even when the main spell is on cooldown or unaffordable: the swap
-// truncates rage and the cast fails. The dedicated prerequisite actions only
-// dance when the main spell can fire this tick.
+// Stance-dance gates for Whirlwind and Pummel, and the stance gate for
+// Thunder Clap. The engine runs the stance prerequisite before isPossible, so
+// a plain "berserker stance" prerequisite swaps even when the main spell is
+// on cooldown or unaffordable: the swap truncates rage and the cast fails. The
+// dedicated prerequisite actions only dance when the main spell can fire this
+// tick.
 //
 // The rage compared is the rage the warrior will hold AFTER entering
 // Berserker Stance: already there the bar is untouched, otherwise only the
@@ -47,5 +48,18 @@ namespace ai
     {
         return spellReady && targetCasting &&
             RageAfterStanceSwap(inBerserkerStance, rage, tmRank) >= WARRIOR_PUMMEL_RAGE_COST;
+    }
+
+    // Forever's Thunder Clap is Battle/Defensive Stance only (client
+    // SpellShapeshift mask 196608 = Battle 65536 | Defensive 131072); the
+    // Turtle spell carries no stance mask. A Berserker-stance kit cannot pay
+    // for the 20-rage clap after a Battle swap (the change keeps only what
+    // Tactical Mastery lets through) and its Berserker upkeep row outranks
+    // the clap row, so a dance would only truncate the bar every cycle: the
+    // row stands down where the stance cannot cast it. Battle and Defensive
+    // both cast it, so neither needs a swap.
+    inline bool ThunderClapStanceAvailable(bool inBattleStance, bool inDefensiveStance)
+    {
+        return inBattleStance || inDefensiveStance;
     }
 } // namespace ai

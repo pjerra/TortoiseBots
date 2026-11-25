@@ -16,7 +16,7 @@ relates_to:
 
 > Work in progress: this page describes an unfinished feature that is still changing.
 
-`.tb run` lets a bound party of bots clear a stored dungeon plan by itself. It needs `AiPlayerbot.DungeonSelfClear = 1` (default `1`, on) and a party of host bots that one bot leads; every member must already be bound with `.tb master party <leader> <commander>` (or `.tb master <bot> <commander>`), because the run never binds or rebuilds a bot's kit. The run sends at most one order per second, through the same order judge as a commander's own orders.
+`.tb run` lets a bound party of bots clear a stored dungeon plan by itself. It needs `AiPlayerbot.DungeonSelfClear = 1` (default `1`, on) and a party of host bots that one bot leads; every other member must already be bound with `.tb master party <leader> <commander>` (or `.tb master <bot> <commander>`). `start` commits the named tank's role itself (the same call `.tb role <leader> tank` makes: stored role and tank kit), so the leader needs no separate role step. The run sends at most one order per second, through the same order judge as a commander's own orders.
 
 The command is a GameMaster command: in game, on the console, over remote access or over SOAP. Its shape:
 
@@ -30,7 +30,7 @@ The command is a GameMaster command: in game, on the console, over remote access
 .tb run decisions <leader|run> [since=<seq>] [limit=<n>]
 ```
 
-`start` refuses a leader that is not a host bot leading a party (a raid group is refused), a plan the server has not loaded, a party member that is not a host bot, offline or in another instance, a member with too few free bag slots, a member with no commander, and a party whose loot method is neither group loot nor need-before-greed. `status all` also prints the run's tick cost.
+`start` refuses a leader that is not a host bot leading a party (a raid group is refused; only a warrior tank or a bear druid can lead a run as its tank), a plan the server has not loaded, a party member that is not a host bot, offline or in another instance, a member with too few free bag slots, a member with no commander, and a party whose loot method is neither group loot nor need-before-greed. `status all` also prints the run's tick cost.
 
 ### Reloading the plans (`.tb plan reload`)
 
@@ -336,7 +336,7 @@ The plan can carry locked-door rows (`ai_dungeon_leg_need`), but the run does no
 ### Player-led runs
 
 Player-led runs (`AiPlayerbot.DungeonRunPlayerLed = 1`, the default) sit on top of `AiPlayerbot.DungeonSelfClear = 1`.
-The leading player starts the run with `.tb run start <tank> <plan> lead=player`; this is a GameMaster command typed in game by the player who leads. The start requires a party of at most five, never a raid, led by the starter, with at least one bot, every bot commanded by the starter, and the named tank a bot of that party.
+The leading player starts the run with `.tb run start <tank> <plan> lead=player`; this is a GameMaster command typed in game by the player who leads. The start requires a party of at most five, never a raid, led by the starter, with at least one bot, every bot commanded by the starter, and the named tank a bot of that party that can lead a run as its tank (a warrior or a bear druid); it commits that tank's role first, like the bot-led start.
 The player walks and the run leader pulls near him (within `AiPlayerbot.DungeonRunPlayerLedPullYd`, default 40).
 Player orders never pause the run (only pause and stop do).
 Staying away from the dungeon instance for over `AiPlayerbot.DungeonRunPlayerLedAwayMinutes` (default 10) stops the run.

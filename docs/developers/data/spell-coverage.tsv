@@ -7,6 +7,9 @@ Warrior	Protection	Revenge, Sunder Armor, Taunt	available	forever/data/waterys/t
 Warrior	Protection	Intervene	unverified	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/warrior/ProtectionWarriorStrategy.cpp:118	not in the spell audit; client SpellName has Intervene; check live
 Warrior	Arms/Fury	Master Strike	not on Forever	forever/tools/test_forever_spell_rows.py:12	ai/playerbot/strategy/warrior/ArmsWarriorStrategy.cpp:86	row compiled out for the Forever build
 Warrior	Protection	Defensive Tactics	not on Forever	forever/data/waterys/talent-trees-70959.csv	none	no such talent node on the Forever Protection tree
+Warrior	Arms/Fury	Heroic Strike	available	forever/data/waterys/forever-spell-ids.csv	ai/playerbot/strategy/warrior/WarriorTriggers.h:271	level-aware rage floor 25/30/40 (WarriorRageGatePolicy.h:84)
+Warrior	Arms/Fury	Thunder Clap	available	forever-local/data/dbc/enUS/SpellShapeshift.db2 (6343 mask 196608)	ai/playerbot/strategy/warrior/WarriorActions.h:156	Battle/Defensive Stance only: a Berserker kit stands down instead of failing the cast
+Warrior	Arms	Spearing Strike	available	forever/data/aotc/talent-picks.csv:8969 (trait node 105949)	ai/playerbot/strategy/warrior/ArmsWarriorStrategy.cpp:89	Battle Stance only, 15 rage, 20 s cooldown; Arms-tree trait taken by the new Arms preset
 Paladin	Retribution	Holy Strike	available	forever/data/waterys/class-review/paladin.md:28	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:95	Forever's paladin strike
 Paladin	Retribution	Judgement, Exorcism, Hammer of Wrath	available	forever/data/waterys/class-review/paladin.md:29-35	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:79-91	Retribution rotation
 Paladin	Retribution	Seal of Command	in preset	forever/data/waterys/talent-builds.csv	ai/playerbot/strategy/paladin/RetributionPaladinStrategy.cpp:87	Retribution seal
