@@ -3,7 +3,7 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 377 keys, 368 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 378 keys, 369 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
 # 328 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
@@ -1096,60 +1096,63 @@ AiPlayerbot.AutoPickReward = yes
 # AiPlayerbot.AutoEquipUpgradeLoot  (bool, PlayerbotAIConfig.cpp:1499)
 AiPlayerbot.AutoEquipUpgradeLoot = 1
 
-# AiPlayerbot.ClaimedBotSelfEquip  (bool, PlayerbotAIConfig.cpp:1500)
+# AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel  (bool, PlayerbotAIConfig.cpp:1500)
+AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel = 1
+
+# AiPlayerbot.ClaimedBotSelfEquip  (bool, PlayerbotAIConfig.cpp:1501)
 AiPlayerbot.ClaimedBotSelfEquip = 1
 
-# AiPlayerbot.EquipUpgradeThreshold  (float, PlayerbotAIConfig.cpp:1501)
+# AiPlayerbot.EquipUpgradeThreshold  (float, PlayerbotAIConfig.cpp:1502)
 AiPlayerbot.EquipUpgradeThreshold = 1.1
 
-# AiPlayerbot.SyncQuestWithPlayer  (bool, PlayerbotAIConfig.cpp:1502)
+# AiPlayerbot.SyncQuestWithPlayer  (bool, PlayerbotAIConfig.cpp:1503)
 AiPlayerbot.SyncQuestWithPlayer = 0
 
-# AiPlayerbot.SyncQuestForPlayer  (bool, PlayerbotAIConfig.cpp:1503)
+# AiPlayerbot.SyncQuestForPlayer  (bool, PlayerbotAIConfig.cpp:1504)
 AiPlayerbot.SyncQuestForPlayer = 0
 
-# AiPlayerbot.AutoTrainSpells  (string, PlayerbotAIConfig.cpp:1504)
+# AiPlayerbot.AutoTrainSpells  (string, PlayerbotAIConfig.cpp:1505)
 AiPlayerbot.AutoTrainSpells = yes
 
-# AiPlayerbot.AutoLearnTrainerSpells  (bool, PlayerbotAIConfig.cpp:1506)
+# AiPlayerbot.AutoLearnTrainerSpells  (bool, PlayerbotAIConfig.cpp:1507)
 AiPlayerbot.AutoLearnTrainerSpells = 1
 
-# AiPlayerbot.AutoLearnQuestSpells  (bool, PlayerbotAIConfig.cpp:1507)
+# AiPlayerbot.AutoLearnQuestSpells  (bool, PlayerbotAIConfig.cpp:1508)
 AiPlayerbot.AutoLearnQuestSpells = 1
 
-# AiPlayerbot.AutoLearnQuestSpellsAlts  (bool, PlayerbotAIConfig.cpp:1508)
+# AiPlayerbot.AutoLearnQuestSpellsAlts  (bool, PlayerbotAIConfig.cpp:1509)
 AiPlayerbot.AutoLearnQuestSpellsAlts = 0
 
-# AiPlayerbot.PetAutoTrain  (bool, PlayerbotAIConfig.cpp:1510)
+# AiPlayerbot.PetAutoTrain  (bool, PlayerbotAIConfig.cpp:1511)
 AiPlayerbot.PetAutoTrain = 1
 
-# AiPlayerbot.AutoDoQuests  (bool, PlayerbotAIConfig.cpp:1512)
+# AiPlayerbot.AutoDoQuests  (bool, PlayerbotAIConfig.cpp:1513)
 AiPlayerbot.AutoDoQuests = 1
 
-# AiPlayerbot.GenerateTravelNodes  (bool, PlayerbotAIConfig.cpp:1514)
+# AiPlayerbot.GenerateTravelNodes  (bool, PlayerbotAIConfig.cpp:1515)
 AiPlayerbot.GenerateTravelNodes = 1
 
-# AiPlayerbot.GenerateFishLocations  (bool, PlayerbotAIConfig.cpp:1515)
+# AiPlayerbot.GenerateFishLocations  (bool, PlayerbotAIConfig.cpp:1516)
 AiPlayerbot.GenerateFishLocations = 0
 
-# AiPlayerbot.AsyncTravelPartitions  (bool, PlayerbotAIConfig.cpp:1516)
+# AiPlayerbot.AsyncTravelPartitions  (bool, PlayerbotAIConfig.cpp:1517)
 AiPlayerbot.AsyncTravelPartitions = 0
 
-# AiPlayerbot.SyncAltLevelToMaster  (bool, PlayerbotAIConfig.cpp:1522)
+# AiPlayerbot.SyncAltLevelToMaster  (bool, PlayerbotAIConfig.cpp:1523)
 AiPlayerbot.SyncAltLevelToMaster = 0
 
-# AiPlayerbot.TalentsInPublicNote  (bool, PlayerbotAIConfig.cpp:1523)
+# AiPlayerbot.TalentsInPublicNote  (bool, PlayerbotAIConfig.cpp:1524)
 AiPlayerbot.TalentsInPublicNote = 1
 
-# AiPlayerbot.SelfBotLevel  (int, PlayerbotAIConfig.cpp:1555)
+# AiPlayerbot.SelfBotLevel  (int, PlayerbotAIConfig.cpp:1556)
 #   default is computed in the code: uint32(BotSelfBotLevel::GM_ONLY)
 # AiPlayerbot.SelfBotLevel =
 
-# AiPlayerbot.ToggleAlwaysOnlineAccounts  (string, PlayerbotAIConfig.cpp:1556)
+# AiPlayerbot.ToggleAlwaysOnlineAccounts  (string, PlayerbotAIConfig.cpp:1557)
 AiPlayerbot.ToggleAlwaysOnlineAccounts = 
 
-# AiPlayerbot.ToggleAlwaysOnlineChars  (string, PlayerbotAIConfig.cpp:1557)
+# AiPlayerbot.ToggleAlwaysOnlineChars  (string, PlayerbotAIConfig.cpp:1558)
 AiPlayerbot.ToggleAlwaysOnlineChars = 
 
-# AiPlayerbot.TargetPosRecalcDistance  (float, PlayerbotAIConfig.cpp:1576)
+# AiPlayerbot.TargetPosRecalcDistance  (float, PlayerbotAIConfig.cpp:1577)
 AiPlayerbot.TargetPosRecalcDistance = 0.1

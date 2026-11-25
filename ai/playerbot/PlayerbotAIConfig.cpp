@@ -1497,6 +1497,7 @@ bool PlayerbotAIConfig::Initialize()
     //SPP automation
     autoPickReward = config.GetStringDefault("AiPlayerbot.AutoPickReward", "yes");
     autoEquipUpgradeLoot = config.GetBoolDefault("AiPlayerbot.AutoEquipUpgradeLoot", true);
+    autoEquipUpgradeRespectsRequiredLevel = config.GetBoolDefault("AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel", true);
     claimedBotSelfEquip = config.GetBoolDefault("AiPlayerbot.ClaimedBotSelfEquip", true);
     equipUpgradeThreshold = config.GetFloatDefault("AiPlayerbot.EquipUpgradeThreshold", 1.1f);
     syncQuestWithPlayer = config.GetBoolDefault("AiPlayerbot.SyncQuestWithPlayer", false);
