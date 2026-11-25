@@ -59,10 +59,8 @@ def check_all(overrides=None):
     assert 'GetBoolDefault("AiPlayerbot.HuntRares", true)' in cfg, "PlayerbotAIConfig.cpp HuntRares default must be true"
     assert "AiPlayerbot.HuntRares = 1" in conf_in, "aiplayerbot.conf.dist.in HuntRares default must be 1"
     assert "AiPlayerbot.HuntRares = 1" in conf, "forever/conf/aiplayerbot.conf.dist HuntRares default must be 1"
-    hunt_rares = doc.split("### `AiPlayerbot.HuntRares`", 1)
-    assert len(hunt_rares) == 2, "world-population.md must document HuntRares"
-    hunt_rares = hunt_rares[1].split("\n### ", 1)[0]
-    assert "**Default:** `1`" in hunt_rares, "world-population.md HuntRares default must be 1"
+    hunt = doc[doc.index("### `AiPlayerbot.HuntRares`"):]
+    assert "**Default:** `1`" in hunt.split("\n### ", 1)[0], "world-population.md HuntRares default must be 1"
 
 
 def main():

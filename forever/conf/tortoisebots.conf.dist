@@ -167,6 +167,39 @@ TortoiseBots.Commander.PosMs = 100
 TortoiseBots.Orders.Tactical = 1
 
 #
+#    TortoiseBots.RaidResistGear.Enable
+#        Description: The resistance-gear swap around a raid pull (issue #20): a bot grouped with a real player on a raid map
+#                     may have the bag pieces carrying the boss's resistance school put on (the boss table is
+#                     forever/data/raid/boss-resist.csv), and its own pieces put back when a release is asked for. Nothing is
+#                     bought, created, sold or destroyed: the swap is in place (Player::SwapItem). The armour slots (head,
+#                     shoulders, chest, legs, feet, hands) are the non-tank's only; weapons, trinkets, ranged, shirt and tabard
+#                     are never swapped. A bot that cannot put every piece back (dead, in combat, a full bag, its own piece in
+#                     the bank) keeps the rest waiting and tries again: every 5 s at first, then once a minute for as long as the
+#                     bot lives, so a bag slot that frees up later still gets the set off. The held set is stored in the
+#                     characters database (tortoise_bots_resist_hold), with its state (the set is on, or a release is in
+#                     flight), so a crash or a restart restores the normal set on the next login; the swap itself is refused
+#                     when that record cannot be written. Turning this off while a set is held puts it back at once and keeps a
+#                     hold it could not finish until the pieces are really back. Nothing arms the swap automatically in this
+#                     build. Off by default: with it at 0 no bot ever swaps.
+#        Default:     0
+#
+
+TortoiseBots.RaidResistGear.Enable = 0
+
+#
+#    TortoiseBots.RaidResistGear.Range
+#    TortoiseBots.RaidResistGear.ReleaseSeconds
+#        Description: Range (yd, 5-200): the arming distance of the automatic boss-range step, and ReleaseSeconds (s, 0-600):
+#                     how long after the last listed boss left the range the bot's own pieces go back on. Both are read at load;
+#                     nothing arms the swap automatically in this build, so neither changes what you see yet. A logout restores
+#                     at once.
+#        Default:     60 / 15
+#
+
+TortoiseBots.RaidResistGear.Range = 60
+TortoiseBots.RaidResistGear.ReleaseSeconds = 15
+
+#
 #    TortoiseBots.Dashboard.Enable
 #        Description: Send the bot roster to the TortoiseBots dashboard (tools/observability) over UDP. Only while TortoiseBots.Enable = 1.
 #        Default:     1
@@ -853,3 +886,37 @@ TortoiseBots.AutoFood = 1
 #                     (combat, death, instances) plus the master and cooldown checks of the player command spec (D-8).
 #        Default:     300
 #
+
+#
+#    TortoiseBots.RaidConsumables
+#        Description: Raid consumables for bots (issue #22): 0 off (default), 1 items, 2 free. With 1 a bot keeps up a flask
+#                     (or a battle and a guardian elixir), a food buff and a weapon stone or oil for its role, using only
+#                     items already in its bags: nothing is bought, mailed or created. With 2 the same buffs are a triggered
+#                     cast of the table's spell on the bot (no item), for owners who only want the result. Raid maps only
+#                     (see .Dungeons), never a battleground, out of combat, at or above the row's level. A held flask covers
+#                     both elixir slots, a held elixir keeps the flask away, and the core's spell groups decide the
+#                     stacking, so only a category that is actually missing is applied. A weapon stone or oil goes only on
+#                     the weapon family its row names (sharpen stones on bladed weapons, oils on any), and a temporary
+#                     enchantment counts as the slot being kept only when it is one of the table's own (a rogue poison or a
+#                     shaman imbue does not). Roles: tank, melee, ranged, caster, healer; the table is
+#                     forever/data/raid/consumables.csv (forever/tools/gen_data_tables.py writes the header). A value
+#                     outside 0, 1 and 2 is a config error: it is logged at load and the feature stays off. A slot a role
+#                     has no item for is declared uncovered in the table (an elixir leg, a food buff, a weapon stone or
+#                     oil), and `.tb state` prints it as consnotcovered= instead of calling the role ready. The brain wiring
+#                     is round 2: this round ships the table, the rules and the `.tb state` keys.
+#        Default:     0
+#
+#    TortoiseBots.RaidConsumables.Dungeons
+#        Description: Also in 5-man instances (never a battleground).
+#        Default:     0
+#
+#    TortoiseBots.RaidConsumables.FreeForOwned
+#        Description: Free mode also applies to a player's own bots (an owned alt, a hire). Off (default) means their free
+#                     mode falls back to items, so a server that leaves free mode on globally still makes the owner's bags
+#                     pay; pool bots and server-run free bots always follow the mode as set.
+#        Default:     0
+#
+
+TortoiseBots.RaidConsumables = 0
+TortoiseBots.RaidConsumables.Dungeons = 0
+TortoiseBots.RaidConsumables.FreeForOwned = 0

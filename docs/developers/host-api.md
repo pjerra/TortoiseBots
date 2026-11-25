@@ -120,6 +120,7 @@ The module is inert when `TortoiseBots.Enable = 0`: no bot is created or logged 
 | LFG fill | `TbHostLfgFill` | Module-owned dungeon-finder fill (the client has no dungeon list; nothing writes `sLFGMgr`). |
 | Open-world PvP | `TbHostWorldPvp` | Gives the seek role to a share of free bots and honours the core's PvP state. |
 | Raids | `TbTactics`, `TbH3`, `TbH4`, `TbOnyxia`, `TbOnyxiaGround` | Raid tactics, group-fight commands, boss observation. |
+| Raid consumables | `TbRaidConsumables` | The compiled consumable table, the map and mode gate for one bot, and the held/due/uncovered answers `.tb state` prints; every row is checked against the item and spell mirrors at startup, a free cast is chosen from that checked index by the bot's role and category (a weapon row only for the main-hand weapon family the table names), and a weapon slot counts as kept only for one of the table's own temporary enchantments. |
 | Automations | `TbAutoTrain`, `TbAutoSkillSpells`, `TbClassQuestSpells`, `TbTalents`, `TbAutoProfs`, `TbAutoTools`, `TbAutoHunterPet`, `TbAutoFood`, `TbAutogear`, `TbMountShop` | Login/level syncs that keep bots trained, geared, fed and mounted. |
 | Rolls/party state | `TbRollVote`, `TbRollWon`, `TbPartyState` | Loot-method votes, won-roll reporting, party state queries. |
 | Runs/plans | `run/TbPlanCommands`, `TbRunCommands`, `TbRunHooks`, `TbPlanUnits`, `TbRunTasks` | Dungeon plans and the run controller. |

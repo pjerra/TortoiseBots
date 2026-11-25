@@ -66,7 +66,7 @@ The pool owns its own accounts (`TBPOOL0001` ...) and characters. See [Managing 
 | `.tb commander status [<commander>]` | Show the bound commander cards, their bots and their state. |
 | `.tb cc <bot> <mark> <unit guid\|target> [family]` | Give one bot a crowd-control mark. `.tb cc <bot> clear` removes it. |
 | `.tb strategy <bot\|role:...> co\|nc <+name,-name,~name>` | Change a bot's strategies for testing. `<bot> reset` returns to the defaults. |
-| `.tb state <bot>` | Dump the bot's state record, including the engine's values and its hybrid state keys. |
+| `.tb state <bot>` | Dump the bot's state record, including the engine's values and its hybrid state keys. The record carries `cons` (the raid consumables the bot holds, `<category>:<aura id>`), `consmiss` (the categories still due, while `TortoiseBots.RaidConsumables` is not `0`) and `consnotcovered` (the slots the table has no item for on that bot's role: an elixir leg it cannot fill, a food buff, a weapon stone or oil). |
 | `.tb why <bot>` | Dump one bot's AI decisions (the why trace). |
 | `.tb ignore <bot\|party> [add\|remove\|list] ...` | Keep the commander's bots off named mobs or entries. |
 | `.tb revive <bot>` | Revive a dead bot. |

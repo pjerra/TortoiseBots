@@ -84,7 +84,9 @@ These are the party orders both the `.tb order` console command and the addon's 
 | A commanded bot's body in a dungeon releases and returns after the backstop | Yes | `TortoiseBots.Slice.DeadBackstopSeconds = 180` | [Wipes](dungeons-and-raids.md#dead-bots) |
 | A bot far behind holds before a skipped pack | No | `AiPlayerbot.DungeonFollowHoldBeforePacks = 0` | [Following](dungeons-and-raids.md#following) |
 | Run leader walks a stored dungeon plan (a server-admin command) | Yes | `AiPlayerbot.DungeonSelfClear = 1` | [Run leader](dungeon-run-leader.md) |
+| Raid consumables: the table, the role rules and the `.tb state` read-outs (bots do not use them yet) | No | `TortoiseBots.RaidConsumables = 0` | [Known limitations](known-limitations.md#features-that-are-not-on-forevercore-yet) |
 | Boss-specific raid tactics (Molten Core to Naxxramas) | No | — | [Not on ForeverCore yet](#not-on-forevercore-yet) |
+| Resistance gear swapped before a raid boss's school (not armed automatically yet) | No | `TortoiseBots.RaidResistGear.Enable = 0` | [Resist gear](resist-gear.md) |
 | Turtle custom raids (Emerald Sanctum, Karazhan) | No | — | [Not on ForeverCore yet](#not-on-forevercore-yet) |
 
 ## The Living World
