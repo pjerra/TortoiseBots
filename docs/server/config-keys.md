@@ -349,7 +349,7 @@ relates_to:
 | `AiPlayerbot.LowHealth` | `50` | int | yes | `ai/playerbot/HealerManaPolicy.h`, `ai/playerbot/HealingTriagePolicy.h`, `ai/playerbot/PlayerbotAIConfig.cpp` +23 more |
 | `AiPlayerbot.MediumHealth` | `70` | int | yes | `ai/playerbot/HealerManaPolicy.h`, `ai/playerbot/PlayerbotAIConfig.cpp`, `ai/playerbot/SurvivePolicy.h` +19 more |
 | `AiPlayerbot.AlmostFullHealth` | `90` | int | yes | `ai/playerbot/HealerDiagnostics.cpp`, `ai/playerbot/PlayerbotAIConfig.cpp`, `ai/playerbot/RaidTankHealing.cpp` +12 more |
-| `AiPlayerbot.LowMana` | `15` | int | yes | `ai/playerbot/PlayerbotAIConfig.cpp`, `ai/playerbot/strategy/actions/GiveItemAction.h`, `ai/playerbot/strategy/druid/DruidTriggers.h` +5 more |
+| `AiPlayerbot.LowMana` | `15` | int | yes | `ai/playerbot/PlayerbotAIConfig.cpp`, `ai/playerbot/strategy/actions/GiveItemAction.h`, `ai/playerbot/strategy/druid/DruidActions.h` +6 more |
 | `AiPlayerbot.MediumMana` | `40` | int | yes | `ai/playerbot/HealerManaPolicy.h`, `ai/playerbot/policy/gear/TrinketUsePolicy.h`, `ai/playerbot/policy/pull/PullRegenPolicy.h` +15 more |
 | `AiPlayerbot.InnervateManaThreshold` | `25` | int | yes | `ai/playerbot/strategy/druid/DruidActions.h`, `ai/playerbot/strategy/druid/DruidInnervateHelper.h`, `ai/playerbot/strategy/druid/DruidTriggers.h` |
 | `AiPlayerbot.RandomGearMaxLevel` | `100` | int | yes | `forever/src/host/TbAutogear.cpp`, `forever/src/host/gear/TbGearGen.cpp` |
