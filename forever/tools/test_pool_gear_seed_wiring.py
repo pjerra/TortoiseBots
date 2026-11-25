@@ -47,15 +47,18 @@ def check_seed_caps(seed_src):
     fn = seed_src[start:end]
     for needle in (
         "TortoiseBots::SeedQualityPlan(level)",
-        "TortoiseBots::SeedSlotQualityCap(level, slotRank, slotCount, offset)",
-        "TortoiseBots::SeedQualityFloor(level)",
+        "TortoiseBots::SeedUpgradedSlotCount(plan, rollBelow)",
+        "TortoiseBots::SeedChooseUpgradedSlots(upgradedEligible,",
+        "TortoiseBots::SeedCandidatePickCount(scores)",
+        "TortoiseBots::SeedFallbackQuality(plan.baseQuality)",
         "TortoiseBots::GearItemLevelCap(level,",
         "sPlayerbotAIConfig.randomGearMaxItemLevelAboveLevel",
         "sPlayerbotAIConfig.randomGearMaxLevel",
         "ai::FilterCandidatesForSlot(",
         "SourceGateAllows(c.itemId)",
         "GearBlacklistBlocks(sPlayerbotAIConfig.randomGearBlacklist, c.itemId)",
-        "c.quality < minQuality || c.itemLevel > maxItemLevel",
+        "c.quality < plan.baseQuality || c.itemLevel > maxItemLevel",
+        "if (slot == EQUIPMENT_SLOT_MAINHAND)\n                    mainHandIsTwoHanded = twoHander;",
         "target->CanEquipNewItem(",
         "target->EquipNewItem(",
         "target->DestroyItem(",
@@ -72,13 +75,15 @@ def check_spawn_host(src):
         "BotMgr::Instance().IsPoolBot(guid)",
         "BotMgr::Instance().MasterOf(guid)",
         "PoolSpawnSubject(",
-        "NeedsPoolSpawn(bot->GetTotalPlayedTime(), StoredSpawn(key))",
+        "bot->GetTotalPlayedTime() == 0 && NeedsPoolSpawn(0, StoredSpawn(key))",
         "MarkSpawned(key)",
         "Store().state[key] = SpawnState::No;",
         "NormalizeSpawnLevelRange(",
         "sPlayerbotAIConfig.randomBotStartLevelMin",
         "sPlayerbotAIConfig.randomBotStartLevelMax",
         "bot->GiveLevel(seedLevel)",
+        "s_applyingStartLevel = true;",
+        "bool ApplyingStartLevel()",
         "gear::SeedGearForTarget(bot, level)",
         "SpawnSeedReady(level)",
         "sConfigMgr->GetBoolDefault(kKeySeed, true)",
@@ -100,6 +105,8 @@ class SpawnGearWiring(unittest.TestCase):
         self.assertNotIn("SeedSpawnKit", level)
         self.assertNotIn("ApplyStartLevel", level)
         self.assertNotIn("SeedGearForTarget", level)
+        # GiveLevel during the start level would run the login block's own syncs a second time.
+        self.assertIn("TortoiseBots::poolspawn::ApplyingStartLevel()", level)
 
     def test_pool_only_and_once(self):
         check_spawn_host(SPAWN)
@@ -115,11 +122,16 @@ class SpawnGearWiring(unittest.TestCase):
         self.assertIn("GearSetOutcome SeedGearForTarget(Player* target, uint32 levelArg);", GEAR_GEN_H)
 
     def test_quality_mix_bands(self):
-        for line in ("CheckBand(5, 1, 1);", "CheckBand(10, 1, 3);", "CheckBand(20, 2, 2);",
-                     "CheckBand(30, 2, 5);", "CheckBand(50, 2, 9);"):
+        for line in ("CheckBand(5, 1, 0, 1);", "CheckBand(10, 1, 1, 2);", "CheckBand(15, 1, 2, 3);",
+                     "CheckBand(20, 2, 0, 2);", "CheckBand(30, 2, 3, 5);", "CheckBand(50, 2, 6, 9);"):
             self.assertIn(line, (ROOT / "tools/test_gear_seed_mix_policy.cpp").read_text())
         self.assertIn("inline constexpr std::uint32_t kSpawnSeedMinLevel = 5;", MIX)
         self.assertIn("base + 1", MIX)
+        # The upgraded slots come from the slots with a candidate, the count is rolled, and the pick is not always the
+        # single best-scoring item.
+        self.assertIn("SeedChooseUpgradedSlots", MIX)
+        self.assertIn("SeedCandidatePickCount", MIX)
+        self.assertIn("SeedFallbackQuality", MIX)
 
     def test_band_and_effective_level(self):
         self.assertIn("kForeverItemBandMinId = 200000", POLICY)
@@ -130,17 +142,25 @@ class SpawnGearWiring(unittest.TestCase):
                       GEAR_GEN)
 
     def test_same_band_and_gate_on_the_other_generators(self):
-        self.assertIn("SourceGateAllows(c.itemId)",
-                      body(GEAR_GEN, "GearSetOutcome TopUpGearForTarget(", "\nGearSetOutcome SeedGearForTarget("))
+        topup = body(GEAR_GEN, "GearSetOutcome TopUpGearForTarget(", "\nGearSetOutcome SeedGearForTarget(")
+        self.assertIn("SourceGateAllows(c.itemId)", topup)
+        # A 1H replacing a 2H clears the main-hand flag, so the off hand is offered again.
+        self.assertIn("if (slot == EQUIPMENT_SLOT_MAINHAND)\n                    mainHandIsTwoHanded = twoHander;",
+                      topup)
         self.assertIn("SourceGateAllows(c.itemId)",
                       body(GEAR_GEN, "GearSetOutcome SetGearForTarget(", "\n}\n"))
         self.assertIn("gear::SourceGateAllows(c.itemId)", AUTOGEAR)
 
     def test_start_level_defaults(self):
-        self.assertRegex(CONFIG, r'"AiPlayerbot\.RandomBotStartLevelMin",\s*1\)')
+        # Forever's code fallback is the guarded constant; the generated config ships 1.
+        self.assertRegex(CONFIG, r"kRandomBotStartLevelMinDefault = 1;")
         self.assertRegex(CONFIG, r'"AiPlayerbot\.RandomBotStartLevelMax",\s*60\)')
-        self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.RandomBotStartLevelMin = 1$")
+        self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.RandomBotStartLevelMin = 5$")
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.RandomBotStartLevelMax = 60$")
+        self.assertIn('"AiPlayerbot.RandomBotStartLevelMin": "1",',
+                      (ROOT / "forever/tools/gen_aiplayerbot_conf.py").read_text())
+        self.assertRegex((ROOT / "forever/conf/aiplayerbot.conf.dist").read_text(),
+                         r"(?m)^AiPlayerbot\.RandomBotStartLevelMin = 1$")
 
     def test_spawn_key_is_shipped_and_read(self):
         self.assertIn("TortoiseBots.Pool.GearOnCreate = 1", CONF)

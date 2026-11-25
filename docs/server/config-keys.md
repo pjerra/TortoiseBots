@@ -302,7 +302,7 @@ relates_to:
 | `AiPlayerbot.AhBot.ListProportion.ListMultipliedItemIDs` | `2589:10,2592:10,4306:10,4338:10,14047:10,2318:10,2319:10,4234:10,4304:10,8170:10,2770:10,2771:10,2772:10,2775:10,2776:10,3858:10,7911:10,10620:10,2835:10,2836:10,2838:10,12365:10,7912:10,765:10,785:10,2447:10,2449:10,2450:10,2452:10,2453:10,3355:10,3356:10,3357:10,3358:10,3369:10,3818:10,3819:10,3820:10,3821:10,4625:10,8153:10,8831:10,8836:10,8838:10,8839:10,8845:10,8846:10,13463:10,13464:10,13465:10,13466:10,13467:10,13468:10,10938:10,10939:10,10940:10,10978:10,10998:10,11082:10,11084:10,11128:10,11134:10,11135:10,11138:10,11139:10,11174:10,11175:10,11177:10,11178:10,14343:10,16202:10,16203:10,16204:10,774:10,818:10,1206:10,1210:10,1529:10,1705:10,3864:10,7909:10,7910:10,12361:10,12364:10,12799:10,12800:10,118:5,858:5,929:5,2455:5,2456:5,3827:5,3928:5,6149:5,13443:5,13446:5,18253:5` | string | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.AhBot.RespectContentPhase` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.Enabled` | `1` | bool | yes | `ai/playerbot/ActionLogPolicy.h`, `ai/playerbot/BotActionLog.cpp`, `ai/playerbot/BotInstantFlightPolicy.h` +56 more |
-| `AiPlayerbot.ShowProgressBars` | `1` | bool | yes | the config accessor (`PlayerbotAIConfig.cpp:686`) |
+| `AiPlayerbot.ShowProgressBars` | `1` | bool | yes | the config accessor (`PlayerbotAIConfig.cpp:694`) |
 | `AiPlayerbot.GlobalCooldown` | `1500` | int | yes | `ai/playerbot/PlayerbotAI.cpp`, `ai/playerbot/PlayerbotAIBase.cpp`, `ai/playerbot/PlayerbotAIConfig.cpp` +8 more |
 | `AiPlayerbot.MaxWaitForMove` | `3000` | int | yes | `ai/playerbot/PlayerbotAIBase.cpp`, `ai/playerbot/TravelMgr.cpp`, `ai/playerbot/strategy/actions/MoveToTravelTargetAction.cpp` +1 more |
 | `AiPlayerbot.ExpireActionTime` | `5000` | int | yes | `ai/playerbot/strategy/Queue.cpp` |
@@ -427,7 +427,7 @@ relates_to:
 | `AiPlayerbot.RandomBotStallRelogMinutes` | `45` | int | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.MinRandomBotRandomizeTime` | `21600` | int | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.MaxRandomBotRandomizeTime` | `config.GetIntDefault("AiPlayerbot.MaxRandomRandomizeTime", 24 * 3600)` | int | no | **not wired** — nothing in the Forever build reads it |
-| `AiPlayerbot.MaxRandomRandomizeTime` | `86400` | int | yes | the config accessor (`PlayerbotAIConfig.cpp:853`) |
+| `AiPlayerbot.MaxRandomRandomizeTime` | `86400` | int | yes | the config accessor (`PlayerbotAIConfig.cpp:861`) |
 | `AiPlayerbot.MinRandomBotChangeStrategyTime` | `1800` | int | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.MaxRandomBotChangeStrategyTime` | `7200` | int | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.PinnedBots` | *(empty)* | string | yes | `ai/playerbot/PlayerbotAIConfig.cpp` |
@@ -470,7 +470,7 @@ relates_to:
 | `AiPlayerbot.RandomBotAutoCreate` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.EnableRandomTeleports` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.RandomBotEvenStartZones` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
-| `AiPlayerbot.RandomBotFactionRatio` | `50` | int | yes | the config accessor (`PlayerbotAIConfig.cpp:947`) |
+| `AiPlayerbot.RandomBotFactionRatio` | `50` | int | yes | the config accessor (`PlayerbotAIConfig.cpp:955`) |
 | `AiPlayerbot.RandomBotStartZoneWeights` | *(empty)* | string | yes | `ai/playerbot/PlayerbotAIConfig.cpp` |
 | `AiPlayerbot.RandomBotNameStyleWeights` | `55,20,25` | string | yes | `ai/playerbot/PlayerbotAIConfig.cpp`, `runtime/BotNameService.cpp` |
 | `AiPlayerbot.RandomBotNamesFile` | *(empty)* | string | yes | `runtime/BotNameService.cpp` |
@@ -612,7 +612,7 @@ relates_to:
 | `AiPlayerbot.CombatMonitor` | `0` | bool | yes | `forever/src/host/cmd/TbCmdCombat.cpp` |
 | `AiPlayerbot.CombatTimeline` | `0` | bool | yes | `runtime/CombatMonitorService.cpp` |
 | `AiPlayerbot.RaidBossDiagnostics` | `0` | bool | yes | `ai/playerbot/CastCancelLog.cpp`, `ai/playerbot/PlayerbotAIPackets.cpp` |
-| `AiPlayerbot.AllowedLogFiles` | `bot_events.csv,deaths.csv` | string | yes | the config accessor (`PlayerbotAIConfig.cpp:1349`) |
+| `AiPlayerbot.AllowedLogFiles` | `bot_events.csv,deaths.csv` | string | yes | the config accessor (`PlayerbotAIConfig.cpp:1357`) |
 | `AiPlayerbot.LogRetentionDays` | `3` | int | yes | `ai/playerbot/PlayerbotAIConfig.cpp` |
 | `AiPlayerbot.UpdateCheck` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.DebugFilter` | `add gathering loot,check values,emote,check mount state,jump` | string | yes | `ai/playerbot/PlayerbotAIConfig.cpp` |
@@ -634,7 +634,7 @@ relates_to:
 | `AiPlayerbot.GuildOrderBankGold` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.GuildOrderPlayerBuy` | `0` | bool | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.GuildOrderSubOrders` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
-| `AiPlayerbot.GuildOrderSubOrderDepth` | `3` | int | yes | the config accessor (`PlayerbotAIConfig.cpp:1412`) |
+| `AiPlayerbot.GuildOrderSubOrderDepth` | `3` | int | yes | the config accessor (`PlayerbotAIConfig.cpp:1420`) |
 | `AiPlayerbot.GuildOrderBotRank` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.botActiveAlone` | `10` | int | yes | `ai/playerbot/PlayerbotAIActivity.cpp`, `forever/src/host/TbEngineBrain.cpp` |
 | `AiPlayerbot.RandombotsWalkingRPG` | `0` | bool | yes | `ai/playerbot/strategy/actions/MoveToRpgTargetAction.cpp` |
@@ -666,7 +666,7 @@ relates_to:
 | `AiPlayerbot.ActionCountsLog` | `0` | bool | yes | `ai/playerbot/BotDiagnostics.cpp` |
 | `AiPlayerbot.HealerDiagnostics` | `0` | bool | yes | `ai/playerbot/HealerDiagnostics.cpp`, `ai/playerbot/PlayerbotAI.cpp`, `ai/playerbot/PlayerbotAI.h` |
 | `AiPlayerbot.BotLogFile` | *(empty)* | string | yes | `ai/playerbot/PlayerbotAIConfig.cpp` |
-| `AiPlayerbot.BotLogDebug` | `0` | bool | yes | the config accessor (`PlayerbotAIConfig.cpp:1456`) |
+| `AiPlayerbot.BotLogDebug` | `0` | bool | yes | the config accessor (`PlayerbotAIConfig.cpp:1464`) |
 | `AiPlayerbot.EnableOffSpecStrategies` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.UseWanderAsDefaultFollowStrategy` | `1` | bool | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.DefaultFormation` | `chaos` | string | yes | `ai/playerbot/strategy/values/Formations.cpp` |
@@ -699,7 +699,7 @@ relates_to:
 | `AiPlayerbot.NonGmFreeSummon` | `0` | bool | no | **not wired** — nothing in the Forever build reads it |
 | `AiPlayerbot.AutoPickReward` | `yes` | string | yes | `ai/playerbot/strategy/actions/TalkToQuestGiverAction.cpp` |
 | `AiPlayerbot.AutoEquipUpgradeLoot` | `1` | bool | yes | `ai/playerbot/strategy/actions/EquipAction.cpp` |
-| `AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel` | `1` | bool | yes | `ai/playerbot/strategy/actions/EquipAction.cpp` |
+| `AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel` | `1` | bool | yes | `ai/playerbot/strategy/actions/EquipAction.cpp`, `ai/playerbot/strategy/values/ItemUsageValue.cpp` |
 | `AiPlayerbot.ClaimedBotSelfEquip` | `1` | bool | yes | `ai/playerbot/strategy/actions/EquipAction.cpp`, `forever/src/host/TbCommandedEquip.cpp`, `forever/src/host/TbCommandedEquipPure.h` +1 more |
 | `AiPlayerbot.EquipUpgradeThreshold` | `1.1` | float | yes | `ai/playerbot/strategy/values/ItemUsageValue.cpp` |
 | `AiPlayerbot.SyncQuestWithPlayer` | `0` | bool | yes | `ai/playerbot/strategy/actions/LootAction.cpp`, `ai/playerbot/strategy/actions/LootRollAction.cpp`, `ai/playerbot/strategy/actions/QuestAction.cpp` +2 more |

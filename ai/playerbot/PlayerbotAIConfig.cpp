@@ -640,6 +640,14 @@ void PlayerbotAIConfig::LoadAhBotPhaseKeys()
     ahBotRespectContentPhase = config.GetBoolDefault("AiPlayerbot.AhBot.RespectContentPhase", true);
 }
 
+// Forever's pool starts fresh bots at level 1 (owner's pool contract); the Turtle build keeps TB's level 5. The shared
+// template keeps 5; the Forever config is generated with 1 (forever/tools/gen_aiplayerbot_conf.py).
+#if defined(TORTOISEBOTS_CORE_FOREVER) && TORTOISEBOTS_CORE_FOREVER
+constexpr uint32 kRandomBotStartLevelMinDefault = 1;
+#else
+constexpr uint32 kRandomBotStartLevelMinDefault = 5;
+#endif
+
 bool PlayerbotAIConfig::Initialize()
 {
     sLog.outString("Initializing AI Playerbot by ike3, based on the original Playerbot by blueboy");
@@ -1420,7 +1428,7 @@ bool PlayerbotAIConfig::Initialize()
     pullBackMaxReturnTime = static_cast<uint32>(config.GetIntDefault("AiPlayerbot.PullBackMaxReturnTime", 15));
     rangedPull = config.GetBoolDefault("AiPlayerbot.RangedPull", true);
     rangedPullMeleeApproach = config.GetFloatDefault("AiPlayerbot.RangedPullMeleeApproach", 20.0f);
-    randomBotStartLevelMin = config.GetIntDefault("AiPlayerbot.RandomBotStartLevelMin", 1);
+    randomBotStartLevelMin = config.GetIntDefault("AiPlayerbot.RandomBotStartLevelMin", kRandomBotStartLevelMinDefault);
     randomBotStartLevelMax = config.GetIntDefault("AiPlayerbot.RandomBotStartLevelMax", 60);
     gearscorecheck = config.GetBoolDefault("AiPlayerbot.GearScoreCheck", false);
     levelCheck = config.GetIntDefault("AiPlayerbot.LevelCheck", 30);

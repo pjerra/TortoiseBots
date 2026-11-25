@@ -588,6 +588,11 @@ public:
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
         {
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+            // The spawn's start-level raise happens here, and OnLogin runs the same syncs right after: skip this pass.
+            if (TortoiseBots::poolspawn::ApplyingStartLevel())
+                return;
+#endif
             tbhost::autotrain::Sync(player, "level");
             tbhost::skillspells::Sync(player, "level");
             TortoiseBots::questspells::Sync(player, "level");

@@ -65,6 +65,7 @@ State& Store()
 }
 
 bool s_seedEnabled = true;
+bool s_applyingStartLevel = false;
 
 int64_t NowSeconds()
 {
@@ -125,8 +126,11 @@ SpawnState Resolve(Player* bot)
     ObjectGuid const guid = bot->GetGUID();
     bool const pool = BotMgr::Instance().IsPoolBot(guid);
     bool const hasMaster = !BotMgr::Instance().MasterOf(guid).IsEmpty();
-    bool const fresh = NeedsPoolSpawn(bot->GetTotalPlayedTime(), StoredSpawn(key));
-    SpawnState const state = PoolSpawnSubject(pool, hasMaster) && fresh ? SpawnState::Yes : SpawnState::No;
+    // Check the cheap facts first: StoredSpawn runs a synchronous SELECT on the world thread, and only a fresh spawn
+    // subject can ever need it.
+    bool const subject = PoolSpawnSubject(pool, hasMaster);
+    bool const fresh = subject && bot->GetTotalPlayedTime() == 0 && NeedsPoolSpawn(0, StoredSpawn(key));
+    SpawnState const state = subject && fresh ? SpawnState::Yes : SpawnState::No;
     s.state.emplace(key, state);
     return state;
 }
@@ -155,9 +159,16 @@ void ApplyStartLevel(Player* bot)
     if (level >= seedLevel)
         return;
 
+    s_applyingStartLevel = true;
     bot->GiveLevel(seedLevel);
+    s_applyingStartLevel = false;
     TC_LOG_INFO("tortoisebots", "TortoiseBots: fresh pool bot {} spawned at level {} (start range {}-{})",
         bot->GetName(), seedLevel, range.minLevel, range.maxLevel);
+}
+
+bool ApplyingStartLevel()
+{
+    return s_applyingStartLevel;
 }
 
 void SeedSpawnKit(Player* bot)

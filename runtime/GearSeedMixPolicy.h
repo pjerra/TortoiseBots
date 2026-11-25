@@ -2,34 +2,46 @@
 
 // Quality mix of the one-time spawn kit (owner's contract, rule 4): a low-level pool bot must not arrive in a full
 // green or blue outfit. The kit has a floor (white below level 20, green from 20: GearSeedQualityPolicy.h) and a
-// fixed number of slots that may take one quality above the floor:
+// range of slots that may take one quality above the floor:
 //
-//   levels 5-9    white, up to 1 green
-//   levels 10-19  white, 3 green
-//   levels 20-29  green, 2 blue
-//   levels 30-49  green, 5 blue
-//   levels 50-60  green, 9 blue
+//   levels 5-9    white, 0-1 green
+//   levels 10-14  white, 1-2 green
+//   levels 15-19  white, 2-3 green
+//   levels 20-29  green, 0-2 blue
+//   levels 30-49  green, 3-5 blue
+//   levels 50-60  green, 6-9 blue
 //
-// Epics are never part of the mix. The upgraded slots are one contiguous run that an offset rotates per bot, so the
-// count is exact while two bots of one level do not wear the same pieces in the same qualities.
+// The count is rolled per bot inside the band. The upgraded slots are picked at random among the slots that really
+// have a candidate of the upgraded quality, so a level-20 kit never spends its blues on an empty trinket slot and two
+// bots of one level do not wear the same qualities on the same slots. Each slot then picks among the best-fitting
+// candidates (top five, or everything within 85% of the best score, whichever is wider). A slot at the green floor with
+// nothing green falls back to white (level 20 and up) instead of staying empty. Epics are never part of the mix.
 //
-// Pure and core-free, so tools/test_gear_seed_mix_policy.cpp includes it directly.
+// Pure and core-free, with the random source injected, so tools/test_gear_seed_mix_policy.cpp exercises the rolls
+// deterministically.
 
 #include "GearSeedQualityPolicy.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace TortoiseBots
 {
 inline constexpr std::uint32_t kSpawnSeedMinLevel = 5;
 // GearSetSlotOrder() in ai/playerbot/policy/item/GearSetPolicy.h: the 17 equipment slots a kit fills.
 inline constexpr std::uint32_t kSpawnKitSlots = 17;
+// A slot may pick among its five best-scoring candidates, or every candidate scoring at least this share of the best.
+inline constexpr std::uint32_t kSeedCandidateWindow = 5;
+inline constexpr std::uint32_t kSeedCandidateScorePercent = 85;
 
 struct GearSeedQualityPlan
 {
     std::uint8_t baseQuality = 0;      // SeedQualityFloor(level)
     std::uint8_t upgradedQuality = 0;  // base + 1, never above rare
-    std::uint32_t upgradedSlots = 0;
+    std::uint32_t minUpgradedSlots = 0;
+    std::uint32_t maxUpgradedSlots = 0;
 };
 
 // Below level 5 the starter outfit stays (the core's own starting items).
@@ -44,40 +56,65 @@ inline GearSeedQualityPlan SeedQualityPlan(std::uint32_t level)
         return {};
 
     std::uint8_t const base = static_cast<std::uint8_t>(SeedQualityFloor(level));
-    std::uint32_t upgraded = 0;
+    std::uint32_t low = 0;
+    std::uint32_t high = 0;
     if (level < 10)
-        upgraded = 1;
+        low = 0, high = 1;
+    else if (level < 15)
+        low = 1, high = 2;
     else if (level < 20)
-        upgraded = 3;
+        low = 2, high = 3;
     else if (level < 30)
-        upgraded = 2;
+        low = 0, high = 2;
     else if (level < 50)
-        upgraded = 5;
+        low = 3, high = 5;
     else
-        upgraded = 9;
+        low = 6, high = 9;
 
-    return { base, static_cast<std::uint8_t>(base + 1), upgraded };
+    return { base, static_cast<std::uint8_t>(base + 1), low, high };
 }
 
-// The upgraded slots are the first `upgradedSlots` of the ring `slotRank + offset`.
-inline bool SeedSlotUpgraded(std::uint32_t slotRank, std::uint32_t slotCount, std::uint32_t upgradedSlots,
-    std::uint32_t offset)
+// Rolls the upgraded-slot count inside the plan's range. `randomBelow(n)` returns a value in [0, n).
+template <typename RandomBelow>
+inline std::uint32_t SeedUpgradedSlotCount(GearSeedQualityPlan const& plan, RandomBelow&& randomBelow)
 {
-    if (slotCount == 0 || upgradedSlots == 0)
-        return false;
-    if (upgradedSlots >= slotCount)
-        return true;
-    return ((slotRank + offset) % slotCount) < upgradedSlots;
+    std::uint32_t const span = plan.maxUpgradedSlots - plan.minUpgradedSlots + 1;
+    return plan.minUpgradedSlots + (span > 1 ? randomBelow(span) : 0);
 }
 
-// Highest item quality one slot of the kit may wear. `offset` is urand(0, slotCount - 1) at seed time.
-inline std::uint8_t SeedSlotQualityCap(std::uint32_t level, std::uint32_t slotRank, std::uint32_t slotCount,
-    std::uint32_t offset)
+// Picks `count` distinct entries of `eligible` (partial Fisher-Yates with the injected source).
+template <typename RandomBelow>
+inline std::vector<std::uint32_t> SeedChooseUpgradedSlots(std::vector<std::uint32_t> eligible, std::uint32_t count,
+    RandomBelow&& randomBelow)
 {
-    GearSeedQualityPlan const plan = SeedQualityPlan(level);
-    if (plan.upgradedSlots == 0)
+    count = std::min<std::uint32_t>(count, static_cast<std::uint32_t>(eligible.size()));
+    for (std::uint32_t i = 0; i < count; ++i)
+    {
+        std::uint32_t const remaining = static_cast<std::uint32_t>(eligible.size()) - i;
+        std::uint32_t const pick = i + (remaining > 1 ? randomBelow(remaining) : 0);
+        std::swap(eligible[i], eligible[pick]);
+    }
+    eligible.resize(count);
+    return eligible;
+}
+
+// How many leading entries of a slot's score-sorted candidate list the kit may pick from.
+inline std::uint32_t SeedCandidatePickCount(std::vector<std::uint32_t> const& sortedScores)
+{
+    if (sortedScores.empty())
         return 0;
-    return SeedSlotUpgraded(slotRank, slotCount, plan.upgradedSlots, offset) ? plan.upgradedQuality
-                                                                           : plan.baseQuality;
+    std::uint32_t const best = sortedScores.front();
+    std::uint32_t const floor = best - (best * (100 - kSeedCandidateScorePercent)) / 100;
+    std::size_t window = 0;
+    while (window < sortedScores.size() && (window < kSeedCandidateWindow || sortedScores[window] >= floor))
+        ++window;
+    return static_cast<std::uint32_t>(window);
+}
+
+// A slot at the green floor may fall back to white; below level 20 the floor is already white and the owner's mix is
+// "the rest white", so an empty slot stays empty.
+inline std::uint8_t SeedFallbackQuality(std::uint8_t baseQuality)
+{
+    return baseQuality > 1 ? static_cast<std::uint8_t>(baseQuality - 1) : baseQuality;
 }
 }

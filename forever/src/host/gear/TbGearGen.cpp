@@ -184,7 +184,6 @@ void InitGearIndex()
         }
     }
 
-    InitGearSourceIndex();
     idx.initialized = true;
     auto const elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - start).count();
@@ -388,8 +387,8 @@ GearSetOutcome TopUpGearForTarget(Player* target, uint32 levelArg, uint32 slotMa
                 res.status = "equipped";
                 equippedSlot = true;
                 alreadyPicked.push_back(cand.itemId);
-                if (slot == EQUIPMENT_SLOT_MAINHAND && twoHander)
-                    mainHandIsTwoHanded = true;
+                if (slot == EQUIPMENT_SLOT_MAINHAND)
+                    mainHandIsTwoHanded = twoHander;
                 ++outcome.equipped;
                 break;
             }
@@ -439,14 +438,12 @@ GearSetOutcome SeedGearForTarget(Player* target, uint32 levelArg)
         specId = sRandomItemMgr.GetFallbackSpecId(playerClass);
     std::string const canonicalSpec = ai::CanonicalSpecName(playerClass, sRandomItemMgr.GetSpecName(specId));
 
-    uint8 const minQuality = static_cast<uint8>(TortoiseBots::SeedQualityFloor(level));
     uint32 const maxItemLevel = TortoiseBots::GearItemLevelCap(level,
         sPlayerbotAIConfig.randomGearMaxItemLevelAboveLevel, sPlayerbotAIConfig.randomGearMaxLevel);
     bool const canDualWield = target->CanDualWield();
 
-    uint32 const slotCount = static_cast<uint32>(ai::GearSetSlotOrder().size());
-    uint32 const offset = slotCount > 1 ? urand(0, slotCount - 1) : 0;
     TortoiseBots::GearSeedQualityPlan const plan = TortoiseBots::SeedQualityPlan(level);
+    uint8 const fallbackQuality = TortoiseBots::SeedFallbackQuality(plan.baseQuality);
 
     outcome.ok = true;
     outcome.specName = canonicalSpec;
@@ -458,12 +455,33 @@ GearSetOutcome SeedGearForTarget(Player* target, uint32 levelArg)
         if (ItemTemplate const* tpl = mainHand->GetTemplate())
             mainHandIsTwoHanded = tpl->GetInventoryType() == INVTYPE_2HWEAPON;
 
-    std::vector<uint32> alreadyPicked;
-    uint32 slotRank = 0;
+    auto rollBelow = [](uint32 bound) { return bound > 1 ? urand(0, bound - 1) : 0u; };
+
+    // The slots that can actually wear the upgraded quality after every shared filter. The upgraded count is rolled
+    // inside the band and spread over those slots, so no green or blue is spent on a slot that would stay empty.
+    std::vector<uint32> upgradedEligible;
     for (uint8 slot : ai::GearSetSlotOrder())
     {
-        uint8 const maxQuality = TortoiseBots::SeedSlotQualityCap(level, slotRank, slotCount, offset);
-        ++slotRank;
+        std::vector<ai::GearItemCandidate> pool = ai::FilterCandidatesForSlot(
+            Index().bySlot[slot], playerClass, canonicalSpec, level, slot, plan.upgradedQuality, canDualWield,
+            mainHandIsTwoHanded);
+        pool.erase(std::remove_if(pool.begin(), pool.end(),
+            [&plan, maxItemLevel](ai::GearItemCandidate const& c)
+            {
+                return c.quality < plan.baseQuality || c.itemLevel > maxItemLevel || !SourceGateAllows(c.itemId) ||
+                    GearBlacklistBlocks(sPlayerbotAIConfig.randomGearBlacklist, c.itemId);
+            }), pool.end());
+        if (!pool.empty())
+            upgradedEligible.push_back(slot);
+    }
+    std::vector<uint32> const upgradedSlots = TortoiseBots::SeedChooseUpgradedSlots(upgradedEligible,
+        TortoiseBots::SeedUpgradedSlotCount(plan, rollBelow), rollBelow);
+
+    std::vector<uint32> alreadyPicked;
+    for (uint8 slot : ai::GearSetSlotOrder())
+    {
+        bool const upgraded = std::find(upgradedSlots.begin(), upgradedSlots.end(), slot) != upgradedSlots.end();
+        uint8 maxQuality = upgraded ? plan.upgradedQuality : plan.baseQuality;
 
         GearSlotResult res;
         res.slot = slot;
@@ -477,15 +495,32 @@ GearSetOutcome SeedGearForTarget(Player* target, uint32 levelArg)
             continue;
         }
 
-        std::vector<ai::GearItemCandidate> ranked = ai::FilterCandidatesForSlot(
-            Index().bySlot[slot], playerClass, canonicalSpec, level, slot, maxQuality, canDualWield,
-            mainHandIsTwoHanded, alreadyPicked);
-        ranked.erase(std::remove_if(ranked.begin(), ranked.end(),
-            [minQuality, maxItemLevel](ai::GearItemCandidate const& c)
-            {
-                return c.quality < minQuality || c.itemLevel > maxItemLevel || !SourceGateAllows(c.itemId) ||
-                    GearBlacklistBlocks(sPlayerbotAIConfig.randomGearBlacklist, c.itemId);
-            }), ranked.end());
+        auto fitting = [&](uint8 qualityCap, uint8 qualityFloor)
+        {
+            std::vector<ai::GearItemCandidate> out = ai::FilterCandidatesForSlot(
+                Index().bySlot[slot], playerClass, canonicalSpec, level, slot, qualityCap, canDualWield,
+                mainHandIsTwoHanded, alreadyPicked);
+            out.erase(std::remove_if(out.begin(), out.end(),
+                [qualityFloor, maxItemLevel](ai::GearItemCandidate const& c)
+                {
+                    return c.quality < qualityFloor || c.itemLevel > maxItemLevel || !SourceGateAllows(c.itemId) ||
+                        GearBlacklistBlocks(sPlayerbotAIConfig.randomGearBlacklist, c.itemId);
+                }), out.end());
+            return out;
+        };
+
+        std::vector<ai::GearItemCandidate> ranked = fitting(maxQuality, plan.baseQuality);
+        if (ranked.empty() && maxQuality > plan.baseQuality)
+        {
+            maxQuality = plan.baseQuality;   // the upgrade slot lost its candidate to an earlier pick
+            ranked = fitting(maxQuality, plan.baseQuality);
+        }
+        if (ranked.empty() && fallbackQuality < plan.baseQuality)
+        {
+            // Nothing at the green floor: a level-20 slot takes white instead of staying empty.
+            maxQuality = fallbackQuality;
+            ranked = fitting(maxQuality, fallbackQuality);
+        }
 
         if (ranked.empty())
         {
@@ -503,6 +538,15 @@ GearSetOutcome SeedGearForTarget(Player* target, uint32 levelArg)
                 c.score = sRandomItemMgr.CalculateStatWeight(playerClass, static_cast<uint8>(specId), proto, itSpec);
             }
         ai::SortCandidatesForSlot(ranked);
+
+        // Vary the look: the kit picks among the slot's best-fitting items, never always the single best one.
+        std::vector<uint32> scores;
+        scores.reserve(ranked.size());
+        for (ai::GearItemCandidate const& c : ranked)
+            scores.push_back(c.score);
+        uint32 const window = TortoiseBots::SeedCandidatePickCount(scores);
+        if (window > 1)
+            std::rotate(ranked.begin(), ranked.begin() + rollBelow(window), ranked.begin() + window);
 
         bool equippedSlot = false;
         std::string lastFailCode = "no-item";
@@ -544,8 +588,8 @@ GearSetOutcome SeedGearForTarget(Player* target, uint32 levelArg)
                 res.status = "equipped";
                 equippedSlot = true;
                 alreadyPicked.push_back(cand.itemId);
-                if (slot == EQUIPMENT_SLOT_MAINHAND && twoHander)
-                    mainHandIsTwoHanded = true;
+                if (slot == EQUIPMENT_SLOT_MAINHAND)
+                    mainHandIsTwoHanded = twoHander;
                 ++outcome.equipped;
                 break;
             }

@@ -2872,8 +2872,8 @@ AiPlayerbot.RandomBotShowCloak = 1
 # The spawn gear kit starts at level 5: a bot that rolls 1-4 keeps its level-1
 # outfit for good (its spawn happens once), so a range whose minimum is below 5
 # still produces some bots without a kit.
-# Default: 1 / 60 (fresh bots may start anywhere from level 1)
-AiPlayerbot.RandomBotStartLevelMin = 1
+# Default: 5 / 60 (the Forever build ships 1 / 60: its pool bots may start at level 1)
+AiPlayerbot.RandomBotStartLevelMin = 5
 AiPlayerbot.RandomBotStartLevelMax = 60
 
 # Set XP rate for bots (default: 1)

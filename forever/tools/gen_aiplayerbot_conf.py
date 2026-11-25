@@ -48,6 +48,13 @@ KNOBS = os.path.join(ROOT, "forever", "data", "run-knobs-139.tsv")
 
 CALL = re.compile(r"\bconfig\.Get(Bool|Int|Float|String)Default\s*\(")
 
+# Keys whose Forever default is a core-guarded constant in PlayerbotAIConfig.cpp, so the census cannot read the value
+# from the call. The value here is what the Forever build's own default is; the shared template keeps the Turtle value.
+FOREVER_DEFAULTS = {
+    # Forever's pool may start a fresh bot at level 1; the Turtle build keeps TB's 5.
+    "AiPlayerbot.RandomBotStartLevelMin": "1",
+}
+
 
 def split_args(text, start):
     """Arguments of the call whose '(' is just before `start`: (list of argument texts, index after the ')')."""
@@ -136,6 +143,10 @@ def collect(text):
             continue
         entries[key] = {"kind": kind, "lit": lit, "expr": default, "line": line, "notes": []}
         order.append(key)
+    for key, value in FOREVER_DEFAULTS.items():
+        if key not in entries:
+            sys.exit("FOREVER_DEFAULTS names %s, which PlayerbotAIConfig.cpp no longer reads" % key)
+        entries[key]["lit"] = value
     return entries, order, nonliteral_keys
 
 

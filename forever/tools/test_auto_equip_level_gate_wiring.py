@@ -16,6 +16,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ACTION = (ROOT / "ai/playerbot/strategy/actions/EquipAction.cpp").read_text()
 POLICY = (ROOT / "runtime/GearEffectiveLevelPolicy.h").read_text()
+USAGE = (ROOT / "ai/playerbot/strategy/values/ItemUsageValue.cpp").read_text()
+SLICE = (ROOT / "forever/SLICE-W4.txt").read_text()
 SELECTOR = (ROOT / "ai/playerbot/TbCompatPoolGear.h").read_text()
 TURTLE = (ROOT / "ai/cmangos-compat-poolgear.h").read_text()
 FOREVER = (ROOT / "forever/src/compat/TbCompat_PoolGear.h").read_text()
@@ -89,10 +91,29 @@ class AutoEquipLevelGateWiring(unittest.TestCase):
 
     def test_policy_is_the_shared_clamped_rule(self):
         self.assertIn("GearEffectiveRequiredLevel(std::uint32_t requiredLevel, std::uint32_t itemLevel)", POLICY)
-        self.assertIn("requiredLevel > 0", POLICY)
+        self.assertIn("requiredLevel > 1 || (requiredLevel == 1 && itemLevel < 15)", POLICY)
         self.assertIn("itemLevel > 5 ? itemLevel - 5 : 1", POLICY)
         self.assertIn("kGearMaxRequiredLevel", POLICY)
         self.assertIn("kGearMaxRequiredLevel = 60", POLICY)
+
+    def test_equip_usage_carries_the_pool_level_gate(self):
+        # Quest-reward choice, loot roll and vendor buy all read this usage.
+        self.assertIn("ai/playerbot/strategy/values/ItemUsageValue.cpp", SLICE)
+        self.assertIn('#include "playerbot/TbCompatPoolGear.h"', USAGE)
+        self.assertIn('#include "runtime/GearEffectiveLevelPolicy.h"', USAGE)
+        self.assertIn('#include "runtime/PoolGearTopUpPolicy.h"', USAGE)
+        start = USAGE.index("ItemUsage ItemUsageValue::QueryItemUsageForEquip(")
+        gate = USAGE[start:USAGE.index("uint32 specId = sRandomItemMgr.GetPlayerSpecId(bot);", start)]
+        for needle in (
+            "TortoiseBots::PoolGearTopUpEligible(",
+            "sPlayerbotAIConfig.autoEquipUpgradeRespectsRequiredLevel",
+            "IsPoolBotCompat(bot)",
+            "PoolGearTopUpIsHiredCompat(bot)",
+            "PoolGearTopUpIsClaimedCompat(bot)",
+            "ai->HasRealPlayerMaster()",
+            "GearEffectiveRequiredLevel(itemProto->RequiredLevel, itemProto->ItemLevel) > bot->GetLevel()",
+        ):
+            self.assertIn(needle, gate)
 
     def test_knob_is_read_defaulted_shipped_and_documented(self):
         self.assertIn(
@@ -101,7 +122,7 @@ class AutoEquipLevelGateWiring(unittest.TestCase):
         self.assertIn("AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel = 1", TEMPLATE)
         self.assertIn("AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel = 1", CONF)
         self.assertIn(
-            "| `AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel` | `1` | bool | yes | `ai/playerbot/strategy/actions/EquipAction.cpp` |",
+            "| `AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel` | `1` | bool | yes | `ai/playerbot/strategy/actions/EquipAction.cpp`, `ai/playerbot/strategy/values/ItemUsageValue.cpp` |",
             KEYS_DOC)
         self.assertIn("### `AiPlayerbot.AutoEquipUpgradeRespectsRequiredLevel`", SETTINGS_DOC)
 

@@ -177,7 +177,7 @@ Bots equip an upgrade they loot or win.
 A pool bot does not equip a looted, quested, bought or traded upgrade above its level.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
 
-Forever item rows often leave the required level empty even on high item levels, so the core alone would let a level-10 pool bot wear an item level 62 blue. With this on, the missing requirement is derived from the item level (item level minus 5, at most 60) and treated as real. A bot with a player master, hired and owned bots, and an explicit `.bot equip` order are not affected; `0` restores the old "if the core allows it, wear it" behaviour.
+Forever item rows often leave the required level empty (or set to the level-1 placeholder) even on high item levels, so the core alone would let a level-10 pool bot wear an item level 62 blue. With this on, the missing requirement is derived from the item level (item level minus 5, at most 60) and treated as real wherever the bot judges an item's use: the equip pass, but also a quest reward's choice, a loot roll and a vendor buy. A bot with a player master, hired and owned bots, and an explicit `.bot equip` order are not affected; `0` restores the old "if the core allows it, wear it" behaviour.
 
 ### `AiPlayerbot.EquipUpgradeThreshold`
 The margin a new item must beat the worn one by.
@@ -232,6 +232,12 @@ Allows reputation-gated items in generated or looted gear.
 ### `AiPlayerbot.RandomGearAllowPvP`
 Allows PvP rank items in generated or looted gear.
 **Default:** `0` · **Values:** `0` off, `1` on · **Restart:** needed
+
+### `AiPlayerbot.RandomGearMaxSourceTier`
+Highest source tier generated gear may come from.
+**Default:** `0` · **Values:** `0` base (world drops, vendors, quests, crafts), `1` end-game dungeon, `2` raid · **Restart:** needed
+
+It bounds the spawn kit, the level-up top-up and `.bot autogear`; loot, quest rewards the bot chooses and trades are not filtered by it. An item with no known ordinary source is never generated, and PvP or reputation gear needs `RandomGearAllowPvP` / `RandomGearAllowReputation`.
 
 ## Learning, pets & the party
 
@@ -342,7 +348,6 @@ The generated [key census](../config-keys.md) lists every advertised key and whe
 | `AiPlayerbot.PetAutoTrainAlts` | See `PetAutoTrain`: pet training covers every bot the module trains. |
 | `AiPlayerbot.RandomGearUpgradeEnabled` | The spawn kit is `TortoiseBots.Pool.GearOnCreate`; level-up gear is `PoolGearTopUpOnLevel`. |
 | `AiPlayerbot.RandomGearProgression` | Nothing acts on it. |
-| `AiPlayerbot.RandomGearMaxSourceTier` | The spawn kit's source check is fixed (no raid, PvP, reputation or unobtainable gear); the key is not read. |
 | `AiPlayerbot.RandomGearSeedEpicChance` | The spawn kit never includes epics. |
 | `AiPlayerbot.AutoPickTalents` | Talents are `TortoiseBots.AutoTalentsOnLevel`. |
 | `AiPlayerbot.XPRate` | Nothing acts on it: the experience bonus action is not part of the build. Bots level at the server's own rate. |

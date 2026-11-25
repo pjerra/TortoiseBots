@@ -1,8 +1,9 @@
 // Standalone test for the effective gear level requirement: the stored
-// RequiredLevel wins untouched, and a stored 0 is derived as item level - 5,
-// clamped to the realm's level cap. On the live Forever data 91% of the rows
-// that do store a requirement match that rule, and the endgame rows that store
-// 0 (item level 71-90 epics) are wearable at 60.
+// RequiredLevel wins untouched, except that a stored 0 and a stored 1 next to
+// an item level of 15+ are placeholders derived as item level - 5, clamped to
+// the realm's level cap. On the live Forever data 91% of the rows that do
+// store a requirement match that rule, and the endgame rows that store 0
+// (item level 71-90 epics) are wearable at 60.
 //
 // Build and run:
 //   g++ -std=c++17 -Wall -Wextra tools/test_gear_effective_level_policy.cpp -o /tmp/test_gear_effective_level_policy
@@ -28,11 +29,24 @@ int main()
 {
     // A stored requirement is what the core checks, so it passes through
     // unchanged, including values above the cap (custom PvP rows store 90).
-    CHECK(GearEffectiveRequiredLevel(1, 62) == 1);
+    CHECK(GearEffectiveRequiredLevel(1, 62) == 57);
     CHECK(GearEffectiveRequiredLevel(5, 5) == 5);
     CHECK(GearEffectiveRequiredLevel(40, 60) == 40);
     CHECK(GearEffectiveRequiredLevel(60, 298) == 60);
     CHECK(GearEffectiveRequiredLevel(90, 298) == 90);
+
+    // Stored 1 is the real requirement of the starter outfit (item levels 1-5);
+    // only from item level 15 does it become a placeholder.
+    CHECK(GearEffectiveRequiredLevel(1, 0) == 1);
+    CHECK(GearEffectiveRequiredLevel(1, 1) == 1);
+    CHECK(GearEffectiveRequiredLevel(1, 5) == 1);
+    CHECK(GearEffectiveRequiredLevel(1, 14) == 1);
+    CHECK(GearEffectiveRequiredLevel(1, 15) == 10);
+    CHECK(GearEffectiveRequiredLevel(1, 40) == 35);
+    CHECK(GearEffectiveRequiredLevel(1, 59) == 54);
+    CHECK(GearEffectiveRequiredLevel(1, 298) == kGearMaxRequiredLevel);
+    // From 2 up the stored requirement is authoritative at any item level.
+    CHECK(GearEffectiveRequiredLevel(2, 90) == 2);
 
     // Stored 0: item level - 5, never below 1 (starter and junk rows).
     CHECK(GearEffectiveRequiredLevel(0, 0) == 1);

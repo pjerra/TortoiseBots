@@ -2,6 +2,7 @@
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
+#include "ItemDefines.h"
 #include "ItemTemplate.h"
 #include "Log.h"
 #include "ObjectMgr.h"
@@ -112,55 +113,63 @@ uint32 ReferenceLootId(tbs9::LootTableRow const& row)
     return row.item.mincountOrRef < 0 ? uint32(-int64(row.item.mincountOrRef)) : 0;
 }
 
-// Every item one loot template can yield: ungrouped and grouped rows, and one level of referenced templates, the same
-// walk TB does. `tiered` is false for templates with no spawn on the map (a summoned or scripted entry cannot attest a
-// map tier; its items stay a known source at base).
-void MarkLootTemplate(tbs9::LootTableCopy const& copy, tbs9::LootTableCopy const& references, uint32 lootId,
-    uint8 tier, bool tiered, SourceTierMap& sourceTier, SourceTierMap& lootTier)
+// reference_loot_template nests several tables deep (a world drop points at a tier table that points at an armour
+// table), so one level of expansion loses every item below the second. `visited` holds the reference tables of this
+// traversal: a table's item set does not depend on the path that reached it, and the depth cap ends a malformed cycle.
+inline constexpr uint32 kLootReferenceMaxDepth = 8;
+
+void CollectLootTemplateItems(tbs9::LootTableCopy const& copy, tbs9::LootTableCopy const& references, uint32 lootId,
+    uint32 depth, std::unordered_set<uint32>& visited, std::vector<uint32>& out)
 {
-    if (!lootId)
+    if (!lootId || depth > kLootReferenceMaxDepth)
         return;
     auto rows = copy.byEntry.find(lootId);
     if (rows == copy.byEntry.end())
         return;
 
-    auto record = [&](uint32 itemId)
-    {
-        NoteSource(sourceTier, itemId, tier);
-        if (tiered)
-            NoteSource(lootTier, itemId, tier);
-    };
     for (tbs9::LootTableRow const& row : rows->second)
     {
         if (uint32 const referenceId = ReferenceLootId(row))
         {
-            auto referenced = references.byEntry.find(referenceId);
-            if (referenced != references.byEntry.end())
-                for (tbs9::LootTableRow const& referenceRow : referenced->second)
-                    record(referenceRow.item.itemid);
+            if (visited.insert(referenceId).second)
+                CollectLootTemplateItems(references, references, referenceId, depth + 1, visited, out);
             continue;
         }
-        record(row.item.itemid);
+        out.push_back(row.item.itemid);
+    }
+}
+
+// Every real item one loot template can yield: ungrouped and grouped rows, and nested referenced templates. A
+// reference row's `itemid` is the child table id, never an item. `tiered` is false for templates with no spawn on the
+// map (a summoned or scripted entry cannot attest a map tier; its items stay a known source at base).
+void MarkLootTemplate(tbs9::LootTableCopy const& copy, tbs9::LootTableCopy const& references, uint32 lootId,
+    uint8 tier, bool tiered, SourceTierMap& sourceTier, SourceTierMap& lootTier)
+{
+    if (!lootId)
+        return;
+
+    std::vector<uint32> items;
+    std::unordered_set<uint32> visited;
+    CollectLootTemplateItems(copy, references, lootId, 0, visited, items);
+    for (uint32 itemId : items)
+    {
+        NoteSource(sourceTier, itemId, tier);
+        if (tiered)
+            NoteSource(lootTier, itemId, tier);
     }
 }
 
 // Containers (lockboxes, gift boxes) and open-water fishing: ordinary base sources, never a map tier.
 void MarkKnownLootItems(tbs9::LootTableCopy const& copy, tbs9::LootTableCopy const& references, SourceTierMap& sourceTier)
 {
+    std::vector<uint32> items;
     for (auto const& entry : copy.byEntry)
     {
-        for (tbs9::LootTableRow const& row : entry.second)
-        {
-            if (uint32 const referenceId = ReferenceLootId(row))
-            {
-                auto referenced = references.byEntry.find(referenceId);
-                if (referenced != references.byEntry.end())
-                    for (tbs9::LootTableRow const& referenceRow : referenced->second)
-                        NoteSource(sourceTier, referenceRow.item.itemid, GEAR_SOURCE_TIER_BASE);
-                continue;
-            }
-            NoteSource(sourceTier, row.item.itemid, GEAR_SOURCE_TIER_BASE);
-        }
+        std::unordered_set<uint32> visited;
+        items.clear();
+        CollectLootTemplateItems(copy, references, entry.first, 0, visited, items);
+        for (uint32 itemId : items)
+            NoteSource(sourceTier, itemId, GEAR_SOURCE_TIER_BASE);
     }
 }
 
@@ -335,6 +344,21 @@ void BuildIndex()
     {
         uint32 const creatureEntry = entry.first;
         CreatureTemplate const& info = entry.second;
+
+        // A vendor source is independent of the creature's loot difficulty row. Only an ordinary item sold for gold
+        // counts: a currency/mark vendor row, an extended-cost (PvP/raid token) row and a condition-gated row are not
+        // ordinary gear, and marking them base would undo the raid/PvP classification.
+        if (VendorItemData const* vendor = sObjectMgr.GetNpcVendorItemList(creatureEntry))
+            for (uint32 slot = 0; slot < vendor->GetItemCount(); ++slot)
+                if (VendorItem const* vendorItem = vendor->GetItem(slot))
+                    if (uint32 const itemId = vendorItem->item)
+                        if (vendorItem->Type == ITEM_VENDOR_TYPE_ITEM && vendorItem->ExtendedCost == 0 &&
+                            vendorItem->PlayerConditionId == 0)
+                        {
+                            NoteSource(state.sourceTier, itemId, GEAR_SOURCE_TIER_BASE);
+                            state.vendored.insert(itemId);
+                        }
+
         CreatureDifficulty const* difficulty = info.GetDifficulty(DIFFICULTY_NONE);
         if (!difficulty)
             continue;
@@ -345,15 +369,6 @@ void BuildIndex()
         if (spawned && (difficulty->TypeFlags & CREATURE_TYPE_FLAG_BOSS_MOB))
             tier = GEAR_SOURCE_TIER_RAID;
         MarkLootTemplate(creatureLoot, references, difficulty->LootID, tier, spawned, state.sourceTier, state.lootTier);
-
-        if (VendorItemData const* vendor = sObjectMgr.GetNpcVendorItemList(creatureEntry))
-            for (uint32 slot = 0; slot < vendor->GetItemCount(); ++slot)
-                if (VendorItem const* vendorItem = vendor->GetItem(slot))
-                    if (uint32 const itemId = vendorItem->item)
-                    {
-                        NoteSource(state.sourceTier, itemId, GEAR_SOURCE_TIER_BASE);
-                        state.vendored.insert(itemId);
-                    }
     }
 
     for (auto const& entry : sObjectMgr.GetGameObjectTemplates())

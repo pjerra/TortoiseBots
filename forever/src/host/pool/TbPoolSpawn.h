@@ -25,6 +25,10 @@ void LoadAtStartup();
 // its random start level once. Gives a level only, never takes one away.
 void ApplyStartLevel(Player* bot);
 
+// True while ApplyStartLevel's GiveLevel is running: its level-change hook would otherwise run the login block's own
+// syncs a second time.
+bool ApplyingStartLevel();
+
 // Called on the same login after those syncs: the one-time kit for a fresh pool bot of level 5+, and the row that
 // says the spawn happened. A bot below 5 keeps the starter outfit and is still marked spawned.
 void SeedSpawnKit(Player* bot);
