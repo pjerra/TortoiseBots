@@ -86,6 +86,13 @@ public:
     std::string const& lastError() const { return lastError_; }
     DecisionCaptureSettings const& settings() const { return settings_; }
 
+    // Ticket #307: the read path over a LIVE capture. The bounded window of its
+    // newest decision rows (null when this commander has no capture) and the
+    // capture's id for the reply ("" when there is none). World thread, like
+    // every entry point above.
+    DecisionCapture::RowLog const* Rows(std::uint64_t commanderRaw) const;
+    std::string CaptureId(std::uint64_t commanderRaw) const;
+
 private:
     struct Capture
     {
@@ -298,6 +305,21 @@ inline void DecisionCaptureRegistry::EndAll(std::string const& reason)
         End(key, reason);
 }
 
+// #307: the row window and the id of the capture this commander holds. A run
+// that has no capture (capture off, a player-led run, or one that ended) has
+// neither, and the command says so.
+inline DecisionCapture::RowLog const* DecisionCaptureRegistry::Rows(std::uint64_t commanderRaw) const
+{
+    auto it = captures_.find(commanderRaw);
+    return it == captures_.end() ? nullptr : &it->second.recorder->rows();
+}
+
+inline std::string DecisionCaptureRegistry::CaptureId(std::uint64_t commanderRaw) const
+{
+    auto it = captures_.find(commanderRaw);
+    return it == captures_.end() ? std::string() : it->second.sink->CaptureId();
+}
+
 inline void DecisionCaptureRegistry::Update()
 {
     for (auto& entry : captures_)
@@ -500,6 +522,13 @@ public:
         registry_.Shutdown();
     }
     std::string const& lastError() const { return registry_.lastError(); }
+
+    // Ticket #307: `.tb run decisions` reads through these. `Enabled` is the
+    // capture's own toggle (AiPlayerbot.DecisionCapture.Enabled): off, the
+    // command refuses `capture-off` and names it, after the access check.
+    bool Enabled() const { return registry_.settings().enabled; }
+    DecisionCapture::RowLog const* Rows(std::uint64_t commanderRaw) const { return registry_.Rows(commanderRaw); }
+    std::string CaptureId(std::uint64_t commanderRaw) const { return registry_.CaptureId(commanderRaw); }
 
 private:
     DecisionCaptureService();

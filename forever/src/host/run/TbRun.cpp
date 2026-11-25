@@ -104,7 +104,8 @@ void SetFlushListener(FlushListener listener)
     FlushHook = listener;
 }
 
-RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep)
+RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep,
+    bool captureTicks)
 {
     if (!plan || leader.IsEmpty() || Table().count(leader))
         return nullptr;
@@ -118,8 +119,10 @@ RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan
     rec->runId = NextRunId();
     RunRec* raw = rec.get();
     Table()[leader] = std::move(rec);
-    // Decision capture (opt-in, test servers): the run leader's policy facts for this run, one JSONL capture.
-    DecisionCaptureService::Instance().Begin(GuidKeyCompat(leader), leaderName, plan->name, DecisionCaptureNowUnixMs());
+    // Decision capture (opt-in, test servers): the run leader's policy facts for this run, one JSONL capture. A
+    // player-led run asks for none: nothing ticks the policy, so the capture would stay empty (#307).
+    if (captureTicks)
+        DecisionCaptureService::Instance().Begin(CaptureKey(leader), leaderName, plan->name, DecisionCaptureNowUnixMs());
     return raw;
 }
 
@@ -133,7 +136,7 @@ bool Remove(ObjectGuid leader)
     // the same as before.
     if (FlushHook)
         FlushHook(*it->second);
-    DecisionCaptureService::Instance().End(GuidKeyCompat(leader), "run removed");
+    DecisionCaptureService::Instance().End(CaptureKey(leader), "run removed");
     Table().erase(it);
     return true;
 }
@@ -186,6 +189,13 @@ std::string StateName(RunRec const& rec)
     return rec.stopped ? "stopped" : DungeonRun::StateName(rec.run.state);
 }
 
+// #307: the decision capture's key (TbRun.h). One definition, so the tick, the
+// command and the end all name the same capture.
+std::uint64_t CaptureKey(ObjectGuid leader)
+{
+    return GuidKeyCompat(leader);
+}
+
 h3::Rec RunRecord(RunRec const& rec, uint32 nowMs)
 {
     using h3::Rec;
@@ -193,7 +203,9 @@ h3::Rec RunRecord(RunRec const& rec, uint32 nowMs)
     size_t const steps = plan ? plan->steps.size() : 0;
     std::string const state = StateName(rec);
     Rec out("run");
-    out.S("lead", rec.leaderName).S("plan", rec.planName).S("state", state);
+    // `run` is the record's own id (#307): `.tb run decisions <id>` takes it in place of the leader's name, so a reader
+    // that keeps the id across a restart of the run (a new run of the same leader gets a new id) names the run it means.
+    out.S("lead", rec.leaderName).S("plan", rec.planName).N("run", int64(rec.runId)).S("state", state);
     if (IsPlayerLed(rec))
         out.S("mode", "player").S("commander", rec.commanderName);
     out.N("step", int64(std::min(rec.run.step, steps))).N("steps", int64(steps));
@@ -812,7 +824,7 @@ uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
     if (stopped)
         rec.stopReason = why;
     rec.endedMs = nowMs ? nowMs : 1;
-    DecisionCaptureService::Instance().End(GuidKeyCompat(rec.leader), why);
+    DecisionCaptureService::Instance().End(CaptureKey(rec.leader), why);
     ForgetRun(rec.leader);
     ForgetRunOrders(rec.leader);
     tasks::Forget(rec.leader);              // S9 (O9)
@@ -1167,7 +1179,7 @@ void TickRun(RunRec& rec, uint32 nowMs)
         return;
     }
     // Decision capture wraps the bot-led policy tick only: a player-led run is a different driver (TB's hook sites).
-    uint64_t const captureKey = GuidKeyCompat(rec.leader);
+    uint64_t const captureKey = CaptureKey(rec.leader);
     if (!playerLed)
         DecisionCaptureService::Instance().BeforeTick(captureKey, run, facts, dt);
     std::string const order = playerLed ? PlayerLed::Tick(run, rec.pl, facts, anchor, dt) : DungeonRun::Tick(run, facts, dt);
@@ -1547,7 +1559,7 @@ StartOutcome StartPlayerLedRun(Player* commander, Player* tank, ai::DungeonPlan 
         tasks::Forget(tank->GetGUID());
         Remove(tank->GetGUID());
     }
-    RunRec* rec = Create(tank->GetGUID(), name, plan, nowMs);
+    RunRec* rec = Create(tank->GetGUID(), name, plan, nowMs, 0, false);   // no capture: a player-led run's ticks are not the policy's (#307)
     if (!rec)
         return refuse("no-plan", "the run could not be created");
     rec->commander = commander->GetGUID();

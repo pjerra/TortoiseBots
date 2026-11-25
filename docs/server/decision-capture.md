@@ -2,7 +2,7 @@
 id: server-decision-capture
 title: Decision Capture (opt-in run-leader recorder)
 category: server
-summary: Record every run-leader decision with the facts and run state behind it, cut a live failure into a replay fixture, and keep it as a regression test.
+summary: Record every run-leader decision with the facts and run state behind it, read the newest rows in game over .tb run decisions, cut a live failure into a replay fixture, and keep it as a regression test.
 tags: [guide, recorder, run-leader, testing, replay, fixtures]
 relates_to:
   - server-configuration
@@ -136,9 +136,18 @@ A 20-bot Zul'Gurub tick in a fight is about 20 member facts and up to 30 unit fa
 
 `capUs`, the bytes per record, and `dropped` in `index.json` are the numbers to watch on the first live walk.
 
+## Reading the rows in game
+
+`.tb run decisions <leader|run> [since=<seq>] [limit=<n>]` prints the run's decision rows over the command link, for the Forever agent's `decisions pull`: the newest 512 rows of the run's live capture, oldest first, one row per line, with a header line carrying `count=`, `next=` and `more=`. A row is the decision of one tick (its `seq`, `t` and `dt`, and the `out` values the record carries: `state`, `phase`, `step`, `order`, `note`, `say`); `since=` is the cursor, `limit=` defaults to 50 and is clamped to 1..200. The reply grammar (percent-encoded values, the 3,000-byte line cap) applies, so a value over 240 bytes is cut and the row says `trunc=yes`; one row is never split over continuation lines. The full text, the facts and the plan are in the capture's files, not in a row.
+
+A row exists for every tick the capture saw, even when the file has no record for it (a header the sink refused, a record the writer dropped, a `stub` over the size cap): the row is the decision, the record is the evidence, and the row's `record=tick|stub|dropped` says which of the three happened, so a reader never mistakes an unwritten decision for a durable one. A repeated `done` tick is not a new decision and has no row.
+
+The command is behind this capture's own toggle, `AiPlayerbot.DecisionCapture.Enabled`: off, it answers `capture-off` and names it. It reads a bot-led run's live capture only: a player-led run starts no capture at all (its driver is the player's walk), and a stopped run's rows are in its folder; both answer `no-capture`. The row format is a stable interface, the field table is in [the run leader page](../play/dungeon-run-leader.md#reading-the-decisions-tb-run-decisions), and the module keeps no second copy of anything: the window lives in the capture service and is gone with the capture.
+
 ## Pulling a capture
 
 - **From disk**: read the capture directly from `<LogsDir>/decisions/<captureId>/` (the folder `AiPlayerbot.DecisionCapture.Dir` sets). The dashboard serves no decision captures yet.
+- **In game**: `.tb run decisions` (above) for the newest rows of a live capture, bounded by `limit=` and `since=`.
 - **External driver**: a walk copies its own character's captures into `<out>/decisions/<id>/`, or pulls them for a walk that died early.
 
 ## A failure becomes a fixture

@@ -15,6 +15,7 @@
 #include "host/run/TbRunFactsPure.h"
 #include "host/run/TbRunPlayerLedPure.h"
 #include "host/run/TbRunStands.h"
+#include "runtime/DecisionCapture.h"
 
 #include "GameTime.h"
 #include "Group.h"
@@ -69,6 +70,21 @@ bool ParseSeq(std::string const& text, uint32& out)
     out = uint32(std::strtoul(text.c_str(), nullptr, 10));
     return true;
 }
+
+// #307: the run a `<leader|run>` word names: the leader's name as every other
+// verb reads it, else a run id (all digits, the `run=` `.tb run status all`
+// shows) when one has it.
+RunRec* RunByArg(std::string const& typed)
+{
+    if (RunRec* byName = RunByName(typed))
+        return byName;
+    uint32 id = 0;
+    if (ParseSeq(typed, id))
+        for (RunRec* rec : All())
+            if (rec->runId == id)
+                return rec;
+    return nullptr;
+}
 }
 
 bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
@@ -76,7 +92,7 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     Words const args = Split(tail);
     if (!RequireBuilt(handler, args, "run"))
         return false;
-    static char const* const usage = ".tb run start <leader> <plan> [from step <N> | from leg <leg>] [lead=player] | stop <leader> [reason] | pause <leader> | resume <leader> | status <leader|all> | events <leader> [since=<seq>]";
+    static char const* const usage = ".tb run start <leader> <plan> [from step <N> | from leg <leg>] [lead=player] | stop <leader> [reason] | pause <leader> | resume <leader> | status <leader|all> | events <leader> [since=<seq>] | decisions <leader|run> [since=<seq>] [limit=<n>]";
     if (args.w.empty())
         return Fail(handler, args, "run", "missing-argument", usage);
     std::string const verb = Lower(args.w[0]);
@@ -87,13 +103,18 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         return Fail(handler, args, "run", "bad-argument", "lead= takes player or bot (once): .tb run start <tank> <plan> lead=player");
 
     // ---- syntax first: nothing is read or changed before the words are known to be well formed ----
-    if (verb != "start" && verb != "stop" && verb != "pause" && verb != "resume" && verb != "status" && verb != "events")
+    if (verb != "start" && verb != "stop" && verb != "pause" && verb != "resume" && verb != "status" && verb != "events" &&
+        verb != "decisions")
         return Fail(handler, args, "run", "unknown-verb", args.w[0]);
     if (args.w.size() < 2)
         return Fail(handler, args, "run", "missing-argument", usage);
     std::string const leaderName = args.w[1];
     uint32 since = 0;
     bool haveSince = false;
+    // #307: `limit=` of `.tb run decisions`, already clamped to the read path's
+    // 1..200 (the default is the policy's kDefaultRows).
+    int limit = DecisionCapture::kDefaultRows;
+    bool haveLimit = false;
     std::string reason;
     if (verb == "start")
     {
@@ -130,6 +151,35 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
             if (!ParseSeq(word.substr(6), since))
                 return Fail(handler, args, "run", "bad-argument", "since= takes the number of an event (`.tb run events <leader>` shows them)");
             haveSince = true;
+        }
+    }
+    else if (verb == "decisions")
+    {
+        for (size_t i = 2; i < args.w.size(); ++i)
+        {
+            std::string const word = Lower(args.w[i]);
+            if (word.compare(0, 6, "since=") == 0 && !haveSince)
+            {
+                if (!ParseSeq(word.substr(6), since))
+                    return Fail(handler, args, "run", "bad-argument", "since= takes the seq of a decision row (`.tb run decisions <leader>` shows them as seq=)");
+                haveSince = true;
+            }
+            else if (word.compare(0, 6, "limit=") == 0 && !haveLimit)
+            {
+                std::string const value = word.substr(6);
+                std::int64_t typed = 0;
+                bool digits = !value.empty() && value.size() <= 9;
+                for (char c : value)
+                    if (!std::isdigit(static_cast<unsigned char>(c)))
+                        digits = false;
+                if (!digits)
+                    return Fail(handler, args, "run", "bad-argument", "limit= takes a row count, 1 to 200 (the default is 50)");
+                typed = std::strtoll(value.c_str(), nullptr, 10);
+                limit = DecisionCapture::ClampRows(typed);
+                haveLimit = true;
+            }
+            else
+                return Fail(handler, args, "run", "unexpected-argument", args.w[i]);
         }
     }
     else if (args.w.size() > 2)
@@ -210,9 +260,73 @@ bool HandleRun(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     }
 
     // ---- the verbs that name an existing run ----
-    RunRec* rec = RunByName(leaderName);
+    RunRec* rec = verb == "decisions" ? RunByArg(leaderName) : RunByName(leaderName);
     if (!rec)
+    {
+        // #307 keeps its own message: the word may be a run id, not a name.
+        if (verb == "decisions")
+            return Fail(handler, args, "run", "no-run", leaderName + " is not a leader with a run or a run id (.tb run status all shows both; .tb run start <leader> <plan>)");
         return Fail(handler, args, "run", "no-run", leaderName + " has no run (.tb run start " + leaderName + " <plan>; .tb run status all)");
+    }
+
+    // ---- decisions (#307): the read path over the capture the run's tick writes ----
+    if (verb == "decisions")
+    {
+        // The same shared check the run's controlling verbs use (console, a GM,
+        // the run's owner or observer): a reader may not see more than the run.
+        std::string code, detail;
+        if (!h3::CheckRunObserverAccess(handler, rec->leader, code, detail))
+            return Fail(handler, args, "run", code, detail);
+        // The capture's own toggle is the feature's: no second key, and off is
+        // a refusal that names it.
+        if (!DecisionCaptureService::Instance().Enabled())
+            return Fail(handler, args, "run", "capture-off", "the decision capture is off: AiPlayerbot.DecisionCapture.Enabled = 0 (set it to 1 and restart the server: the keys are read when the config loads)");
+        // A player-led run asks for no capture at all (TbRun.h, Create): say
+        // that, rather than a capture that never had a row.
+        if (IsPlayerLed(*rec))
+            return Fail(handler, args, "run", "no-capture", "this is a player-led run: the capture records the leader policy's ticks, and a player-led run does not tick it (a bot-led run does)");
+        std::uint64_t const captureKey = CaptureKey(rec->leader);
+        DecisionCapture::RowLog const* rows = DecisionCaptureService::Instance().Rows(captureKey);
+        if (!rows)
+        {
+            std::string const& captureError = DecisionCaptureService::Instance().lastError();
+            return Fail(handler, args, "run", "no-capture", captureError.empty()
+                ? std::string("this run has no live capture: a player-led run is not captured, and a stopped run's window leaves with its capture (the capture folder keeps its rows)")
+                : "the capture could not start: " + captureError);
+        }
+        DecisionCapture::Page const page = DecisionCapture::Select(rows->Rows(), since, std::size_t(limit));
+        Reply reply(handler, args, "run");
+        reply.Begin();
+        {
+            // The one header line: which capture, how many rows, and the cursor.
+            Rec head("decisions");
+            head.N("run", int64(rec->runId)).S("lead", rec->leaderName).S("plan", rec->planName)
+                .S("capture", DecisionCaptureService::Instance().CaptureId(captureKey))
+                .N("count", int64(page.count)).N("since", int64(since)).N("next", int64(page.next)).B("more", page.more);
+            reply.Line(head);
+        }
+        // One row per line, oldest first, the keys in one fixed order
+        // (docs/play/dungeon-run-leader.md): the row is never split over
+        // continuation lines, a long value is cut and the row says trunc=yes.
+        for (std::size_t i = 0; i < page.count; ++i)
+        {
+            DecisionCapture::Row const& row = rows->Rows()[page.first + i];
+            Rec out("decision");
+            out.N("seq", int64(row.seq)).N("t", int64(row.unixMs)).N("dt", int64(row.dtMs))
+                .S("state", DungeonRun::StateName(static_cast<DungeonRun::State>(row.state)))
+                .S("phase", DungeonRun::PhaseName(static_cast<DungeonRun::Phase>(row.phase)))
+                .N("step", int64(row.step))
+                .S("record", DecisionCapture::RecordName(row.record));
+            for (DecisionCapture::TextField const& field : DecisionCapture::TextFields(row))
+                out.T(field.key, *field.value, DecisionCapture::kRowTextBytes);
+            reply.Line(out);
+        }
+        Rec end("run");
+        end.S("verb", "decisions").N("run", int64(rec->runId)).N("count", int64(page.count))
+            .N("next", int64(page.next)).B("more", page.more);
+        reply.End(end);
+        return true;
+    }
 
     if (verb == "status")
     {

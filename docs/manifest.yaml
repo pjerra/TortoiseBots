@@ -235,7 +235,7 @@ nodes:
   - id: server-decision-capture
     path: server/decision-capture.md
     category: server
-    summary: The opt-in run-leader decision recorder, the tb-decision-capture format, and the replay fixture workflow.
+    summary: The opt-in run-leader decision recorder, reading its newest rows in game, the tb-decision-capture format, and the replay fixture workflow.
 
   # Developers
   - id: developers

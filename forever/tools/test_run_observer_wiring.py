@@ -40,9 +40,9 @@ class RunObserverWiring(unittest.TestCase):
         for path in (FOREVER / "src/host/cmd").rglob("*"):
             if path.is_file() and path.suffix in (".cpp", ".h"):
                 self.assertNotIn("CheckRunObserverAccess", path.read_text(), msg=str(path.relative_to(ROOT)))
-        # the three `.tb run` guards are the only callers: start (leader + members), stop, pause/resume
+        # the `.tb run` callers: start (leader + members), stop, pause/resume, and since #307 the read-only `decisions`
         cmds = text("forever/src/host/run/TbRunCommands.cpp")
-        self.assertEqual(cmds.count("CheckRunObserverAccess"), 4)
+        self.assertEqual(cmds.count("CheckRunObserverAccess"), 5)
 
     def test_guard_rule(self):
         pure = text("forever/src/host/TbGuardPure.h")

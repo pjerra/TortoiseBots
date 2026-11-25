@@ -96,7 +96,9 @@ class RunTraceWiring(unittest.TestCase):
         self.assertIn("DecisionCaptureService::Instance().Begin(", run)
         self.assertIn("DecisionCaptureService::Instance().BeforeTick(captureKey, run, facts, dt)", run)
         self.assertIn("DecisionCaptureService::Instance().AfterTick(captureKey, run, order)", run)
-        self.assertIn('DecisionCaptureService::Instance().End(GuidKeyCompat(rec.leader), why)', run)
+        # #307: the capture's key is one function (run::CaptureKey), shared by the tick, the command and the end.
+        self.assertIn('DecisionCaptureService::Instance().End(CaptureKey(rec.leader), why)', run)
+        self.assertIn("std::uint64_t CaptureKey(ObjectGuid leader)", run)
 
     def test_the_shipped_switches_are_off(self):
         conf = text("forever/conf/aiplayerbot.conf.dist")

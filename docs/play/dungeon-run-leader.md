@@ -27,6 +27,7 @@ The command is a GameMaster command: in game, on the console, over remote access
 .tb run resume <leader>
 .tb run status <leader|all>
 .tb run events <leader> [since=<seq>]
+.tb run decisions <leader|run> [since=<seq>] [limit=<n>]
 ```
 
 `start` refuses a leader that is not a host bot leading a party (a raid group is refused), a plan the server has not loaded, a party member that is not a host bot, offline or in another instance, a member with too few free bag slots, a member with no commander, and a party whose loot method is neither group loot nor need-before-greed. `status all` also prints the run's tick cost.
@@ -152,8 +153,48 @@ The run leads the bound party and nobody else's.
 - `AiPlayerbot.DungeonRunMaxMinutes` (default 180, `0` for none) ends a run that has lasted that long with a note; paused time counts.
 - `.tb run stop <leader> [reason]` keeps the reason in the end note.
 - `.tb run events <leader> [since=<seq>]` prints the run's event ring.
+- `.tb run decisions <leader|run> [since=<seq>] [limit=<n>]` prints the run's decision rows from the decision capture (below).
 
 The commands below are GameMaster commands; a normal player does not start, pause or stop a run.
+
+### Reading the decisions (`.tb run decisions`)
+
+This is the read path for the [decision capture](../server/decision-capture.md), the opt-in recorder of the run leader's ticks. It needs `AiPlayerbot.DecisionCapture.Enabled = 1` (default `0`, test servers only), and it reads a bot-led run: a player-led run (`lead=player`) is not captured. The command prints the newest decision rows of the run's **live** capture, oldest first: one header line, then one line per tick's decision.
+
+`.tb run decisions <leader|run> [since=<seq>] [limit=<n>]` takes the leader's name or the run's id (the `run=` of `.tb run status all`), `since=` (a row's `seq`, the `next=` of an earlier reply: only newer rows are printed) and `limit=` (the rows this reply may hold, default `50`, clamped to `1..200`). The window is the newest 512 rows of the capture, about eight and a half minutes of ticks at one a second; a row that falls out of the window is only in the capture's files. A stopped run has no live capture here: its rows are in the folder.
+
+The reply is the usual `run-begin` / `run-end` report (see the reply grammar), with the rows between the markers. The header line is:
+
+| Key | Meaning |
+| :--- | :--- |
+| `run` | The run's id. |
+| `lead` | The run's leader bot. |
+| `plan` | The plan the run started on. |
+| `capture` | The capture's folder id under `AiPlayerbot.DecisionCapture.Dir`. |
+| `count` | The rows in this reply. |
+| `since` | The cursor this reply was asked for (`0`: from the oldest row kept). |
+| `next` | Pass this as `since=` next time. It is unchanged when no row was returned, so a cursor past the newest row is remembered, not reset. |
+| `more` | `yes` while a newer row waits past the last one printed. |
+
+Each row is one `decision` line, **one line per decision, never split**, with the keys in this fixed order. This is the **stable interface** the Forever agent reads (`forever-agent decisions pull`); a new field is appended, an existing key keeps its meaning:
+
+| Key | Meaning |
+| :--- | :--- |
+| `seq` | The tick's number in the capture, counted from 1: the cursor. |
+| `t` | When the tick ran, Unix milliseconds. |
+| `dt` | The tick's time step, milliseconds. |
+| `state` | `running`, `paused` or `done`. |
+| `phase` | `begin`, `gather`, `walk`, `pull`, `task`, `rest`, `wait` or `hold`. |
+| `step` | The plan step index after the tick, from 0. |
+| `record` | What became of the row's capture record: `tick` (a full record), `stub` (the record was over the capture's `RecordKiB` cap, so only a stub is in the file), or `dropped` (the file has no record for this tick: a refused header, a full writer queue, a failed write). The row is the decision; `record=` says whether the evidence behind it reached the disk. |
+| `order` | What the tick ordered; the empty value when it gave none. |
+| `note` | The run's note after the tick. |
+| `say` | The say text after the tick. |
+| `trunc` | `yes` when a value was cut to fit the line; absent otherwise. |
+
+Values are percent-encoded like every other `.tb` reply (a space is `%20`), so a value with spaces stays one word. A free-text value (`order`, `note`, `say`) longer than 240 bytes is cut and the row carries `trunc=yes`: the full text is in the capture file. Every tick the capture saw has its row, even when the file has no record for it (a record the sink refused, a `stub` record over the size cap): the row is the decision, the record is the evidence, and `record=` tells the two apart. The one tick without a row is a repeat of `done`, which is not a new decision.
+
+The command refuses with the grammar's `error` line: `capture-off` (the capture is off; the message names `AiPlayerbot.DecisionCapture.Enabled`), `no-run` (no run or run id of that name), `no-capture` (the run has no live capture: a player-led run, or one that has stopped), and `bad-argument` (a `since=` or `limit=` that is not a number). It uses the same access check as the run's controlling commands: the console, a GameMaster, or the run's owner or observer.
 
 ### How it plays
 

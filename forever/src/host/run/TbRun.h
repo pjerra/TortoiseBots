@@ -136,8 +136,12 @@ struct RunRec
 inline bool IsPlayerLed(RunRec const& rec) { return !rec.commander.IsEmpty(); }
 
 // The run table. `Create` fails (null) when the leader already has a run; the Turtle run is started on the plan at step 0.
+// `captureTicks` begins the decision capture for this run (#307). A player-led run passes false: its driver is the
+// player's walk, the capture records the policy's ticks, and an empty capture folder would only be a read path that
+// answers with no rows.
 RunRec* Find(ObjectGuid leader);
-RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep = 0);
+RunRec* Create(ObjectGuid leader, std::string const& leaderName, ai::DungeonPlan const* plan, uint32 nowMs, size_t fromStep = 0,
+    bool captureTicks = true);
 bool Remove(ObjectGuid leader);
 std::vector<RunRec*> All();                         // by leader name
 
@@ -217,5 +221,10 @@ StateOutcome ResumeRun(RunRec& rec, uint32 nowMs);
 // The `run` record of `.tb run status` (S6) and of the selftest, and the `event` record of `.tb run events`.
 h3::Rec RunRecord(RunRec const& rec, uint32 nowMs);
 h3::Rec EventRecord(RunEvent const& event);
+
+// Ticket #307: the decision capture's key for a run (the leader's one-64-bit
+// guid key, the same one Begin/BeforeTick/AfterTick/End use), so
+// `.tb run decisions` reads the capture the run's tick writes.
+std::uint64_t CaptureKey(ObjectGuid leader);
 }
 }

@@ -528,7 +528,106 @@ static void TestRecorderTickTime()
     }
 }
 
-// -- 9. decode errors ----------------------------------------------------
+// -- 8c. the read path's row window (#307) -------------------------------
+
+// Refuses the first `refuseFirst` lines the sink is handed: the segment header
+// of a fresh capture, then (when it allows those) nothing else. A refused
+// header is the storage-pressure case the read path must survive: the tick has
+// no record, but its DECISION must still be readable.
+struct RefusingSink : Sink
+{
+    int refuseFirst = 0;
+    std::uint64_t pushes = 0;
+    std::uint64_t accepted = 0;
+
+    bool Push(std::string line) override
+    {
+        ++pushes;
+        if (refuseFirst > 0)
+        {
+            --refuseFirst;
+            return false;
+        }
+        accepted += line.size();
+        return true;
+    }
+
+    bool NewSegment(std::uint32_t, std::uint64_t) override
+    {
+        return true;
+    }
+};
+
+static void TestRowWindow()
+{
+    DungeonPlan plan;
+    plan.name = "deadmines";
+    plan.map = 36;
+    plan.steps.push_back(Step(PlanStepKind::Move, 40.0f, 1.0f));
+    Run run = TortoiseBots::DungeonRun::Start(&plan);
+    run.liveTactics = nullptr;
+
+    Facts facts;
+    Facts const before = facts;
+
+    HeaderInfo header;
+    header.captureId = "20261125T101010Z-deadmines-Fionaa";
+    header.commander = "Fionaa";
+    header.module = "test";
+    Limits limits;
+
+    // Tick 1 and 2 lose their segment header (so they have no record at all);
+    // tick 3 is written. Every tick is a decision and has its row.
+    RefusingSink sink;
+    sink.refuseFirst = 2;
+    Recorder recorder(header, limits, sink);
+    for (int i = 0; i < 3; ++i)
+    {
+        recorder.BeforeTick(run, facts, 1000, 5000 + static_cast<std::uint64_t>(i));
+        recorder.AfterTick(run, "move 40,0 0,0");
+    }
+    CHECK(recorder.rows().Size() == 3);
+    CHECK(recorder.stats().records == 2);   // tick 1 lost its header twice and has no record; its row is there
+    CHECK(recorder.rows().Rows()[0].seq == 1);
+    CHECK(recorder.rows().Rows()[0].unixMs == 5000);
+    CHECK(recorder.rows().Rows()[0].dtMs == 1000);
+    CHECK(recorder.rows().Rows()[0].order == "move 40,0 0,0");
+    CHECK(recorder.rows().Rows()[2].seq == 3);
+    CHECK(recorder.rows().Newest() == 3);
+    CHECK(recorder.rows().Oldest() == 1);
+    // And each row says what became of its record: tick 1 has no evidence in
+    // the file, ticks 2 and 3 do.
+    CHECK(recorder.rows().Rows()[0].record == kRecordDropped);
+    CHECK(recorder.rows().Rows()[1].record == kRecordTick);
+    CHECK(recorder.rows().Rows()[2].record == kRecordTick);
+
+    // A record over the size cap is written as a stub, and the row says so.
+    CountingSink stubSink;
+    Limits stubLimits;
+    stubLimits.recordBytes = 64;   // every tick record is over this
+    Recorder stubRecorder(header, stubLimits, stubSink);
+    stubRecorder.BeforeTick(run, before, 1000, 8000);
+    stubRecorder.AfterTick(run, "");   // the first tick is a keyframe: written whole, over the cap
+    stubRecorder.BeforeTick(run, before, 1000, 9000);
+    stubRecorder.AfterTick(run, "");   // not a keyframe: over the cap, so a stub
+    CHECK(stubRecorder.rows().Size() == 2);
+    CHECK(stubRecorder.rows().Rows()[0].record == kRecordTick);
+    CHECK(stubRecorder.rows().Rows()[1].record == kRecordStub);
+    CHECK(stubRecorder.stats().stubs == 1);
+
+    // A tick the policy repeats after `Done` (the one skipped record) is not a
+    // new decision: it adds no row.
+    Run done = TortoiseBots::DungeonRun::Start(&plan);
+    done.state = TortoiseBots::DungeonRun::State::Done;
+    CountingSink doneSink;
+    Recorder doneRecorder(header, limits, doneSink);
+    doneRecorder.BeforeTick(done, before, 1000, 6000);
+    doneRecorder.AfterTick(done, "");
+    doneRecorder.BeforeTick(done, before, 1000, 7000);
+    doneRecorder.AfterTick(done, "");
+    CHECK(doneRecorder.rows().Size() == 1);
+}
+
 
 static void TestDecodeErrors()
 {
@@ -715,6 +814,7 @@ int main()
     TestSchema();
     TestRealisticSizes();
     TestRecorderTickTime();
+    TestRowWindow();
     TestDecodeErrors();
     TestRowsOnMap();
     TestTacticsAddressReuse();

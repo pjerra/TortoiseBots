@@ -21,6 +21,7 @@
 //   end  t,reason,records,dropped
 
 #include "DecisionCaptureCodec.h"
+#include "DecisionCaptureRows.h"
 
 #include <chrono>
 #include <cstddef>
@@ -138,12 +139,33 @@ public:
             return;
         }
 
+        // Ticket #307: the read path's window. The row is the DECISION of this
+        // tick (the same `out` values the record carries), kept for
+        // `.tb run decisions`. It is added before every early return below, so
+        // a tick whose header was refused, whose line the sink refused, or
+        // whose record had to be a stub still has its row: the row is the
+        // decision, the record is the evidence.
+        {
+            Row row;
+            row.seq = tickSeq_;
+            row.unixMs = pendingNow_;
+            row.dtMs = pendingDt_;
+            row.state = static_cast<std::uint8_t>(run.state);
+            row.phase = static_cast<std::uint8_t>(run.phase);
+            row.step = static_cast<std::uint32_t>(run.step);
+            row.order = order;
+            row.note = run.note;
+            row.say = run.say;
+            rows_.Push(std::move(row));
+        }
+
         // No record lands in a segment whose header the sink has not taken.
         if (headerPending_ && !PushHeader())
         {
             ++stats_.dropped;
             ++gapDropped_;
             nextKey_ = true;
+            rows_.SetNewestRecord(kRecordDropped);   // no evidence in the file for this decision
             KeepBase(postRun);
             return;
         }
@@ -184,12 +206,14 @@ public:
             stub += ",\"bytes\":";
             stub += std::to_string(line.size());
             stub += "}";
-            if (PushRecord(std::move(stub), seq))
+            bool const accepted = PushRecord(std::move(stub), seq);
+            if (accepted)
             {
                 ++stats_.stubs;
                 ++stats_.records;
                 ++tickIndex_;
             }
+            rows_.SetNewestRecord(accepted ? kRecordStub : kRecordDropped);
             nextKey_ = true;
             KeepBase(postRun);
             return;
@@ -198,9 +222,11 @@ public:
         if (!PushRecord(std::move(line), seq))
         {
             nextKey_ = true;
+            rows_.SetNewestRecord(kRecordDropped);   // no evidence in the file for this decision
             KeepBase(postRun);
             return;
         }
+        rows_.SetNewestRecord(kRecordTick);
         if (writeOversized)
         {
             ++stats_.oversized;
@@ -244,6 +270,13 @@ public:
     const Stats& stats() const
     {
         return stats_;
+    }
+
+    // Ticket #307: the read side's window of the newest decision rows (the
+    // `.tb run decisions` command reads it; docs/server/decision-capture.md).
+    RowLog const& rows() const
+    {
+        return rows_;
     }
 
     bool Stopped() const
@@ -474,6 +507,7 @@ private:
     std::uint32_t capUs_ = 0;
 
     bool stopped_ = false;
+    RowLog rows_;   // #307: the read path's window of the newest decision rows
 };
 
 } // namespace DecisionCapture
