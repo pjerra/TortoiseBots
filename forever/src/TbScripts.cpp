@@ -580,6 +580,8 @@ public:
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
             // The one-time kit, after the syncs have taught the level's spells (Dual Wield, weapon skills).
             TortoiseBots::poolspawn::SeedSpawnKit(player);
+            // A kit bow or gun comes with no ammo, and the kit runs after the login ammo pass: match it here, not at the resync.
+            TortoiseBots::p11::EnsureHunterStarterAmmo(player);
 #endif
         }
         TortoiseBots::cmd::NoteLogin(player);     // P2: a commander back inside the grace, or the last member of a stored binding
