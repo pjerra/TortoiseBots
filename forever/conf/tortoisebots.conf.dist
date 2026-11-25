@@ -520,6 +520,7 @@ TortoiseBots.Pool.CensusComposition = 1
 
 TortoiseBots.Pool.CensusSpec = 1
 
+#
 #    TortoiseBots.Pool.GearOnCreate
 #        Description: The one-time spawn gear kit of a fresh pool bot. On its first login (played time 0, no spawn row
 #                     yet) a pool bot of level 5 or above gets a level- and spec-fitting outfit once: white below level
