@@ -60,7 +60,7 @@ A pool bot's session ends after 30 to 90 minutes (rolled), it stays away for 5 t
 | **Capital errands** | On by default (`TortoiseBots.World.CapitalErrands`): in a capital a bot runs mailbox, trainer and bank errands, duels other bots at the gates, and learns riding and buys its mount from its own gold at 40 and 60. Auction-house errands need `TortoiseBots.World.Auction`. |
 | **Quest parties** | Free bots with the same group quest form a party nearby; see [Grouping](social.md#grouping). |
 | **Pickpocket & lockboxes** | Rogues pick pockets and open lockboxes they carry; a lockbox the bot cannot open is mailed to a rogue in its own guild. On by default (`TortoiseBots.World.Pickpocket`, `TortoiseBots.World.Lockboxes`, `TortoiseBots.World.LockboxMail`). |
-| **Profession upkeep** | Enchanters disenchant junk and enchant their own gear; both on by default (`TortoiseBots.World.Disenchant`, `TortoiseBots.World.EnchantGear`). |
+| **Profession upkeep** | Enchanters disenchant junk and enchant their own gear; both on by default (`TortoiseBots.World.Disenchant`, `TortoiseBots.World.EnchantGear`). At level 60 a bot's gear enchant follows the common Forever choice for its spec and slot, and slots players leave empty stay empty. |
 | **Passing buffs** | A pool bot passing a real player buffs them and keeps walking; see [Passing buffs](social.md#passing-buffs). |
 
 <details>
