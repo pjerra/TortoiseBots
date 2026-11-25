@@ -4,6 +4,7 @@
 // engine::Built() is false: `error code=engine-not-built cmd=<name> msg=<percent-encoded> [#token]` (grammar version 2, forever/docs/TB-COMMANDS.md).
 #include "host/TbH3.h"
 #include "host/TbHostLfgFill.h"
+#include "host/TbRaidLayout.h"
 
 #include "Chat.h"
 
@@ -70,6 +71,10 @@ bool HandleRole(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { re
 bool HandleSpec(ChatHandler* handler, Trinity::ChatCommands::Tail args)     { return NotBuilt(handler, args, "spec"); }
 bool HandleMaster(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { return NotBuilt(handler, args, "master"); }
 bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "party"); }
+bool HandleLayout(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { return NotBuilt(handler, args, "layout"); }
+void ForgetLayout(Group*) {}
+void NoteLayoutMemberLeft(Group*, ObjectGuid) {}
+bool RaidConvertBlocked(Group*, std::string&) { return false; }
 bool HandleOnyxiaOff(ChatHandler* handler, Trinity::ChatCommands::Tail args) { return NotBuilt(handler, args, "onyxia"); }
 bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail args)    { return NotBuilt(handler, args, "state"); }
 bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail args)   { return NotBuilt(handler, args, "threat"); }

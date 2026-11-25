@@ -111,6 +111,7 @@
 #include "host/TbRaidConsumables.h"
 #include "host/TbMountShop.h"
 #include "host/TbH3.h"
+#include "host/TbRaidLayout.h"
 #include "host/TbH4.h"
 #include "host/TbCc.h"
 #include "host/TbThrown.h"
@@ -526,6 +527,7 @@ public:
         TortoiseBots::HireLifecycle::Instance().OnGroupMemberRemoved(group, guid);
 #endif
         TortoiseBots::cmd::NoteGroupRemove(group, guid);
+        TortoiseBots::h3::NoteLayoutMemberLeft(group, guid);
     }
     void OnChangeLeader(Group* group, ObjectGuid newLeaderGuid, ObjectGuid /*oldLeaderGuid*/) override { TortoiseBots::cmd::NoteGroupLeader(group, newLeaderGuid); }
     void OnDisband(Group* group) override
@@ -534,6 +536,7 @@ public:
         TortoiseBots::HireLifecycle::Instance().OnGroupDisband(group);
 #endif
         TortoiseBots::cmd::NoteGroupDisband(group);
+        TortoiseBots::h3::ForgetLayout(group);
     }
 };
 
@@ -770,6 +773,7 @@ public:
             { "lfg",    TortoiseBots::lfg::HandleLfg,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "master", TortoiseBots::h3::HandleMaster, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "party",  TortoiseBots::h3::HandleParty,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "layout", TortoiseBots::h3::HandleLayout, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "onyxia", TortoiseBots::onyxia::HandleCommand, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "state",  TortoiseBots::h3::HandleState,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "threat", TortoiseBots::h3::HandleThreat, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -911,7 +915,7 @@ public:
                 master = caller->GetGUID();
 
         ObjectGuid const guid = GuidByName(name);
-        std::string const error = BotMgr::Instance().Login(guid, master, free);
+        std::string const error = BotMgr::Instance().Login(guid, master, free, false, false, false, true);
         if (!error.empty())
             return Fail(handler, name + " not logged in: " + error + ".");
         // A bot with no master that takes the engine (EngineByDefault, `owned`) runs the free kit, so say so.
@@ -1100,7 +1104,7 @@ public:
         ObjectGuid const guid = GuidByName(name);
         if (!RequireOwnedBot(handler, guid))
             return false;
-        std::string const error = BotMgr::Instance().GroupWith(guid, master);
+        std::string const error = BotMgr::Instance().GroupWith(guid, master, true);
         if (!error.empty())
             return Fail(handler, name + " not grouped: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s joined the party of %s.", name.c_str(), masterName.c_str());

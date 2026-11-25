@@ -101,6 +101,10 @@ Pure decision rules live in `*Policy.h` headers grouped by domain: `ai/playerbot
 
 The opt-in Onyxia observer is a module host service (`forever/src/host/TbOnyxia`), not a core boss-script change. It exists only in the slice build and only while a GM starts it with `.tb onyxia`; observations and watches are cleared independently for each bot and instance. Its core-free phase policy is covered by `tools/test_forever_onyxia.cpp`.
 
+## Raid groups
+
+Forever raid groups are module-only: the host converts and seats through the core's public `Group` API, and the raid layout reuses the plain-data `runtime/RaidLayoutPolicy.h` unchanged (`forever/docs/RAID-GROUPS.md`).
+
 ## Related boundaries
 
 Player-facing boundaries, gameplay quirks and project non-goals are catalogued in [Known Limitations & Quirks](../play/known-limitations.md).

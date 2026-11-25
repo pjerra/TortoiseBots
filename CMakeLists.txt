@@ -50,7 +50,7 @@ option(TORTOISEBOTS_SLICE1 "Also build the slice-1 legacy bot engine (forever/SL
 # follows the same rule (host/chat/TbChatCmd.cpp: it names the engine's reply types); the chat hook itself (TbChatIn.cpp) is in both builds and inert here.
 if(NOT TORTOISEBOTS_SLICE1)
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/compat/(TbCompat_C|TbCompat_Config|TbCompat_Unported|TbCompat_V|TbCompat_WL4)\\.cpp$")
-  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/(TbH3|TbOrders|TbPartyState|TbTestKit|TbLuaBots|chat/TbChatCmd)\\.cpp$")
+  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/(TbH3|TbOrders|TbPartyState|TbRaidLayout|TbTestKit|TbLuaBots|chat/TbChatCmd)\\.cpp$")
   # The hire provisioner is the engine's (it logs a bot in, levels it and gears it): forever/src/host/hire is slice-only.
   list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/host/hire/[^/]*\\.cpp$")
 else()

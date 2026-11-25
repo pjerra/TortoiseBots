@@ -3,13 +3,16 @@
 # do not edit by hand, run the tool. Every uncommented line is a key with the default the code has; a commented line is a
 # key whose default the code computes, so it is left to the code until it is set here.
 # Install as aiplayerbot.conf in the directory that holds worldserver.conf (see forever/docs/SLICE1-R4C-NOTES.md).
-# 391 keys, 382 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
-# 315 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
+# 392 keys, 383 with a literal default, 9 computed; 18 reads with a non-literal key are not listed.
+# 314 key(s) the loader reads are consumed by no compiled file and are not listed here; docs/server/config-keys.md names them.
 
 [AiPlayerbotConf]
 
 # AiPlayerbot.DungeonSelfClear  (bool, PlayerbotAIConfig.cpp:133)
 AiPlayerbot.DungeonSelfClear = 1
+
+# AiPlayerbot.RaidHealerSeatsByClass  (bool, PlayerbotAIConfig.cpp:136)
+AiPlayerbot.RaidHealerSeatsByClass = 0
 
 # AiPlayerbot.RaidTankHealerAssist  (bool, PlayerbotAIConfig.cpp:137)
 AiPlayerbot.RaidTankHealerAssist = 0
