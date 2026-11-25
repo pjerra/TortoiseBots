@@ -35,7 +35,7 @@ Paladins provide resilient group utility, customizable auras, coordinated blessi
 
 ### Protection (Tank)
 - Maintains *Righteous Fury* in and out of combat to boost holy threat generation.
-- Taunts loose mobs with *Hand of Reckoning* when it is learned. *Righteous Defense* is Not on ForeverCore yet.
+- Has no taunt on ForeverCore: *Hand of Reckoning* exists only as a runecarving glove rune (the Libram of Justice grants the engraving), and *Righteous Defense* does not exist here, so the tank holds threat with damage and *Judgement* and cannot pull a mob off a party member.
 - Drops *Consecration* against 3 or more attackers in melee reach while above medium mana (40% default), or against 2 at 70%+ mana.
 - Keeps *Holy Shield* active on cooldown for block rating and reflective holy damage.
 - Judges *Seal of Righteousness* on the primary target for sustained threat.

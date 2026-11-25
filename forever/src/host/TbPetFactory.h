@@ -41,6 +41,9 @@ uint32 StarterPetEntry(Player const* bot);
 // pet the bot cannot read back after the attach, is undone completely (active slot, attachment, object; nothing saved), and the result is read back from the
 // world before anything is written.
 GiveResult GiveHunterPet(Player* bot, bool saveToDb = true);
+// A hunter's ranged slot: true when it holds a bow, gun or crossbow (what Auto Shot needs). Below level 5 an empty
+// slot gets the core's starter bow back; above 5 the slot is the spawn kit's and autogear's.
+bool EnsureHunterStarterWeapon(Player* bot);
 void EnsureHunterStarterAmmo(Player* bot);
 void EnsureShamanStarterTotems(Player* bot);
 }

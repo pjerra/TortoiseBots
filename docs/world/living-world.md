@@ -112,7 +112,7 @@ Pool characters are created at level 1 and level up by playing. There is no leve
 | :--- | :--- |
 | **Class spells** on login and on every level-up, free | `TortoiseBots.AutoLearnOnLevel` (on) |
 | **Talent points** spent on login and level-up following a premade build (never a reset) | `TortoiseBots.AutoTalentsOnLevel` (on) |
-| **Class-quest spells** (stances, forms, totems, pets, racials) when the running world has the quest | `TortoiseBots.ClassQuestSpells` (off) |
+| **Class-quest spells** (stances, forms, totems, pets, racials) when a quest of the running world teaches them, class-masked or implied by the spell | `TortoiseBots.ClassQuestSpells` (off; the class-line autotrain already teaches these, so turning it on adds a family-0 row such as the paladin's *Sense Undead*) |
 | **At level 5, a class-sensible pair of primary professions plus First Aid and Cooking** | `TortoiseBots.AutoProfessions` (on) |
 | **Profession tools** (pick, knife, hammer, spanner, rod, pole) in a free bag slot | `TortoiseBots.AutoTools` (on) |
 | **Food and water** fitting the bot's level, on login and level-up | `TortoiseBots.AutoFood` (on) |

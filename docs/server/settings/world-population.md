@@ -273,7 +273,7 @@ These switch the host-side life of free bots. `.reload config` re-reads them.
 | :--- | :---: | :--- |
 | `TortoiseBots.AutoLearnOnLevel` | `1` | Bots learn their class and class-line spells free on login and on level-up. |
 | `TortoiseBots.AutoTalentsOnLevel` | `1` | Bots spend talent points on login and level-up following a premade build, never resetting points. |
-| `TortoiseBots.ClassQuestSpells` | `0` | Bots learn the class-quest spells the running world offers (stances, forms, totems, pets, racials). |
+| `TortoiseBots.ClassQuestSpells` | `0` | Bots learn the class-quest spells the running world offers (stances, forms, totems, pets, racials); a quest with no class mask counts when the spell it teaches is on the reviewed list. The class-line autotrain already covers nearly all of them. |
 | `TortoiseBots.AutoProfessions` | `1` | Level-5 pool bots learn a class-sensible pair of primary professions plus First Aid and Cooking. |
 | `TortoiseBots.AutoTools` | `1` | Missing profession tools are granted in a free bag slot. |
 | `TortoiseBots.AutoFood` | `1` | Level-fitting vendor food and water are granted on login and level-up. |

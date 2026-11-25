@@ -26,6 +26,7 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 
 ### Beast Mastery & Marksmanship (Ranged DPS)
 - Opens with *Hunter's Mark* and *Auto Shot*. With a living tank in the group the mark goes only on the mob the tank is fighting.
+- *Auto Shot* needs a bow, gun or crossbow in the ranged slot and matching arrows or bullets in the bags. Bots keep a level-fitting ammo stack topped up on login, on level-up and while playing, and a hunter below level 5 whose ranged slot is empty gets the starter bow back. A hunter with no ranged weapon logs one line on login and fights in melee until it gets one.
 - Fires *Aimed Shot* (Marksmanship, once trained, within range) or *Arcane Shot* on cooldown.
 - Uses *Steady Shot* as a filler when it is trained.
 - Uses *Multi-Shot* only when the splash around the target catches a second fighting enemy, and never into a crowd-controlled mob standing beside it.
@@ -70,9 +71,10 @@ Hunters deliver consistent ranged physical damage, pet management, crowd control
 
 ## Custom abilities
 
-- **Aspect of the Viper:** a hunter aspect that trades damage for mana regeneration; the bot switches to it when mana is low and back to *Aspect of the Hawk* once mana recovers.
+- **Aspect of the Beast:** manual only (`.bot choice aspect beast`); on ForeverCore the class-line autotrain teaches it (13161).
+- **Aspect of the Viper:** a hunter aspect that trades damage for mana regeneration; the bot switches to it when mana is low and back to *Aspect of the Hawk* once mana recovers. On ForeverCore the client's Viper (415423) is on the Beast Mastery line but no trainer row, preset or class-line pass grants it, so the switch stays idle there.
 - **Aspect of the Wolf:** Not on ForeverCore yet.
-- **Lacerate:** Not on ForeverCore yet.
+- **Lacerate:** the client's Lacerate on ForeverCore is a pet ability (Survival-line ranks); the hunter's own `lacerate` action has no trigger, so the bot never casts it itself.
 
 ---
 

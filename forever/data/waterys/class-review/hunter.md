@@ -139,14 +139,13 @@ Survival adds carve in AoE HIGH-1 (below multi-shot, shared 10s CD) over base.
 
 ## Shared strategy notes
 
-auto shot idle; aimed/arcane/steady/multi/volley rows; hunter's mark (tank-target); traps (immolation PvE, explosive AoE, frost/freezing CC); scatter interrupt; wyvern sting fallback; concussive/intimidation/counterattack/mongoose melee chain; dead-zone/switch/kite; feign death + disengage threat drops; tranquilizing vs enrage. Pet: no-pet>call pet (combat +1, noncombat +2), tame beast last-resort fallback; safe-to-revive>revive; pet-hp>mend; pet-unhappy>feed. aspect of the viper low-mana + viper-sting logic exist in code but Viper has no Forever spell - dead conditions. aspect of the beast trigger/action registered, spell MISSING - dead.
+auto shot idle; aimed/arcane/steady/multi/volley rows; hunter's mark (tank-target); traps (immolation PvE, explosive AoE, frost/freezing CC); scatter interrupt; wyvern sting fallback; concussive/intimidation/counterattack/mongoose melee chain; dead-zone/switch/kite; feign death + disengage threat drops; tranquilizing vs enrage. Pet: no-pet>call pet (combat +1, noncombat +2), tame beast last-resort fallback; safe-to-revive>revive; pet-hp>mend; pet-unhappy>feed. aspect of the viper low-mana + viper-sting logic exist in code but Viper 415423 is not learnable by bots (no trainer row, no preset node, retail-chainless skip) - dead conditions. aspect of the beast is taught by the class-line pass (13161), but only the manual aspect order schedules it.
 
 ## Spells not OK on Forever
 
 | spell | rank1 id | status | note |
 |---|---|---|---|
-| aspect of the beast |  | MISSING | TBC spell; Turtle DB has it, Forever classic data TBD |
-| aspect of the viper |  | MISSING | TBC spell; Turtle DB has it, Forever classic data TBD |
+| aspect of the viper | 415423 | CHANGED | exists on the Beast Mastery line, but no trainer row/preset buys it and the class-line pass skips retail-era chainless ids; the old 34074 has no learn path either |
 | aspect of the wolf |  | MISSING | Turtle custom; no vanilla/Forever equivalent |
 | choice aspect |  | PSEUDO | TB pseudo-action, not a spell |
 | choice sting |  | PSEUDO | TB pseudo-action, not a spell |

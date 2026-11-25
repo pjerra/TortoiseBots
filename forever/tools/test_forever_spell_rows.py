@@ -18,6 +18,8 @@ ROWS = {
     'ai/playerbot/strategy/rogue/AssassinationRogueStrategy.cpp': ['envenom'],
     'ai/playerbot/strategy/rogue/SubtletyRogueStrategy.cpp': ['shadow of death', 'mark for death', 'smoke bomb'],
     'ai/playerbot/strategy/druid/TankFeralDruidStrategy.cpp': ['savage bite'],
+    'ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp': ['hand of reckoning', 'hand of reckoning on attacker'],
+    'ai/playerbot/strategy/paladin/TankPaladinStrategy.cpp': ['hand of reckoning'],
 }
 
 # Forever-only rows (a Turtle bot simply does not know the spell): actions whose rows must exist and stay unguarded.

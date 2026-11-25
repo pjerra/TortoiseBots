@@ -122,7 +122,7 @@ These are the party orders both the `.tb order` console command and the addon's 
 | Pool and free bots get the gathering and crafting tools they need | Yes | `TortoiseBots.AutoTools = 1` | [Professions](../world/living-world.md) |
 | Hunter bots get a starter pet and its control spells | Yes | `TortoiseBots.AutoHunterPet = 1` | [Hunter](../classes/hunter.md) |
 | Pool and free bots get level-fitting food and water | Yes | `TortoiseBots.AutoFood = 1` | [Living world](../world/living-world.md) |
-| Bots learn the class-quest spells a player would earn | No | `TortoiseBots.ClassQuestSpells = 0` | [Class spells](../world/living-world.md#class-spells) |
+| Bots learn the class-quest spells a player would earn (the class-line autotrain already teaches all but the family-0 rows such as the paladin's *Sense Undead*) | No | `TortoiseBots.ClassQuestSpells = 0` | [Class spells](../world/living-world.md#class-spells) |
 | Bots keep gear that fits their level as they level | Yes | `AiPlayerbot.RandomGearProgression = 1` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
 | Bots equip better gear they loot | Yes | `AiPlayerbot.AutoEquipUpgradeLoot = 1` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
 | Reputation and PvP items in generated gear | No | `AiPlayerbot.RandomGearAllowReputation = 0`, `AiPlayerbot.RandomGearAllowPvP = 0` | [Gear](../world/living-world.md#gear-evaluation--upgrades) |
