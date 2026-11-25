@@ -422,7 +422,7 @@ static void ApplySpecEnchant(Player* target, Item* item, std::string const& spec
         uint8(target->GetClass()), spec, slot, target->GetLevel(), proto ? uint8(proto->GetQuality()) : uint8(1));
     if (choice.verdict != TortoiseBots::enchant::SpecEnchantVerdict::Apply)
         return;
-    SpellInfo const* spell = sSpellMgr->GetSpellInfo(choice.spellId, DIFFICULTY_NONE);
+    SpellInfo const* spell = sSpellMgr.GetSpellInfo(choice.spellId, DIFFICULTY_NONE);
     if (!spell)
         return;
     for (SpellEffectInfo const& effect : spell->GetEffects())

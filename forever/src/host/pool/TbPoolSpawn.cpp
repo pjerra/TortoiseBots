@@ -7,6 +7,10 @@
 #include "compat/TbCompat_CharStore.h"
 #include "host/gear/TbGearGen.h"
 
+// PlayerbotAIConfig.h is a legacy header: on ForeverCore the names it uses come from this prelude, which replaces the
+// core's `sLog`, so the lines below log through Log::instance() as TbCompat_W2.h does.
+#include "compat/botpch_forever.h"
+
 #include "Config.h"
 #include "Log.h"
 #include "Player.h"
@@ -85,7 +89,7 @@ void EnsureStore()
     if (!s.storeReady && !s.storeWarned)
     {
         s.storeWarned = true;
-        TC_LOG_WARN("tortoisebots", "TortoiseBots: `{}` is missing or lacks columns; a pool bot's spawn is remembered for this server run only. Apply forever/sql/characters/2026_11_24_10_tb_player_flag.sql.", kTable);
+        Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_WARN, "TortoiseBots: `{}` is missing or lacks columns; a pool bot's spawn is remembered for this server run only. Apply forever/sql/characters/2026_11_24_10_tb_player_flag.sql.", kTable);
     }
 }
 
@@ -162,7 +166,7 @@ void ApplyStartLevel(Player* bot)
     s_applyingStartLevel = true;
     bot->GiveLevel(seedLevel);
     s_applyingStartLevel = false;
-    TC_LOG_INFO("tortoisebots", "TortoiseBots: fresh pool bot {} spawned at level {} (start range {}-{})",
+    Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: fresh pool bot {} spawned at level {} (start range {}-{})",
         bot->GetName(), seedLevel, range.minLevel, range.maxLevel);
 }
 
@@ -184,22 +188,22 @@ void SeedSpawnKit(Player* bot)
     uint32 const level = bot->GetLevel();
     if (!s_seedEnabled)
     {
-        TC_LOG_INFO("tortoisebots", "TortoiseBots: spawn kit for {} is off ({} = 0); it keeps the starter outfit",
+        Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: spawn kit for {} is off ({} = 0); it keeps the starter outfit",
             bot->GetName(), kKeySeed);
     }
     else if (!SpawnSeedReady(level))
     {
-        TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} spawned at level {}: below level {}, it keeps the starter outfit for good",
+        Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: pool bot {} spawned at level {}: below level {}, it keeps the starter outfit for good",
             bot->GetName(), level, kSpawnSeedMinLevel);
     }
     else
     {
         gear::GearSetOutcome const outcome = gear::SeedGearForTarget(bot, level);
         if (outcome.ok)
-            TC_LOG_INFO("tortoisebots", "TortoiseBots: spawned pool bot {} at level {} with {} kit piece(s) ({} slot(s) left empty)",
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: spawned pool bot {} at level {} with {} kit piece(s) ({} slot(s) left empty)",
                 bot->GetName(), level, outcome.equipped, outcome.failed);
         else
-            TC_LOG_WARN("tortoisebots", "TortoiseBots: spawn kit for pool bot {} at level {} was refused ({}: {})",
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_WARN, "TortoiseBots: spawn kit for pool bot {} at level {} was refused ({}: {})",
                 bot->GetName(), level, outcome.errorCode, outcome.errorDetail);
     }
 

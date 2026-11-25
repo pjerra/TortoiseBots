@@ -504,7 +504,7 @@ void BuildIndex()
     index.initialized = true;
     auto const elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - started).count();
-    TC_LOG_INFO("server.loading",
+    Log::instance()->OutMessage("server.loading", LOG_LEVEL_INFO,
         "TortoiseBots: gear source index built ({} weapon/armor items: {} base, {} dungeon, {} raid, {} reputation, {} pvp, {} no known source) in {} ms",
         index.items.size(), perTier[0], perTier[1], perTier[2], reputationCount, pvpCount, unknownCount, elapsedMs);
 }

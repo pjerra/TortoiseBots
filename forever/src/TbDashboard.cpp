@@ -63,6 +63,11 @@ bool WriteJsonFile(std::string const& path, std::string const& body, char const*
 
 namespace
 {
+// The pool census reads the pool registry, the spec picker and the pure composition shares, each in its own namespace.
+namespace pool = TortoiseBots::pool;
+namespace talents = TortoiseBots::talents;
+namespace world = TortoiseBots::world;
+
 // The dashboard's model.ProtocolVersion this sender writes.
 constexpr int ProtocolVersion = 12;
 // Bots per BOT_BATCH datagram: keeps one datagram well under the 64 KB UDP limit.

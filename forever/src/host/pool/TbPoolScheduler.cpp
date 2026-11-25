@@ -22,6 +22,10 @@
 
 #include "ai/playerbot/policy/world/PoolSchedulePolicy.h"
 
+// PlayerbotAIConfig.h is a legacy header: on ForeverCore the names it uses come from this prelude, which replaces the
+// core's `sLog`, so the lines below log through Log::instance() as TbCompat_W2.h does.
+#include "compat/botpch_forever.h"
+
 #include "Config.h"
 #include "CharacterCache.h"
 #include "Log.h"
@@ -187,13 +191,13 @@ void Sync(State& s, Tracked& track, std::int64_t now)
         // is none left: the count then stays short for as long as the binding lasts, and `.tb pool status` shows the cap.
         std::uint32_t const usable = UsableAccounts(s);
         if (s.settings.targetOnline > usable)
-            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} took a master: it leaves the pool's count and is never logged out by the pool; {} account(s) left for a target of {}, so its slot stays empty while it is bound",
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: pool bot {} took a master: it leaves the pool's count and is never logged out by the pool; {} account(s) left for a target of {}, so its slot stays empty while it is bound",
                 track.name, usable, s.settings.targetOnline);
         else
-            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} took a master: it leaves the pool's count and is never logged out by the pool", track.name);
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: pool bot {} took a master: it leaves the pool's count and is never logged out by the pool", track.name);
     }
     if (outcome.boundCleared)
-        TC_LOG_INFO("tortoisebots", "TortoiseBots: pool bot {} is free again: back in the pool's count with a fresh session", track.name);
+        Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: pool bot {} is free again: back in the pool's count with a fresh session", track.name);
 }
 
 void Trim(std::vector<std::int64_t>& times, std::int64_t now, std::int64_t windowMs)
@@ -220,7 +224,7 @@ std::vector<world::PoolBotState> StatesOf(State const& s)
     {
         world::PoolBotState state = bot.state;
         state.accountOnline = state.accountId
-            && (sWorld->FindSession(state.accountId) != nullptr
+            && (sWorld.FindSession(state.accountId) != nullptr
                 || std::binary_search(botAccounts.begin(), botAccounts.end(), state.accountId));
         states.push_back(state);
     }
@@ -263,7 +267,7 @@ void LadderLog(State& s, world::PoolPass const& plan, std::int64_t now)
     if (plan.counted < s.settings.targetOnline && now >= s.nextLadderPassLogMs)
     {
         s.nextLadderPassLogMs = now + world::kPoolMinuteMs;
-        TC_LOG_INFO("tortoisebots", "TortoiseBots: level ladder pass: online {}/{}, added {}, offline eligible {}", plan.counted,
+        Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: level ladder pass: online {}/{}, added {}, offline eligible {}", plan.counted,
             s.settings.targetOnline, std::uint32_t(plan.logins.size()), plan.eligible);
     }
     if (now < s.nextLadderBandLogMs)
@@ -292,7 +296,7 @@ void LadderLog(State& s, world::PoolPass const& plan, std::int64_t now)
                 s.settings.levelLadderBandSize, s.settings.levelLadderMaxLevelSharePct))
             + "(" + std::to_string(pool[b]) + ")";
     }
-    TC_LOG_INFO("tortoisebots", "TortoiseBots: level ladder online/target(pool) per band {} | reserve {}, highest level {}", line,
+    Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: level ladder online/target(pool) per band {} | reserve {}, highest level {}", line,
         reserve, highest);
 }
 
@@ -322,7 +326,7 @@ bool Pass(State& s)
     in.settings = s.settings;
     in.nowMs = now;
     in.stopping = s.stopping;
-    in.shuttingDown = sWorld->IsShuttingDown();   // a pending shutdown plans no logins; the logouts still run
+    in.shuttingDown = sWorld.IsShuttingDown();   // a pending shutdown plans no logins; the logouts still run
     in.nextFaction = s.nextFaction;
     in.recentLoginsMs = &s.logins;
     in.recentLogoutsMs = &s.logouts;
@@ -343,7 +347,7 @@ bool Pass(State& s)
         if (!error.empty())
         {
             // The world says no (already in the world by hand, the account is loading, the session limit): one line a minute.
-            TC_LOG_WARN("tortoisebots", "TortoiseBots: pool login of {} refused: {}", track.name, error);
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_WARN, "TortoiseBots: pool login of {} refused: {}", track.name, error);
             bot.offlineUntilMs = now + world::kPoolMinuteMs;
             continue;
         }
@@ -352,12 +356,12 @@ bool Pass(State& s)
         s.logins.push_back(now);
         MarkLogin(track.name, UnixNow());
         if (s.settings.levelLadder)
-            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool login {} ({}, level {}, band {})", track.name, FactionName(bot.faction),
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: pool login {} ({}, level {}, band {})", track.name, FactionName(bot.faction),
                 std::uint32_t(bot.level),
                 world::PoolLadderBandName(world::PoolLadderBandOf(bot.level, s.settings.maxLevel, s.settings.levelLadderBandSize),
                     s.settings.maxLevel, s.settings.levelLadderBandSize));
         else
-            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool login {} ({})", track.name, FactionName(bot.faction));
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: pool login {} ({})", track.name, FactionName(bot.faction));
         loggedIn = true;
     }
 
@@ -378,11 +382,11 @@ bool Pass(State& s)
         bot.phase = world::PoolPhase::Leaving;
         s.logouts.push_back(now);
         if (dead)
-            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool logout {}: reason={}, session {}, dead (the corpse run had its 10 min)", track.name, word, length);
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: pool logout {}: reason={}, session {}, dead (the corpse run had its 10 min)", track.name, word, length);
         else if (!length.empty())
-            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool logout {}: reason={}, session {}", track.name, word, length);
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: pool logout {}: reason={}, session {}", track.name, word, length);
         else
-            TC_LOG_INFO("tortoisebots", "TortoiseBots: pool logout {}: reason={}", track.name, word);
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: pool logout {}: reason={}", track.name, word);
     }
 
     Trim(s.logins, now, world::kPoolLoginWindowMs);
@@ -391,7 +395,7 @@ bool Pass(State& s)
     if (s.stopping && !Draining(s))
     {
         s.stopping = false;
-        TC_LOG_INFO("tortoisebots", "TortoiseBots: the pool stopped: no pool bot is left in the world");
+        Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: the pool stopped: no pool bot is left in the world");
     }
     LadderLog(s, plan, now);
     return loggedIn;
@@ -417,7 +421,7 @@ void LoadConfig()
         s.settings.offlineMaxMs = s.settings.offlineMinMs;
     // The ladder's band math is built on the server's own level cap, never a hard-coded 60: a server with another cap splits
     // its levels the same way. Its four knobs are the engine's own (AiPlayerbot.LevelLadder*), already read on this build.
-    s.settings.maxLevel = std::uint32_t(std::clamp<int32>(sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL), 2, 255));
+    s.settings.maxLevel = std::uint32_t(std::clamp<int32>(sWorld.getIntConfig(CONFIG_MAX_PLAYER_LEVEL), 2, 255));
     s.ladderConfigTried = false;
     ApplyLadderConfig(s);
     s.nextLadderBandLogMs = 0;
@@ -438,7 +442,7 @@ bool Update(std::uint32_t diff)
         if (!s.warnedOff)
         {
             s.warnedOff = true;
-            TC_LOG_WARN("tortoisebots", "TortoiseBots: the pool is off (TortoiseBots.Pool.Enable = 0, or its tables are missing): {}",
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_WARN, "TortoiseBots: the pool is off (TortoiseBots.Pool.Enable = 0, or its tables are missing): {}",
                 Draining(s) ? "draining the bots in the world" : "nothing is scheduled");
         }
         s.running = false;
@@ -450,7 +454,7 @@ bool Update(std::uint32_t diff)
         if (!s.warnedReset)
         {
             s.warnedReset = true;
-            TC_LOG_WARN("tortoisebots", "TortoiseBots: the pool reset is in progress or failed: no new logins until the reset finishes or the server restarts; {}",
+            Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_WARN, "TortoiseBots: the pool reset is in progress or failed: no new logins until the reset finishes or the server restarts; {}",
                 Draining(s) ? "draining the bots in the world" : "nothing is scheduled");
         }
         s.running = false;
@@ -511,7 +515,7 @@ SwitchResult Start()
     result.message = Trinity::StringFormat("pool start: target {}, {} character(s) in the pool, logins {} per minute, sessions {}..{} min, offline {}..{} min",
         s.settings.targetOnline, s.bots.size(), s.settings.loginsPerMinute, s.settings.sessionMinMs / world::kPoolMinuteMs,
         s.settings.sessionMaxMs / world::kPoolMinuteMs, s.settings.offlineMinMs / world::kPoolMinuteMs, s.settings.offlineMaxMs / world::kPoolMinuteMs);
-    TC_LOG_INFO("tortoisebots", "TortoiseBots: {}", result.message);
+    Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: {}", result.message);
     return result;
 }
 
@@ -535,7 +539,7 @@ SwitchResult Stop()
     std::uint32_t const left = Draining(s);
     result.ok = true;
     result.message = Trinity::StringFormat("pool stop: {} pool bot(s) will be logged out, 5 per second", left);
-    TC_LOG_INFO("tortoisebots", "TortoiseBots: {}", result.message);
+    Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: {}", result.message);
     return result;
 }
 
@@ -557,7 +561,7 @@ SwitchResult SetPopulation(std::string const& word)
         : (!s.running ? "the pool is not running: run `.tb pool start`" : "the pool adds or logs out bots gradually");
     result.ok = true;
     result.message = Trinity::StringFormat("pool population target {} (was {}); {}", resolved.target, previous, then);
-    TC_LOG_INFO("tortoisebots", "TortoiseBots: {}", result.message);
+    Log::instance()->OutMessage("tortoisebots", LOG_LEVEL_INFO, "TortoiseBots: {}", result.message);
     return result;
 }
 
