@@ -171,15 +171,17 @@ int main()
         w::PoolPopulationTarget spaced = w::PoolResolvePopulationTarget(" 25", 10, 50);
         CHECK(!spaced.ok);
     }
-    // The ids the policy relies on: the client's races, the Alliance's four.
+    // The ids the policy relies on: the client's races, the Alliance's five (the two Skyborne are 95 and 96).
     CHECK(w::PoolFactionOfRace(1) == w::PoolFaction::Alliance);
     CHECK(w::PoolFactionOfRace(3) == w::PoolFaction::Alliance);
     CHECK(w::PoolFactionOfRace(4) == w::PoolFaction::Alliance);
     CHECK(w::PoolFactionOfRace(7) == w::PoolFaction::Alliance);
+    CHECK(w::PoolFactionOfRace(95) == w::PoolFaction::Alliance);
     CHECK(w::PoolFactionOfRace(2) == w::PoolFaction::Horde);
     CHECK(w::PoolFactionOfRace(5) == w::PoolFaction::Horde);
     CHECK(w::PoolFactionOfRace(6) == w::PoolFaction::Horde);
     CHECK(w::PoolFactionOfRace(8) == w::PoolFaction::Horde);
+    CHECK(w::PoolFactionOfRace(96) == w::PoolFaction::Horde);
     CHECK(w::OtherFaction(w::PoolFaction::Alliance) == w::PoolFaction::Horde);
     CHECK(w::OtherFaction(w::PoolFaction::Horde) == w::PoolFaction::Alliance);
 

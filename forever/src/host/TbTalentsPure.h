@@ -52,6 +52,21 @@ inline constexpr ClassWeights kClassWeights[] = {
     { 11, 20, 40, 40 }, // Druid: Balance, Feral, Restoration
 };
 
+// The pool's spec roll with the live server's weights (TortoiseBots.Pool.CensusSpec): the share of each spec among
+// a class's level 60 characters, per mille, copied from forever/data/aotc/spec-population.csv (aotc.gg, read 2026-11-24).
+// Tab order is the class's own (SpecName): the same tabs kClassWeights above comment.
+inline constexpr ClassWeights kCensusSpecWeights[] = {
+    {  1, 100, 310, 580 }, // Warrior: Arms, Fury, Protection
+    {  2, 100, 400, 500 }, // Paladin: Holy, Protection, Retribution
+    {  3, 610, 260, 130 }, // Hunter: Beast Mastery, Marksmanship, Survival
+    {  4,  90, 720, 190 }, // Rogue: Assassination, Combat, Subtlety
+    {  5, 160, 250, 590 }, // Priest: Discipline, Holy, Shadow
+    {  7, 120, 690, 190 }, // Shaman: Elemental, Enhancement, Restoration
+    {  8, 350,  40, 610 }, // Mage: Arcane, Fire, Frost
+    {  9, 600, 350,  50 }, // Warlock: Affliction, Demonology, Destruction
+    { 11, 160, 630, 220 }, // Druid: Balance, Feral, Restoration
+};
+
 inline constexpr TalentStep kBuildSteps[] = {
     {  1, 0,    130, 5 },
     {  1, 0,    127, 3 },
@@ -574,7 +589,8 @@ inline char const* SpecName(uint8_t classId, int tab)
     }
 }
 
-inline int PickSpecTabForBot(uint8_t classId, uint32_t guidLow, int forcedSpecTab, int tab0Spent, int tab1Spent, int tab2Spent)
+inline int PickSpecTabForBot(uint8_t classId, uint32_t guidLow, int forcedSpecTab, int tab0Spent, int tab1Spent, int tab2Spent,
+    bool censusWeights = false)
 {
     if (forcedSpecTab >= 0 && forcedSpecTab <= 2)
         return forcedSpecTab;
@@ -594,7 +610,7 @@ inline int PickSpecTabForBot(uint8_t classId, uint32_t guidLow, int forcedSpecTa
     h *= 0x85EBCA6Bu;
     h ^= h >> 13;
 
-    for (ClassWeights const& cw : kClassWeights)
+    for (ClassWeights const& cw : censusWeights ? kCensusSpecWeights : kClassWeights)
     {
         if (cw.classId != classId)
             continue;
@@ -607,6 +623,20 @@ inline int PickSpecTabForBot(uint8_t classId, uint32_t guidLow, int forcedSpecTa
         if (roll < uint32_t(cw.w0) + cw.w1)
             return 1;
         return 2;
+    }
+    return 0;
+}
+
+// The census's share of one spec tab among its class's level 60 characters, per mille (0 for a class outside the table).
+inline uint16_t CensusSpecSharePm(uint8_t classId, int tab)
+{
+    if (tab < 0 || tab > 2)
+        return 0;
+    for (ClassWeights const& cw : kCensusSpecWeights)
+    {
+        if (cw.classId != classId)
+            continue;
+        return tab == 0 ? cw.w0 : (tab == 1 ? cw.w1 : cw.w2);
     }
     return 0;
 }

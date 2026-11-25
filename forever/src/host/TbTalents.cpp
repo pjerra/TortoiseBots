@@ -41,6 +41,7 @@ namespace
 {
 
 std::atomic<bool> g_enabled{ true };
+std::atomic<bool> g_censusSpec{ true };
 
 struct ResolvedNode
 {
@@ -226,13 +227,15 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
     report.free = std::max<int32>(0, expectedTotal - report.spent);
 
     int8 const forced = ForcedSpecTab(bot->GetGUID());
+    bool const censusSpec = g_censusSpec.load(std::memory_order_relaxed) && BotMgr::Instance().IsPoolBot(bot->GetGUID());
     report.tab = PickSpecTabForBot(
         bot->GetClass(),
         bot->GetGUID().GetCounter(),
         forced,
         report.tabCounts[0],
         report.tabCounts[1],
-        report.tabCounts[2]);
+        report.tabCounts[2],
+        censusSpec);
 
     if (report.free <= 0)
         return report;
@@ -352,7 +355,8 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
             forced,
             report.tabCounts[0],
             report.tabCounts[1],
-            report.tabCounts[2]);
+            report.tabCounts[2],
+            censusSpec);
         bot->UpdateTraitConfig(std::move(working), 0, false);
         TC_LOG_INFO("tortoisebots", "talents: {} spent {} point(s) in {} ({}/{}/{}, total {}/{}) on {}",
             bot->GetName(), report.applied, SpecName(bot->GetClass(), report.tab),
@@ -374,6 +378,7 @@ SyncReport ApplyTalents(Player* bot, char const* why, bool ignoreConfigFlag)
 void LoadConfig()
 {
     g_enabled.store(sConfigMgr->GetBoolDefault("TortoiseBots.AutoTalentsOnLevel", true), std::memory_order_relaxed);
+    g_censusSpec.store(sConfigMgr->GetBoolDefault("TortoiseBots.Pool.CensusSpec", true), std::memory_order_relaxed);
 }
 
 void LogStartupSelfCheck()
@@ -404,6 +409,11 @@ void LogStartupSelfCheck()
 bool Enabled()
 {
     return g_enabled.load(std::memory_order_relaxed);
+}
+
+bool PoolCensusSpecEnabled()
+{
+    return g_censusSpec.load(std::memory_order_relaxed);
 }
 
 uint32_t Sync(Player* bot, char const* why)

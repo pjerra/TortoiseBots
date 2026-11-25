@@ -1,6 +1,7 @@
 """Wiring pins for the world slice W0 (the pool: registry, creation and the fix round).
 …
 """
+import csv
 import pathlib
 import re
 import shutil
@@ -78,6 +79,10 @@ class Creation(unittest.TestCase):
         body = func(CREATE, "Step MakeOne(")
         self.assertIn("world::CompositionAt(", body)
         self.assertIn("world::GenderAt(", body)
+        self.assertIn("world::CensusCompositionAt(", body)
+        self.assertIn("if (CensusComposition())", body)
+        self.assertIn('GetBoolDefault("TortoiseBots.Pool.CensusComposition", true)', REG)
+        self.assertIn("TortoiseBots.Pool.CensusComposition = 1", CONF)
         self.assertIn("PickBotCharacterName(composition.race, composition.klass, gender)", body)
         # And the policy is the one the spec pins: the vanilla pairs, the races the test refuses.
         self.assertIn("RaceHuman = 1", POLICY)
@@ -675,6 +680,53 @@ class ScheduleBehaviour(unittest.TestCase):
             out = subprocess.run([str(exe)], capture_output=True, text=True)
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertIn("RESULT: PASS", out.stdout)
+
+    def test_the_census_test_passes(self):
+        """1000 picks follow the aotc census class, race and gender shares (test_pool_census_policy.cpp)."""
+        gxx = shutil.which("g++")
+        if not gxx:
+            self.skipTest("no g++")
+        with tempfile.TemporaryDirectory(prefix="pool-census-") as tmp:
+            tmp_path = pathlib.Path(tmp)
+            exe = tmp_path / "test_pool_census_policy"
+            subprocess.run([gxx, "-std=c++17", "-O1", "-Wall", "-Wextra", "-I", str(ROOT),
+                            str(ROOT / "forever/tools/test_pool_census_policy.cpp"), "-o", str(exe)],
+                           check=True, capture_output=True, text=True)
+            out = subprocess.run([str(exe)], capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("RESULT: PASS", out.stdout)
+
+    def test_the_census_tables_match_the_csv(self):
+        """The per-mille tables copied into PoolCompositionPolicy.h are the values in forever/data/aotc."""
+        def table(name):
+            m = re.search(name + r"\[\] = \{(.*?)\n\};", POLICY, re.S)
+            self.assertIsNotNone(m, name)
+            return {key: int(value) for key, value in re.findall(r"\{\s*(?:Class|Race)(\w+),\s*(\d+)\s*\}", m.group(1))}
+
+        aotc = ROOT / "forever/data/aotc"
+        with open(aotc / "census-classes.csv", newline="") as f:
+            classes = list(csv.DictReader(f))
+        totals = {"alliance": sum(int(r["alliance"]) for r in classes),
+                  "horde": sum(int(r["horde"]) for r in classes)}
+        for array, faction in (("kCensusAllianceClasses", "alliance"), ("kCensusHordeClasses", "horde")):
+            pins = table(array)
+            for row in classes:
+                key = row["class"].title()
+                self.assertEqual(pins[key], round(1000 * int(row[faction]) / totals[faction]), f"{array} {key}")
+
+        race_keys = {"Human": "Human", "Night Elf": "NightElf", "Dwarf": "Dwarf", "Gnome": "Gnome",
+                     "High Order Skyborne": "SkyborneAlliance", "Undead": "Undead", "Orc": "Orc",
+                     "Tauren": "Tauren", "Troll": "Troll", "Windshaper Skyborne": "SkyborneHorde"}
+        with open(aotc / "census-races.csv", newline="") as f:
+            races = {race_keys[r["race"]]: r for r in csv.DictReader(f)}
+        for array in ("kCensusAllianceRaces", "kCensusHordeRaces"):
+            for key, value in table(array).items():
+                self.assertEqual(value, round(10 * float(races[key]["pct_of_faction"])), f"{array} {key}")
+
+        with open(aotc / "census-class-gender.csv", newline="") as f:
+            genders = {r["class"]: r for r in csv.DictReader(f)}
+        for key, value in table("kCensusFemaleShares").items():
+            self.assertEqual(value, round(10 * float(genders[key.lower()]["female_pct"])), f"female {key}")
 
 
 MUTATIONS = {

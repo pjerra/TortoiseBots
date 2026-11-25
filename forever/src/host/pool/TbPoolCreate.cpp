@@ -344,8 +344,20 @@ Step MakeOne(State& s)
         return Step::Failed;
     }
 
-    world::PoolComposition const composition = world::CompositionAt(s.serial, urand(0, 0xffff));
-    std::uint8_t const gender = world::GenderAt(urand(0, 1));
+    world::PoolComposition composition;
+    std::uint8_t gender = 0;
+    if (CensusComposition())
+    {
+        world::CensusPoolComposition const pick = world::CensusCompositionAt(s.serial, urand(0, 0xffff), urand(0, 0xffff), urand(0, 999));
+        composition.race = pick.race;
+        composition.klass = pick.klass;
+        gender = pick.gender;
+    }
+    else
+    {
+        composition = world::CompositionAt(s.serial, urand(0, 0xffff));
+        gender = world::GenderAt(urand(0, 1));
+    }
     std::string const name = PickBotCharacterName(composition.race, composition.klass, gender);
     // The name is settled before any account is made: the core's own name rules, then the characters table.
     if (name.empty() || !CheckPlayerNameCompat(name))

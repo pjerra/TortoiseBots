@@ -47,6 +47,12 @@ TortoiseBots.Pool.MaxCharacters = 50
 
 `CreatePerMinute = 0` means nothing may be created; `MaxCharacters = 0` means the pool cannot grow. `.tb pool create` creates only what still fits under the cap and refuses a full pool.
 
+### What a new character looks like
+
+By default (`TortoiseBots.Pool.CensusComposition = 1`) the pool rolls each new character the way the live game looks (aotc.gg, read 2026-11-24): class by its share of the faction, race within the faction among the pairs ForeverCore can create, gender by the class's female share. The faction alternates, so the pool stays half Alliance and half Horde, and both Skyborne races are part of the mix. `0` keeps the old balanced sequence: the vanilla races in turn and a random class of the race.
+
+A pool bot's spec tree follows the live spec shares of its class (`TortoiseBots.Pool.CensusSpec = 1`); `0` keeps the pool's own roll. Hired and commanded bots always get the spec their role needs.
+
 ## The scheduler
 
 Once a second, the scheduler keeps `TortoiseBots.Pool.TargetOnline` pool bots of both factions online:

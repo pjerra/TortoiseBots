@@ -23,6 +23,8 @@ Free pool bots run the bot engine automatically once `TortoiseBots.Enable = 1` a
 | :--- | :---: | :--- |
 | `TortoiseBots.Pool.Enable` | `0` | The bot pool: module-created level-1 characters on module-created accounts, logged in on a schedule. Off by default. |
 | `TortoiseBots.Pool.MaxCharacters` | `50` | Ceiling on the pool's total size. `0` creates nothing. |
+| `TortoiseBots.Pool.CensusComposition` | `1` | New characters follow the live server's class, race and gender shares. `0` keeps the balanced vanilla sequence. |
+| `TortoiseBots.Pool.CensusSpec` | `1` | A pool bot's spec is rolled with the live server's spec shares. `0` keeps the pool's own roll. |
 | `TortoiseBots.Pool.CreatePerMinute` | `30` | How many characters `pool create` may make per minute. `0` creates nothing. |
 | `TortoiseBots.Pool.TargetOnline` | `0` | How many pool bots `.tb pool start` keeps in the world. `0` runs the schedule but logs nobody in. |
 | `TortoiseBots.Pool.LoginsPerMinute` | `20` | Login cap per minute (and at most one per second). |
@@ -32,6 +34,8 @@ Free pool bots run the bot engine automatically once `TortoiseBots.Enable = 1` a
 | `TortoiseBots.Pool.Reset` | `"off"` | Rebuilds the pool on world startup. Read only at startup. |
 
 The scheduler logs in one bot per second at most, alternates factions and takes the bot that has been offline longest first. One session per account is the rule, so the online count is capped by the number of accounts the pool sits on. A bot that gets a master leaves the count and is never logged out by the pool. A lowered target logs out the newest sessions first, never a dead or fighting bot. Characters, commands and the reset's safety checks are in [The bot pool](../bot-pool.md). `.reload config` re-reads every pool key except `TortoiseBots.Pool.Reset`, which is read only at world startup.
+
+With `TortoiseBots.Pool.CensusComposition = 1` (the default) new characters follow what real WoW Forever players run (aotc.gg, read 2026-11-24): the class by its share of its faction, the race within the faction and only where ForeverCore can make the pair, and the gender by the class's female share. The faction still alternates, so the pool stays 50/50 Alliance and Horde. The two Skyborne races (95 High Order, 96 Windshaper) are part of the mix. At `0` the pool uses the balanced vanilla sequence it had before. With `TortoiseBots.Pool.CensusSpec = 1` (the default) a pool bot's spec tree is rolled with the live spec shares of its class; `0` keeps the pool's own roll, and a hired or commanded bot always gets the spec its role needs. The Server tab of the [dashboard](../dashboard.md) compares the pool with the census.
 
 ## Free-bot behaviour (`aiplayerbot.conf`)
 

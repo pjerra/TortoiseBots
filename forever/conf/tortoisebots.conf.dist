@@ -498,6 +498,29 @@ TortoiseBots.Pool.Reset = "off"
 TortoiseBots.Pool.MaxCharacters = 50
 
 #
+#    TortoiseBots.Pool.CensusComposition
+#        Description: Create new pool characters with the live server's shares (aotc.gg, read 2026-11-24): the class by its share
+#                     of its faction, the race within the faction (only a race/class pair ForeverCore can create), the gender by
+#                     the class's female share. The faction still alternates, so the pool stays 50/50 Alliance and Horde.
+#                     0 keeps the balanced sequence: the two factions' vanilla races in turn, a random class of the race.
+#                     Read by `.tb pool create` and the pool's refill; `.reload config` picks a new value up.
+#        Default:     1
+#
+
+TortoiseBots.Pool.CensusComposition = 1
+
+#
+#    TortoiseBots.Pool.CensusSpec
+#        Description: Roll a pool bot's spec (talent tree) with the live server's shares (aotc.gg, read 2026-11-24): the share of
+#                     each spec among its class's level 60 characters. Applied when the bot's talents are synced on login and
+#                     level-up; a bot already spending points keeps them. 0 keeps the pool's own per-class roll. Hired and
+#                     commanded bots keep the spec their role needs either way.
+#        Default:     1
+#
+
+TortoiseBots.Pool.CensusSpec = 1
+
+#
 #    TortoiseBots.Pool.TargetOnline
 #        Description: The pool's online target: `.tb pool start` keeps this many pool bots of both factions in the world (0 = the
 #                     schedule runs but logs nobody in; sessions that end still log out). One session per account is the rule,
